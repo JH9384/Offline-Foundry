@@ -8,14 +8,17 @@
 //     the verified core. The worker only carries the request to a window client over a
 //     MessageChannel and streams its frames back.
 //  3. Previews and the capability gate: each project's preview is served under <base>p/<kappa>/
-//     from the previews cache the host fills after every in-tab build; a cross origin request made
-//     by a preview frame is admitted only when that project's grants list the origin, and every
-//     decision is appended to the audit store, hologram-live's audit row shape.
+//     from the previews cache the host fills after every in-tab build, in a CSP sandbox with an
+//     opaque origin, so model-written code never reaches this origin's keys or stores; a cross
+//     origin request made by a frame this worker controls is admitted only when that project's
+//     grants list the origin, and every decision is appended to the audit store, hologram-live's
+//     audit row shape.
 //  4. Published applications: a .holo the page verified through PrismPM's validator in the core is
 //     unpacked into the holo cache under <base>holo/<kappa>/ and served from there on any device;
 //     a missing entry hands the URL to the runner page, which finds the bytes in the store or asks
 //     for the file; <base>holo/<kappa>.holo downloads the bytes. A published application carries the
-//     empty capability baseline, so every cross origin request from under holo/ is refused and audited.
+//     empty capability baseline: its files are served in a CSP sandbox with an opaque origin and a
+//     policy that admits no network, so it reaches neither this origin's stores nor any other host.
 const CLOSURE = "__CLOSURE__";   // written by the projector; a new shell is a new worker
 const BASE = new URL(self.registration.scope).pathname;
 
@@ -94,6 +97,23 @@ async function principalOf(e) {
   return m ? { kind: m[1], id: m[2] } : null;
 }
 
+// ---- untrusted documents
+// A preview runs code the model wrote; an installed application runs code someone else wrote. Both
+// are served from this origin, where the keys, chats and projects live, so both are served with a
+// CSP sandbox: the document gets an opaque origin and cannot open this origin's IndexedDB, Cache API
+// or storage, nor reach into the page that framed it. An opaque document is no client of this
+// worker, so the worker's gate never sees its requests; the network rule therefore rides in the same
+// header. A preview keeps today's open network (no project has grants yet). A published application
+// carries the empty capability baseline, so its policy admits nothing beyond its own inline bytes.
+const SANDBOX = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-presentation allow-orientation-lock";
+const PREVIEW_POLICY = SANDBOX;
+const HOLO_POLICY = SANDBOX + "; default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: data:; style-src 'unsafe-inline' blob: data:; img-src blob: data:; font-src blob: data:; media-src blob: data:; worker-src blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'";
+function untrusted(response, policy) {
+  const headers = new Headers(response.headers);
+  headers.set("content-security-policy", policy);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 // ---- published applications
 async function holoBytes(id) { const db = await openDb(); return new Promise((res, rej) => { const q = db.transaction("objects", "readonly").objectStore("objects").get(id); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
 async function serveHolo(request, path) {
@@ -111,7 +131,7 @@ async function serveHolo(request, path) {
   if (file.endsWith("/")) file += "index.html";
   const cache = await caches.open("holo");
   const hit = await cache.match(BASE + "holo/" + id + "/" + file);
-  if (hit) return hit;
+  if (hit) return untrusted(hit, HOLO_POLICY);
   if (file === "index.html" || !file.includes(".")) {
     const runner = (await caches.match("holo.html")) || (await fetch(new Request(BASE + "holo.html", { cache: "no-store" })).catch(() => null));
     if (runner && runner.ok) return new Response(await runner.text(), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
@@ -130,7 +150,7 @@ self.addEventListener("fetch", (event) => {
       event.respondWith((async () => {
         const cache = await caches.open("previews");
         const hit = await cache.match(BASE + "p/" + id + "/index.html");
-        return hit || new Response("no preview " + id, { status: 404 });
+        return hit ? untrusted(hit, PREVIEW_POLICY) : new Response("no preview " + id, { status: 404 });
       })());
       return;
     }

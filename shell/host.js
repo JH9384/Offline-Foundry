@@ -854,35 +854,52 @@ async function buildPortable(appId) {
   const html = head + `<\/script>\n<style>${tailwindCss}</style>\n` + body;
   return { html, modules: fetched.size, jsBytes: js.length, cssBytes: css.length, tailwindBytes: tailwindCss.length, ms: Math.round(performance.now() - t0) };
 }
+// Runs inside the compile frame. The frame is a preview address, so the worker serves it in a CSP
+// sandbox with an opaque origin and the host cannot read its document: the frame reports instead,
+// every 250 ms, the compiled sheet, whether the app rendered, and the classes in use that no rule
+// covers. A report is the app's own word about its own styles; a false one can only spoil that app.
+function tailwindReporter() {
+  const escapeClass = (c) => c.replace(/[^a-zA-Z0-9_-]/g, (m) => "\\" + m);
+  setInterval(() => {
+    const sheets = [...document.querySelectorAll("style")].map((s) => s.textContent);
+    const root = document.getElementById("root");
+    const all = sheets.join("\n");
+    const used = new Set([...document.querySelectorAll("[class]")].filter((e) => e.id !== "tw-candidates").flatMap((e) => String(e.className.baseVal ?? e.className).split(/\s+/).filter(Boolean)));
+    parent.postMessage({ tailwindReport: true, sheet: sheets.find((t) => t.includes("--tw-")) || "", rendered: !!(root && root.childElementCount), missing: [...used].filter((c) => !all.includes("." + escapeClass(c))) }, "*");
+  }, 250);
+}
+
 async function compileTailwind(page) {
   const id = "tw-" + Date.now().toString(36);
   const path = new URL("p/" + id + "/index.html", BASE).pathname;
+  const at = page.lastIndexOf("</body>");
+  const reporting = page.slice(0, at) + `<script>(${tailwindReporter})();<\/script>` + page.slice(at);
   const cache = await caches.open("previews");
-  await cache.put(path, new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } }));
+  await cache.put(path, new Response(reporting, { headers: { "content-type": "text/html; charset=utf-8" } }));
   const frame = document.createElement("iframe");
   frame.style.cssText = "position:fixed;width:1280px;height:800px;left:-2000px;top:0;visibility:hidden";
+  let report = null;
+  const listen = (e) => { if (e.source === frame.contentWindow && e.data && e.data.tailwindReport) report = e.data; };
+  window.addEventListener("message", listen);
   frame.src = path;
   document.body.append(frame);
   try {
     const t0 = performance.now();
     let last = "", stable = 0;
-    const escapeClass = (c) => c.replace(/[^a-zA-Z0-9_-]/g, (m) => "\\" + m);
     while (performance.now() - t0 < 30000) {
       await new Promise((r) => setTimeout(r, 250));
-      const doc = frame.contentDocument;
-      const sheets = doc ? [...doc.querySelectorAll("style")].map((s) => s.textContent) : [];
-      const sheet = sheets.find((t) => t.includes("--tw-"));
-      if (!sheet || !doc.getElementById("root") || !doc.getElementById("root").childElementCount) continue;
+      if (!report || !report.sheet || !report.rendered) continue;
       // Converged when the rendered page uses no class the compiled sheet (or the project's own CSS) lacks.
-      const all = sheets.join("\n");
-      const used = new Set([...doc.querySelectorAll("[class]")].filter((e) => e.id !== "tw-candidates").flatMap((e) => String(e.className.baseVal ?? e.className).split(/\s+/).filter(Boolean)));
-      const missing = [...used].filter((c) => !all.includes("." + escapeClass(c)));
+      // The sheet is inlined into a <style> element of the published page, so it may not close that element.
+      const sheet = String(report.sheet).replace(/<\/style/gi, "<\\/style");
+      const missing = Array.isArray(report.missing) ? report.missing.map(String) : [];
       const key = sheet.length + ":" + missing.join(",");
       if (key === last) { stable += 1; if (stable >= 3 && missing.length === 0) return sheet; if (stable >= 12) return sheet; } else { last = key; stable = 0; }
     }
     if (last) throw new Error("tailwind did not converge on the page");
     throw new Error("tailwind did not compile the page");
   } finally {
+    window.removeEventListener("message", listen);
     frame.remove();
     await cache.delete(path);
   }
