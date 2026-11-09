@@ -1,7 +1,7 @@
 {
   "name": "Forge kernel",
   "shortName": "Forge",
-  "live": "https://uor-foundation.github.io/forge-kernel/",
+  "live": "https://uor-foundation.github.io/forge/",
   "purpose": "Decide the next build phase of a Hologram Forge app from its current phase and the event that just happened. Send phase or event, separated by spaces; it answers drafting, checked, proving, proved or published, and invalid request for anything else.",
   "inputLabel": "Request: phase event",
   "placeholder": "drafting check",
@@ -20,8 +20,8 @@
     "refusal": "invalid request"
   },
   "promise": {
-    "headline": "Says conformant exactly when every policy file matches its lock.",
-    "detail": "Each of the six universal policy files is compared with the digest the lock records, and any file that drifted is named."
+    "headline": "Says proved only after Lean attests the current rules.",
+    "detail": "Each answer is the next build phase from the current phase and one event. Lean proved four guarantees for every request: no proved without an attestation, no publish before proved, any edit returns to drafting, no proof run on unchecked rules."
   },
   "claim": "FK-01: the app never answers proved when phase is not proved and event is not attest. FK-02: the app never answers published when phase is not proved and phase is not published. FK-03: the app always answers drafting when event is edit. FK-04: the app never answers proving when phase is drafting.",
   "proposition": {
@@ -102,13 +102,13 @@
   "attestations": {
     "proof": {
       "id": "2ba631ef4c59b4f08406643c7ad26a1803a6e05f69c8f65e5ef70fa35435f244",
-      "url": "https://github.com/UOR-Foundation/forge-kernel/actions/workflows/bootstrap.yml"
+      "url": "https://github.com/UOR-Foundation/forge/actions/workflows/bootstrap.yml"
     },
     "build": {
       "id": "printed by prismpm verify in every pages run",
-      "url": "https://github.com/UOR-Foundation/forge-kernel/actions/workflows/pages.yml"
+      "url": "https://github.com/UOR-Foundation/forge/actions/workflows/pages.yml"
     }
   },
-  "repository": "https://github.com/UOR-Foundation/forge-kernel",
-  "report": "https://github.com/UOR-Foundation/forge-kernel/blob/main/TEMPLATE-VERIFICATION.md"
+  "repository": "https://github.com/UOR-Foundation/forge",
+  "report": "https://github.com/UOR-Foundation/forge/blob/main/TEMPLATE-VERIFICATION.md"
 }
