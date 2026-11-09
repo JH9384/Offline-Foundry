@@ -339,11 +339,23 @@ async function esbuild() {
   if (!esbuildReady) esbuildReady = import("https://cdn.jsdelivr.net/npm/esbuild-wasm@0.25.5/esm/browser.min.js").then(async (m) => { await m.initialize({ wasmURL: "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.25.5/esbuild.wasm" }); return m; });
   return esbuildReady;
 }
+// The grant a preview is served under. The worker asks the kernel's gate (proved by Lean) before it
+// serves a preview, and the gate refuses anything that has no record, so every preview gets one:
+// it may be served, and it may reach the hosts its build names: esm.sh for packages and the play
+// build of Tailwind. An app may carry its own list in app.grants; nothing else is reachable.
+const PREVIEW_ENDPOINTS = ["https://esm.sh", "https://cdn.tailwindcss.com"];
+const previewId = (pathname) => pathname.split("/").filter(Boolean).pop();
+async function grantPreview(id, endpoints) {
+  await put("refs", "capabilities:" + id, { serve: true, network: { endpoints: [...endpoints], denied: [] } });
+}
+
 async function buildPreview(appId) {
   await coreReady;
   const head = await get("refs", appId + ":main");
   const { path } = core.run({ op: "preview", kappa: head });
   const appUrl = new URL(path.slice(1), BASE);
+  const owner = await get("apps", appId);
+  await grantPreview(previewId(appUrl.pathname), Array.isArray(owner && owner.grants) ? owner.grants : PREVIEW_ENDPOINTS);
   const files = new Map();
   for (const p of await filesOf(appId)) files.set(p, await get("files", appId + ":" + p));
   const pkg = await (await fetch(new URL("scaffold/package.json", BASE))).json();
@@ -874,6 +886,7 @@ async function compileTailwind(page) {
   const path = new URL("p/" + id + "/index.html", BASE).pathname;
   const at = page.lastIndexOf("</body>");
   const reporting = page.slice(0, at) + `<script>(${tailwindReporter})();<\/script>` + page.slice(at);
+  await grantPreview(id, ["https://cdn.tailwindcss.com"]);
   const cache = await caches.open("previews");
   await cache.put(path, new Response(reporting, { headers: { "content-type": "text/html; charset=utf-8" } }));
   const frame = document.createElement("iframe");
@@ -902,6 +915,7 @@ async function compileTailwind(page) {
     window.removeEventListener("message", listen);
     frame.remove();
     await cache.delete(path);
+    await del("refs", "capabilities:" + id);
   }
 }
 window.__portable = buildPortable;
@@ -974,6 +988,15 @@ window.electron = {
 })();
 window.__host = { handlers, emit, seen, get, put, all, kappa, core: () => core, coreReady, view: () => coreReady.then((c) => c.run({ op: "view" })), publish: () => lastPublish };
 if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js", BASE)).catch(() => {});
+// Applications installed before the kernel's gate held no grant record, and the gate refuses to
+// serve without one: each gets the grant install now writes, served with no network.
+(async () => {
+  await coreReady;
+  for (const ref of await installed()) {
+    const id = core.run({ op: "holo-path", kappa: ref.kappa }).path.split("/").filter(Boolean).pop();
+    if (!(await get("refs", "capabilities:" + id))) await put("refs", "capabilities:" + id, { serve: true, network: { endpoints: [], denied: [] } });
+  }
+})().catch(() => {});
 // One closure per page. A document can be served by a worker that installed an older shell while a
 // newer one is published; then its scripts and the page disagree and a screen breaks for reasons that
 // are not in the code. The worker names its cache after the closure it installed, and the origin serves

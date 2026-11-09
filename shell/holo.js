@@ -105,6 +105,9 @@ export async function install(bytes, extra = {}) {
     const t = d.transaction(["objects", "refs", "audit"], "readwrite");
     t.objectStore("objects").put(bytes, info.kappa);
     t.objectStore("refs").put(ref, "holo:" + info.kappa);
+    // The grant the kernel's gate reads before the worker serves this application: it may be served,
+    // and it names no host, so its policy admits no network (the empty capability baseline).
+    t.objectStore("refs").put({ serve: true, network: { endpoints: [], denied: [] } }, "capabilities:" + base.split("/").filter(Boolean).pop());
     t.objectStore("audit").put({ timestamp_millis: Date.now(), principal: "holo:" + info.kappa, operation: "holo.application.verify", resource: info.kappa, outcome: "granted" }, Date.now() + ":" + info.kappa);
     t.oncomplete = res; t.onerror = () => rej(t.error);
   });

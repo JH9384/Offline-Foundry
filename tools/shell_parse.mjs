@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // sw.template.js is sw.js before the projector writes the closure digest into it; both are checked,
 // because a defect in the template reaches every future release.
-const GOAL = { "host.js": "mjs", "appearance.js": "mjs", "holo.js": "mjs", "inference.js": "mjs", "prompts.js": "mjs", "sw.js": "cjs", "sw.template.js": "cjs" };
+const GOAL = { "host.js": "mjs", "appearance.js": "mjs", "holo.js": "mjs", "inference.js": "mjs", "prompts.js": "mjs", "sw.js": "cjs", "sw.template.js": "cjs", "kernel.js": "cjs" };
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shell-parse-"));
 let bad = 0;
 for (const name of fs.readdirSync(path.join(root, "shell")).filter((f) => f.endsWith(".js")).sort()) {

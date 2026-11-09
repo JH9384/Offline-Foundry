@@ -9,18 +9,27 @@
 //     MessageChannel and streams its frames back.
 //  3. Previews and the capability gate: each project's preview is served under <base>p/<kappa>/
 //     from the previews cache the host fills after every in-tab build, in a CSP sandbox with an
-//     opaque origin, so model-written code never reaches this origin's keys or stores; a cross
-//     origin request made by a frame this worker controls is admitted only when that project's
-//     grants list the origin, and every decision is appended to the audit store, hologram-live's
-//     audit row shape.
+//     opaque origin, so model-written code never reaches this origin's keys or stores. Whether it is
+//     served at all, and which hosts its policy names, is the kernel's answer: the capability gate
+//     Lean proves (kernel.js). Every decision is appended to the audit store, hologram-live's audit
+//     row shape.
 //  4. Published applications: a .holo the page verified through PrismPM's validator in the core is
 //     unpacked into the holo cache under <base>holo/<kappa>/ and served from there on any device;
 //     a missing entry hands the URL to the runner page, which finds the bytes in the store or asks
 //     for the file; <base>holo/<kappa>.holo downloads the bytes. A published application carries the
-//     empty capability baseline: its files are served in a CSP sandbox with an opaque origin and a
-//     policy that admits no network, so it reaches neither this origin's stores nor any other host.
+//     empty capability baseline: its grant names no host, so the kernel admits no network and its
+//     files are served in a CSP sandbox with an opaque origin that reaches no other host and none of
+//     this origin's stores.
 const CLOSURE = "__CLOSURE__";   // written by the projector; a new shell is a new worker
 const BASE = new URL(self.registration.scope).pathname;
+
+// The kernel decides what an untrusted document may do: its capability gate is proved by Lean
+// (FK-05 to FK-09 in UOR-Foundation/forge). kernel.js checks the guest against its pin and replays
+// every acceptance vector before the first question; until then, and if that fails, nothing
+// untrusted is served.
+importScripts("kernel.js");
+let kernelLoad = null;
+const kernel = () => (kernelLoad ??= ForgeKernel.load(async (p) => (await caches.match(BASE + p)) || fetch(BASE + p, { cache: "no-store" })).catch((error) => { kernelLoad = null; throw error; }));
 
 async function readManifest() {
   const r = await fetch("manifest.json", { cache: "no-store" });
@@ -102,16 +111,53 @@ async function principalOf(e) {
 // are served from this origin, where the keys, chats and projects live, so both are served with a
 // CSP sandbox: the document gets an opaque origin and cannot open this origin's IndexedDB, Cache API
 // or storage, nor reach into the page that framed it. An opaque document is no client of this
-// worker, so the worker's gate never sees its requests; the network rule therefore rides in the same
-// header. A preview keeps today's open network (no project has grants yet). A published application
-// carries the empty capability baseline, so its policy admits nothing beyond its own inline bytes.
+// worker, so the worker never sees its requests; its network therefore rides in the same header.
+//
+// What goes in the header is the kernel's answer, not this worker's. A grant record is
+// refs["capabilities:<id>"] = { serve, network: { endpoints, denied } }, written by the page when it
+// builds a preview or installs an application. The kernel is asked `gate preview|published serve ...`
+// before the document is served at all, and `gate ... fetch ...` once per granted endpoint; only the
+// endpoints it allows enter the policy. No record means no grant: the kernel refuses to serve.
 const SANDBOX = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-presentation allow-orientation-lock";
-const PREVIEW_POLICY = SANDBOX;
-const HOLO_POLICY = SANDBOX + "; default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: data:; style-src 'unsafe-inline' blob: data:; img-src blob: data:; font-src blob: data:; media-src blob: data:; worker-src blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'";
+const ENDPOINT_FORM = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(:[0-9]{1,5})?$/;
+function policyOf(endpoints) {
+  const named = (head) => (endpoints.length ? head + " " + endpoints.join(" ") : head);
+  return [SANDBOX, "default-src 'none'", named("script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: data:"), named("style-src 'unsafe-inline' blob: data:"),
+    named("img-src blob: data:"), named("font-src blob: data:"), named("media-src blob: data:"), endpoints.length ? "connect-src " + endpoints.join(" ") : "connect-src 'none'",
+    "worker-src blob:", "frame-src 'none'", "form-action 'none'", "base-uri 'self'"].join("; ");
+}
+const flag = (b) => (b ? "yes" : "no");
+async function gate(origin, effect, record, granted, denied) {
+  return (await (await kernel()).ask(`gate ${origin} ${effect} ${flag(record)} ${flag(granted)} ${flag(denied)}`)) === "allow";
+}
+// The policy for one untrusted document, or null when the kernel refuses to serve it.
+async function policyFor(kind, id) {
+  const origin = kind === "p" ? "preview" : "published";
+  const record = await grants(id);
+  const network = (record && record.network) || {};
+  const denied = new Set(Array.isArray(network.denied) ? network.denied : []);
+  const served = await gate(origin, "serve", !!record, !!(record && record.serve === true), false);
+  await audit({ principal: kind + ":" + id, operation: "kernel.gate.serve", resource: id, outcome: served ? "granted" : "refused" });
+  if (!served) return null;
+  const allowed = [];
+  for (const endpoint of Array.isArray(network.endpoints) ? network.endpoints : []) {
+    if (typeof endpoint !== "string" || !ENDPOINT_FORM.test(endpoint)) continue;
+    if (await gate(origin, "fetch", true, true, denied.has(endpoint))) allowed.push(endpoint);
+  }
+  return policyOf(allowed);
+}
 function untrusted(response, policy) {
   const headers = new Headers(response.headers);
   headers.set("content-security-policy", policy);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+async function serveUntrusted(kind, id, hit) {
+  let policy;
+  try { policy = await policyFor(kind, id); } catch (error) {
+    return new Response("not served: the kernel did not verify (" + error.message + ")", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
+  if (!policy) return new Response("not served: no grant to serve " + id, { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
+  return untrusted(hit, policy);
 }
 
 // ---- published applications
@@ -131,7 +177,7 @@ async function serveHolo(request, path) {
   if (file.endsWith("/")) file += "index.html";
   const cache = await caches.open("holo");
   const hit = await cache.match(BASE + "holo/" + id + "/" + file);
-  if (hit) return untrusted(hit, HOLO_POLICY);
+  if (hit) return serveUntrusted("holo", id, hit);
   if (file === "index.html" || !file.includes(".")) {
     const runner = (await caches.match("holo.html")) || (await fetch(new Request(BASE + "holo.html", { cache: "no-store" })).catch(() => null));
     if (runner && runner.ok) return new Response(await runner.text(), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
@@ -150,7 +196,7 @@ self.addEventListener("fetch", (event) => {
       event.respondWith((async () => {
         const cache = await caches.open("previews");
         const hit = await cache.match(BASE + "p/" + id + "/index.html");
-        return hit ? untrusted(hit, PREVIEW_POLICY) : new Response("no preview " + id, { status: 404 });
+        return hit ? serveUntrusted("p", id, hit) : new Response("no preview " + id, { status: 404 });
       })());
       return;
     }
@@ -179,11 +225,14 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const who = await principalOf(event);
     if (!who) return fetch(event.request);
-    // A published application carries the empty baseline: nothing is admitted, every request audited.
-    const caps = who.kind === "holo" ? { network: { endpoints: [] } } : await grants(who.id);
-    const endpoints = (caps && caps.network && caps.network.endpoints) || [];
-    const allowed = caps ? endpoints.some((ep) => url.origin === ep) : true;
-    if (caps) await audit({ principal: who.kind + ":" + who.id, operation: "holo.capability.authorize", resource: url.origin, outcome: allowed ? "granted" : "refused" });
+    // A frame this worker still controls under p/ or holo/: the kernel's gate decides each request.
+    const record = await grants(who.id);
+    const network = (record && record.network) || {};
+    const granted = Array.isArray(network.endpoints) && network.endpoints.includes(url.origin);
+    const denied = Array.isArray(network.denied) && network.denied.includes(url.origin);
+    let allowed = false;
+    try { allowed = await gate(who.kind === "p" ? "preview" : "published", "fetch", !!record, granted, denied); } catch (error) { allowed = false; }
+    await audit({ principal: who.kind + ":" + who.id, operation: "kernel.gate.fetch", resource: url.origin, outcome: allowed ? "granted" : "refused" });
     if (allowed) return fetch(event.request);
     return new Response("refused by capabilities: " + url.origin, { status: 403, headers: { "content-type": "text/plain" } });
   })());
