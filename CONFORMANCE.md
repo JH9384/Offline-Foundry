@@ -18,11 +18,14 @@ The three honesty levels (R2):
 `cargo xtask audit-limits` fails if any code path returns an error the
 model does not sanction.
 
-## contract
+## forge_kernel
 
 | ID | Level | Statement |
 | --- | --- | --- |
-| `TC-01` | `build` | The checker answers conformant exactly when every universal policy file's observed digest equals its locked digest |
+| `FK-01` | `build` | The app never answers proved when phase is not proved and event is not attest |
+| `FK-02` | `build` | The app never answers published when phase is not proved and phase is not published |
+| `FK-03` | `build` | The app always answers drafting when event is edit |
+| `FK-04` | `build` | The app never answers proving when phase is drafting |
 
 ## Cited authorities
 

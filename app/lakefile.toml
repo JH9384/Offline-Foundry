@@ -1,6 +1,6 @@
-name = "PrismTemplateContract"
+name = "PrismForgeKernel"
 version = "0.1.0"
-defaultTargets = ["PrismTemplateContract"]
+defaultTargets = ["PrismForgeKernel"]
 
 [[lean_lib]]
-name = "PrismTemplateContract"
+name = "PrismForgeKernel"

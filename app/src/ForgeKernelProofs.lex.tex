@@ -1,0 +1,196 @@
+\begin{lexlean}{ForgeKernelProofs}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{ForgeKernel}
+\title{Text application model}
+\begin{semanticmodule}
+definition{
+  name: breaksInv001,
+  parameters: [request : ForgeKernel::Request],
+  result: Bool,
+  body: ((((((project request phase) <? 5) && ((project request event) <? 7)) && (not ((project request phase) =? (ForgeKernel::phaseProved)))) && (not ((project request event) =? (ForgeKernel::eventAttest)))) && ((ForgeKernel::judge request) =? (ForgeKernel::answerProved)))
+}
+
+theorem{
+  name: inv001Holds,
+  parameters: [request : ForgeKernel::Request],
+  statement: ((breaksInv001 request) = false),
+  proof: linear_arithmetic{
+    definitions: [
+      ForgeKernel::answerChecked,
+      ForgeKernel::answerDrafting,
+      ForgeKernel::answerProved,
+      ForgeKernel::answerProving,
+      ForgeKernel::answerPublished,
+      ForgeKernel::eventApprove,
+      ForgeKernel::eventAttest,
+      ForgeKernel::eventCheck,
+      ForgeKernel::eventEdit,
+      ForgeKernel::eventFail,
+      ForgeKernel::eventPublish,
+      ForgeKernel::eventWait,
+      ForgeKernel::judge,
+      ForgeKernel::phaseChecked,
+      ForgeKernel::phaseDrafting,
+      ForgeKernel::phaseProved,
+      ForgeKernel::phaseProving,
+      ForgeKernel::phasePublished,
+      ForgeKernel::rule1,
+      ForgeKernel::rule10,
+      ForgeKernel::rule2,
+      ForgeKernel::rule3,
+      ForgeKernel::rule4,
+      ForgeKernel::rule5,
+      ForgeKernel::rule6,
+      ForgeKernel::rule7,
+      ForgeKernel::rule8,
+      ForgeKernel::rule9,
+      breaksInv001
+    ]
+  },
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: breaksInv002,
+  parameters: [request : ForgeKernel::Request],
+  result: Bool,
+  body: ((((((project request phase) <? 5) && ((project request event) <? 7)) && (not ((project request phase) =? (ForgeKernel::phaseProved)))) && (not ((project request phase) =? (ForgeKernel::phasePublished)))) && ((ForgeKernel::judge request) =? (ForgeKernel::answerPublished)))
+}
+
+theorem{
+  name: inv002Holds,
+  parameters: [request : ForgeKernel::Request],
+  statement: ((breaksInv002 request) = false),
+  proof: linear_arithmetic{
+    definitions: [
+      ForgeKernel::answerChecked,
+      ForgeKernel::answerDrafting,
+      ForgeKernel::answerProved,
+      ForgeKernel::answerProving,
+      ForgeKernel::answerPublished,
+      ForgeKernel::eventApprove,
+      ForgeKernel::eventAttest,
+      ForgeKernel::eventCheck,
+      ForgeKernel::eventEdit,
+      ForgeKernel::eventFail,
+      ForgeKernel::eventPublish,
+      ForgeKernel::eventWait,
+      ForgeKernel::judge,
+      ForgeKernel::phaseChecked,
+      ForgeKernel::phaseDrafting,
+      ForgeKernel::phaseProved,
+      ForgeKernel::phaseProving,
+      ForgeKernel::phasePublished,
+      ForgeKernel::rule1,
+      ForgeKernel::rule10,
+      ForgeKernel::rule2,
+      ForgeKernel::rule3,
+      ForgeKernel::rule4,
+      ForgeKernel::rule5,
+      ForgeKernel::rule6,
+      ForgeKernel::rule7,
+      ForgeKernel::rule8,
+      ForgeKernel::rule9,
+      breaksInv002
+    ]
+  },
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: breaksInv003,
+  parameters: [request : ForgeKernel::Request],
+  result: Bool,
+  body: (((((project request phase) <? 5) && ((project request event) <? 7)) && ((project request event) =? (ForgeKernel::eventEdit))) && (not ((ForgeKernel::judge request) =? (ForgeKernel::answerDrafting))))
+}
+
+theorem{
+  name: inv003Holds,
+  parameters: [request : ForgeKernel::Request],
+  statement: ((breaksInv003 request) = false),
+  proof: linear_arithmetic{
+    definitions: [
+      ForgeKernel::answerChecked,
+      ForgeKernel::answerDrafting,
+      ForgeKernel::answerProved,
+      ForgeKernel::answerProving,
+      ForgeKernel::answerPublished,
+      ForgeKernel::eventApprove,
+      ForgeKernel::eventAttest,
+      ForgeKernel::eventCheck,
+      ForgeKernel::eventEdit,
+      ForgeKernel::eventFail,
+      ForgeKernel::eventPublish,
+      ForgeKernel::eventWait,
+      ForgeKernel::judge,
+      ForgeKernel::phaseChecked,
+      ForgeKernel::phaseDrafting,
+      ForgeKernel::phaseProved,
+      ForgeKernel::phaseProving,
+      ForgeKernel::phasePublished,
+      ForgeKernel::rule1,
+      ForgeKernel::rule10,
+      ForgeKernel::rule2,
+      ForgeKernel::rule3,
+      ForgeKernel::rule4,
+      ForgeKernel::rule5,
+      ForgeKernel::rule6,
+      ForgeKernel::rule7,
+      ForgeKernel::rule8,
+      ForgeKernel::rule9,
+      breaksInv003
+    ]
+  },
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+definition{
+  name: breaksInv004,
+  parameters: [request : ForgeKernel::Request],
+  result: Bool,
+  body: (((((project request phase) <? 5) && ((project request event) <? 7)) && ((project request phase) =? (ForgeKernel::phaseDrafting))) && ((ForgeKernel::judge request) =? (ForgeKernel::answerProving)))
+}
+
+theorem{
+  name: inv004Holds,
+  parameters: [request : ForgeKernel::Request],
+  statement: ((breaksInv004 request) = false),
+  proof: linear_arithmetic{
+    definitions: [
+      ForgeKernel::answerChecked,
+      ForgeKernel::answerDrafting,
+      ForgeKernel::answerProved,
+      ForgeKernel::answerProving,
+      ForgeKernel::answerPublished,
+      ForgeKernel::eventApprove,
+      ForgeKernel::eventAttest,
+      ForgeKernel::eventCheck,
+      ForgeKernel::eventEdit,
+      ForgeKernel::eventFail,
+      ForgeKernel::eventPublish,
+      ForgeKernel::eventWait,
+      ForgeKernel::judge,
+      ForgeKernel::phaseChecked,
+      ForgeKernel::phaseDrafting,
+      ForgeKernel::phaseProved,
+      ForgeKernel::phaseProving,
+      ForgeKernel::phasePublished,
+      ForgeKernel::rule1,
+      ForgeKernel::rule10,
+      ForgeKernel::rule2,
+      ForgeKernel::rule3,
+      ForgeKernel::rule4,
+      ForgeKernel::rule5,
+      ForgeKernel::rule6,
+      ForgeKernel::rule7,
+      ForgeKernel::rule8,
+      ForgeKernel::rule9,
+      breaksInv004
+    ]
+  },
+  axioms: [Quot.sound, propext]
+}
+\end{semanticmodule}
+\end{lexlean}

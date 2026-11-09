@@ -1,18 +1,21 @@
 {
-  "name": "Template contract",
-  "shortName": "Contract",
-  "live": "https://uor-foundation.github.io/template/",
-  "purpose": "Checks each universal policy file of a UOR template repository against its locked digest. Send the six expected and observed digests; it answers conformant, or names every file that drifted, and invalid request for anything else.",
-  "inputLabel": "Expected and observed digests",
-  "placeholder": "hex: followed by 384 bytes",
-  "submitLabel": "Check",
-  "outputLabel": "Verdict",
+  "name": "Forge kernel",
+  "shortName": "Forge",
+  "live": "https://uor-foundation.github.io/forge-kernel/",
+  "purpose": "Decide the next build phase of a Hologram Forge app from its current phase and the event that just happened. Send phase or event, separated by spaces; it answers drafting, checked, proving, proved or published, and invalid request for anything else.",
+  "inputLabel": "Request: phase event",
+  "placeholder": "drafting check",
+  "submitLabel": "Decide",
+  "outputLabel": "Answer",
   "answers": {
     "positive": [
-      "conformant"
+      "drafting"
     ],
     "negative": [
-      "drift:*"
+      "checked",
+      "proving",
+      "proved",
+      "published"
     ],
     "refusal": "invalid request"
   },
@@ -20,25 +23,58 @@
     "headline": "Says conformant exactly when every policy file matches its lock.",
     "detail": "Each of the six universal policy files is compared with the digest the lock records, and any file that drifted is named."
   },
-  "claim": "TC-01: the checker answers conformant exactly when every universal policy file's observed digest equals its locked digest.",
+  "claim": "FK-01: the app never answers proved when phase is not proved and event is not attest. FK-02: the app never answers published when phase is not proved and phase is not published. FK-03: the app always answers drafting when event is edit. FK-04: the app never answers proving when phase is drafting.",
   "proposition": {
-    "name": "Conformant",
-    "text": "Conformant observation :=\n  SameDigest devcontainer.expected devcontainer.observed\n  /\\ SameDigest bootstrap.expected bootstrap.observed\n  /\\ SameDigest agents.expected agents.observed\n  /\\ SameDigest verification.expected verification.observed\n  /\\ SameDigest prismpmLock.expected prismpmLock.observed\n  /\\ SameDigest templateContract.expected templateContract.observed\n\nSameDigest left right :=\n  left.w0 = right.w0 /\\ left.w1 = right.w1 /\\ left.w2 = right.w2 /\\ left.w3 = right.w3",
-    "plain": "Every one of the six universal policy files has the digest the lock says it has."
+    "name": "judge",
+    "text": "judge request :=\n  event is edit → drafting\n  event is check and phase is drafting → checked\n  event is approve and phase is checked → proving\n  event is attest and phase is proving → proved\n  event is fail and phase is proving → checked\n  event is publish and phase is proved → published\n  phase is drafting → drafting\n  phase is checked → checked\n  phase is proving → proving\n  phase is proved → proved\n  otherwise → published",
+    "plain": "Decide the next build phase of a Hologram Forge app from its current phase and the event that just happened."
   },
   "theorems": [
     {
-      "name": "conformant_decides",
-      "statement": "conformant observation = true ↔ Conformant observation, for every observation",
-      "how": "Proved by simplification over the record fields, checked by the Lean kernel by prismpm verify in CI",
-      "where": "app/src/Contract.lex.tex"
+      "name": "inv001Holds",
+      "statement": "no request meets breaksInv001: the app never answers proved when phase is not proved and event is not attest",
+      "how": "Proved by linear arithmetic, checked by the Lean kernel on the UOR MCP server and again by prismpm verify in CI",
+      "where": "app/src/ForgeKernelProofs.lex.tex"
+    },
+    {
+      "name": "inv002Holds",
+      "statement": "no request meets breaksInv002: the app never answers published when phase is not proved and phase is not published",
+      "how": "Proved by linear arithmetic, checked by the Lean kernel on the UOR MCP server and again by prismpm verify in CI",
+      "where": "app/src/ForgeKernelProofs.lex.tex"
+    },
+    {
+      "name": "inv003Holds",
+      "statement": "no request meets breaksInv003: the app always answers drafting when event is edit",
+      "how": "Proved by linear arithmetic, checked by the Lean kernel on the UOR MCP server and again by prismpm verify in CI",
+      "where": "app/src/ForgeKernelProofs.lex.tex"
+    },
+    {
+      "name": "inv004Holds",
+      "statement": "no request meets breaksInv004: the app never answers proving when phase is drafting",
+      "how": "Proved by linear arithmetic, checked by the Lean kernel on the UOR MCP server and again by prismpm verify in CI",
+      "where": "app/src/ForgeKernelProofs.lex.tex"
     }
   ],
   "pinned": [
     {
-      "name": "contract_tc_01",
-      "what": "The theorem's statement and axioms, the six files the proposition names against template-contract.json, that a drifted file is named in the verdict, and that the verdict is decided by conformant. A string-matching test, not a theorem: a planted defect fails it.",
-      "where": "crates/conformance/tests/contract.rs"
+      "name": "forge_kernel_fk_01",
+      "what": "FK-01's condition and the theorem that no request meets it. A string-matching test, not a theorem: a planted defect fails it.",
+      "where": "crates/conformance/tests/forge_kernel.rs"
+    },
+    {
+      "name": "forge_kernel_fk_02",
+      "what": "FK-02's condition and the theorem that no request meets it. A string-matching test, not a theorem: a planted defect fails it.",
+      "where": "crates/conformance/tests/forge_kernel.rs"
+    },
+    {
+      "name": "forge_kernel_fk_03",
+      "what": "FK-03's condition and the theorem that no request meets it. A string-matching test, not a theorem: a planted defect fails it.",
+      "where": "crates/conformance/tests/forge_kernel.rs"
+    },
+    {
+      "name": "forge_kernel_fk_04",
+      "what": "FK-04's condition and the theorem that no request meets it. A string-matching test, not a theorem: a planted defect fails it.",
+      "where": "crates/conformance/tests/forge_kernel.rs"
     }
   ],
   "trusted": [
@@ -65,14 +101,14 @@
   ],
   "attestations": {
     "proof": {
-      "id": "not recorded for the template's own app; an instance records the UOR MCP server's attestation here",
-      "url": "https://github.com/UOR-Foundation/template/actions/workflows/bootstrap.yml"
+      "id": "2ba631ef4c59b4f08406643c7ad26a1803a6e05f69c8f65e5ef70fa35435f244",
+      "url": "https://github.com/UOR-Foundation/forge-kernel/actions/workflows/bootstrap.yml"
     },
     "build": {
-      "id": "printed by prismpm verify in every pages run; an instance records it here",
-      "url": "https://github.com/UOR-Foundation/template/actions/workflows/pages.yml"
+      "id": "printed by prismpm verify in every pages run",
+      "url": "https://github.com/UOR-Foundation/forge-kernel/actions/workflows/pages.yml"
     }
   },
-  "repository": "https://github.com/UOR-Foundation/template",
-  "report": "https://github.com/UOR-Foundation/template/blob/main/TEMPLATE-VERIFICATION.md"
+  "repository": "https://github.com/UOR-Foundation/forge-kernel",
+  "report": "https://github.com/UOR-Foundation/forge-kernel/blob/main/TEMPLATE-VERIFICATION.md"
 }

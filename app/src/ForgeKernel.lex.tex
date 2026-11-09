@@ -1,0 +1,248 @@
+\begin{lexlean}{ForgeKernel}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Foundation.Bytes}
+\importmodule{Foundation.View.Text.V1.Model}
+\title{Text application model}
+\begin{semanticmodule}
+definition{name: phaseDrafting, parameters: [], result: Nat, body: 0}
+
+definition{name: phaseChecked, parameters: [], result: Nat, body: 1}
+
+definition{name: phaseProving, parameters: [], result: Nat, body: 2}
+
+definition{name: phaseProved, parameters: [], result: Nat, body: 3}
+
+definition{name: phasePublished, parameters: [], result: Nat, body: 4}
+
+definition{name: eventCheck, parameters: [], result: Nat, body: 0}
+
+definition{name: eventApprove, parameters: [], result: Nat, body: 1}
+
+definition{name: eventAttest, parameters: [], result: Nat, body: 2}
+
+definition{name: eventFail, parameters: [], result: Nat, body: 3}
+
+definition{name: eventPublish, parameters: [], result: Nat, body: 4}
+
+definition{name: eventEdit, parameters: [], result: Nat, body: 5}
+
+definition{name: eventWait, parameters: [], result: Nat, body: 6}
+
+definition{name: answerDrafting, parameters: [], result: Nat, body: 0}
+
+definition{name: answerChecked, parameters: [], result: Nat, body: 1}
+
+definition{name: answerProving, parameters: [], result: Nat, body: 2}
+
+definition{name: answerProved, parameters: [], result: Nat, body: 3}
+
+definition{name: answerPublished, parameters: [], result: Nat, body: 4}
+
+structure{
+  name: Request,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: phase, type: Nat}, {name: event, type: Nat}]
+}
+
+definition{
+  name: byteAt,
+  parameters: [s : Bytes, i : Nat],
+  result: (Option Nat),
+  body: (match (prim index s i : (Option UInt8))
+    | Option.none => (ctor Option.none [Nat])
+    | Option.some b => (ctor Option.some [Nat] (prim to_nat b : Nat))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: digitsValue,
+  parameters: [s : Bytes, i : Nat, acc : Nat, fuel : Nat],
+  result: (Option Nat),
+  body: (match fuel
+    | Nat.zero => (ctor Option.some [Nat] acc)
+    | Nat.succ rest => (match (byteAt s i)
+      | Option.none => (ctor Option.none [Nat])
+      | Option.some d => (if ((d <? 48) || (57 <? d)) then (ctor Option.none [Nat]) else (digitsValue s (i + 1) ((prim multiply acc 10 : Nat) + (prim subtract d 48 : Nat)) rest)))),
+  axioms: [Quot.sound, propext],
+  recursive_argument: fuel
+}
+
+definition{
+  name: parseDigits,
+  parameters: [s : Bytes],
+  result: (Option Nat),
+  body: (if ((Foundation.Bytes::byteLength s) =? 0) then (ctor Option.none [Nat]) else (if (18 <? (Foundation.Bytes::byteLength s)) then (ctor Option.none [Nat]) else (match (byteAt s 0)
+    | Option.none => (ctor Option.none [Nat])
+    | Option.some lead => (if ((lead =? 48) && (1 <? (Foundation.Bytes::byteLength s))) then (ctor Option.none [Nat]) else (digitsValue s 0 0 (Foundation.Bytes::byteLength s)))))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: parseNumber,
+  parameters: [value : Bytes],
+  result: (Option Nat),
+  body: (parseDigits value),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: parsePhase,
+  parameters: [value : Bytes],
+  result: (Option Nat),
+  body: (if (prim equal value 0x6472616674696e67 : Bool) then (ctor Option.some [Nat] (phaseDrafting)) else (if (prim equal value 0x636865636b6564 : Bool) then (ctor Option.some [Nat] (phaseChecked)) else (if (prim equal value 0x70726f76696e67 : Bool) then (ctor Option.some [Nat] (phaseProving)) else (if (prim equal value 0x70726f766564 : Bool) then (ctor Option.some [Nat] (phaseProved)) else (if (prim equal value 0x7075626c6973686564 : Bool) then (ctor Option.some [Nat] (phasePublished)) else (ctor Option.none [Nat]))))))
+}
+
+definition{
+  name: parseEvent,
+  parameters: [value : Bytes],
+  result: (Option Nat),
+  body: (if (prim equal value 0x636865636b : Bool) then (ctor Option.some [Nat] (eventCheck)) else (if (prim equal value 0x617070726f7665 : Bool) then (ctor Option.some [Nat] (eventApprove)) else (if (prim equal value 0x617474657374 : Bool) then (ctor Option.some [Nat] (eventAttest)) else (if (prim equal value 0x6661696c : Bool) then (ctor Option.some [Nat] (eventFail)) else (if (prim equal value 0x7075626c697368 : Bool) then (ctor Option.some [Nat] (eventPublish)) else (if (prim equal value 0x65646974 : Bool) then (ctor Option.some [Nat] (eventEdit)) else (if (prim equal value 0x77616974 : Bool) then (ctor Option.some [Nat] (eventWait)) else (ctor Option.none [Nat]))))))))
+}
+
+definition{
+  name: sliceOf,
+  parameters: [s : Bytes, start : Nat, count : Nat],
+  result: Bytes,
+  body: (match (prim slice s start count : (Option Bytes))
+    | Option.none => 0x
+    | Option.some part => part)
+}
+
+definition{
+  name: fieldEnd,
+  parameters: [s : Bytes, i : Nat, fuel : Nat],
+  result: Nat,
+  body: (match fuel
+    | Nat.zero => i
+    | Nat.succ rest => (match (byteAt s i)
+      | Option.none => i
+      | Option.some d => (if (d =? 32) then i else (fieldEnd s (i + 1) rest)))),
+  axioms: [Quot.sound, propext],
+  recursive_argument: fuel
+}
+
+definition{
+  name: decodeField2,
+  parameters: [s : Bytes, start : Nat, v1 : Nat],
+  result: (Option Request),
+  body: (let e : Nat := (fieldEnd s start (Foundation.Bytes::byteLength s)); (match (parseEvent (sliceOf s start (prim subtract e start : Nat)))
+    | Option.none => (ctor Option.none [Request])
+    | Option.some v2 => (if (e =? (Foundation.Bytes::byteLength s)) then (ctor Option.some [Request] (record Request {phase := v1, event := v2})) else (ctor Option.none [Request])))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: decodeField1,
+  parameters: [s : Bytes, start : Nat],
+  result: (Option Request),
+  body: (let e : Nat := (fieldEnd s start (Foundation.Bytes::byteLength s)); (match (parsePhase (sliceOf s start (prim subtract e start : Nat)))
+    | Option.none => (ctor Option.none [Request])
+    | Option.some v1 => (if (e <? (Foundation.Bytes::byteLength s)) then (decodeField2 s (e + 1) v1) else (ctor Option.none [Request])))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: rule1,
+  parameters: [request : Request],
+  result: Bool,
+  body: ((project request event) =? (eventEdit))
+}
+
+definition{
+  name: rule2,
+  parameters: [request : Request],
+  result: Bool,
+  body: (((project request event) =? (eventCheck)) && ((project request phase) =? (phaseDrafting)))
+}
+
+definition{
+  name: rule3,
+  parameters: [request : Request],
+  result: Bool,
+  body: (((project request event) =? (eventApprove)) && ((project request phase) =? (phaseChecked)))
+}
+
+definition{
+  name: rule4,
+  parameters: [request : Request],
+  result: Bool,
+  body: (((project request event) =? (eventAttest)) && ((project request phase) =? (phaseProving)))
+}
+
+definition{
+  name: rule5,
+  parameters: [request : Request],
+  result: Bool,
+  body: (((project request event) =? (eventFail)) && ((project request phase) =? (phaseProving)))
+}
+
+definition{
+  name: rule6,
+  parameters: [request : Request],
+  result: Bool,
+  body: (((project request event) =? (eventPublish)) && ((project request phase) =? (phaseProved)))
+}
+
+definition{
+  name: rule7,
+  parameters: [request : Request],
+  result: Bool,
+  body: ((project request phase) =? (phaseDrafting))
+}
+
+definition{
+  name: rule8,
+  parameters: [request : Request],
+  result: Bool,
+  body: ((project request phase) =? (phaseChecked))
+}
+
+definition{
+  name: rule9,
+  parameters: [request : Request],
+  result: Bool,
+  body: ((project request phase) =? (phaseProving))
+}
+
+definition{
+  name: rule10,
+  parameters: [request : Request],
+  result: Bool,
+  body: ((project request phase) =? (phaseProved))
+}
+
+definition{
+  name: judge,
+  parameters: [request : Request],
+  result: Nat,
+  body: (if (rule1 request) then (answerDrafting) else (if (rule2 request) then (answerChecked) else (if (rule3 request) then (answerProving) else (if (rule4 request) then (answerProved) else (if (rule5 request) then (answerChecked) else (if (rule6 request) then (answerPublished) else (if (rule7 request) then (answerDrafting) else (if (rule8 request) then (answerChecked) else (if (rule9 request) then (answerProving) else (if (rule10 request) then (answerProved) else (answerPublished)))))))))))
+}
+
+definition{
+  name: encodeAnswer,
+  parameters: [code : Nat],
+  result: Bytes,
+  body: (if (code =? (answerDrafting)) then 0x6472616674696e67 else (if (code =? (answerChecked)) then 0x636865636b6564 else (if (code =? (answerProving)) then 0x70726f76696e67 else (if (code =? (answerProved)) then 0x70726f766564 else (if (code =? (answerPublished)) then 0x7075626c6973686564 else 0x696e76616c6964)))))
+}
+
+definition{
+  name: dispatch,
+  parameters: [value : Bytes],
+  result: Bytes,
+  body: (if (64 <? (Foundation.Bytes::byteLength value)) then 0x696e76616c6964 else (match (decodeField1 value 0)
+    | Option.none => 0x696e76616c6964
+    | Option.some request => (encodeAnswer (judge request)))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: application,
+  parameters: [],
+  result: Foundation.View.Text.V1.Model::TextApplication,
+  body: (record Foundation.View.Text.V1.Model::TextApplication {profile := "prismpm/text-application/1", name := "Forge kernel", cargoName := "prism-forge-kernel", cargoVersion := "0.1.0", cargoDescription := "Decide the next build phase of a Hologram Forge app from its current phase and the event that just happened.", cargoRepository := "https://github.com/UOR-Foundation/PrismPM", cargoHomepage := "https://github.com/UOR-Foundation/PrismPM", libraryRoots := (cons "PrismForgeKernel.ForgeKernel.dispatch" (nil String)), acceptanceVectors := (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e6720636865636b, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b656420617070726f7665, response := 0x70726f76696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e6720617474657374, response := 0x70726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f766564207075626c697368, response := 0x7075626c6973686564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f7665642065646974, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e67206661696c, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e67207075626c697368, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b656420617474657374, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x7075626c69736865642077616974, response := 0x7075626c6973686564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e6720617070726f7665, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e6720617474657374, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e67206661696c, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e672065646974, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e672077616974, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b656420636865636b, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b6564206661696c, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b6564207075626c697368, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b65642065646974, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636865636b65642077616974, response := 0x636865636b6564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e6720636865636b, response := 0x70726f76696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e6720617070726f7665, response := 0x70726f76696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e67207075626c697368, response := 0x70726f76696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e672065646974, response := 0x6472616674696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76696e672077616974, response := 0x70726f76696e67}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76656420636865636b, response := 0x70726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76656420617070726f7665, response := 0x70726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x70726f76656420617474657374, response := 0x70726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0xff, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e67, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e6720636865636b20636865636b, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e672020636865636b, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x756e6b6e6f776e20636865636b, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6472616674696e6720756e6b6e6f776e, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x7878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x7878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878, response := 0x696e76616c6964}) (nil Foundation.View.Text.V1.Model::AcceptanceVector)))))))))))))))))))))))))))))))))))))), entryRoot := "PrismForgeKernel.ForgeKernel.dispatch", coreContract := "hologram:guest/core-wasm@1", requestMaximum := (64 : UInt32), responseMaximum := (64 : UInt32), guestAllocationMaximum := (128 : UInt32), capabilitiesEmpty := true, fatArchive := true, primaryLayer := (0 : UInt8), viewLayer := (1 : UInt8), view := (record Foundation.View.Text.V1.Model::TextView {title := "Forge kernel", heading := "Forge kernel", inputLabel := "Request: phase event", submitLabel := "Decide", outputLabel := "Answer", inputError := "Invalid request", responseError := "Invalid response"})})
+}
+\end{semanticmodule}
+\end{lexlean}
