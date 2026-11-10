@@ -807,6 +807,22 @@ async function rulesAfterTurn(appId, text, written = []) {
   if (!current) return { changed, card: tag && tag.error ? `**Rules** · not checked\n\n- ${tag.error}\n\nAsk me to fix the rules.` : null };
   const specKappa = await kappa(enc.encode(current));
   if (before && before.specKappa === specKappa) return { changed, card: tag ? prism.card(before) : null };
+  // The proof is about the logic (fields, rules, answers, guarantees), so it is keyed by the logic kappa,
+  // not by the bytes of the file. An edit that leaves the logic kappa as it was (a word, a label, the
+  // view) is a reword: the kernel keeps the phase (FK-10, FK-11, proved by Lean), and the proof stands.
+  let parsed = null;
+  try { parsed = JSON.parse(current); } catch (e) {}
+  const logicKappa = parsed ? live.project(parsed).logicKappa : null;
+  if (before && before.spec && before.logicKappa && logicKappa === before.logicKappa) {
+    const kept = await rewordPhase(before.phase);
+    const reworded = kept ? prism.checkSpec(parsed) : null;
+    if (reworded && reworded.ok) {
+      if ((await get("files", appId + ":src/lib/prism.ts")) !== reworded.module) { await put("objects", await kappa(enc.encode(reworded.module)), enc.encode(reworded.module)); await put("files", appId + ":src/lib/prism.ts", reworded.module); changed++; }
+      const state = { ...before, phase: kept, specKappa, logicKappa, spec: reworded.spec, issues: reworded.issues, notes: reworded.notes || [], vectors: reworded.vectors || 0, updated: now() };
+      await saveRules(appId, state);
+      return { changed, card: prism.card(state) };
+    }
+  }
   let phase = before ? await nextPhase(before.phase, "edit") : "drafting";
   let checked;
   try { checked = prism.checkSpec(JSON.parse(current)); } catch (e) { checked = { ok: false, issues: ["The rules are not valid JSON: " + e.message] }; }
@@ -822,23 +838,30 @@ async function rulesAfterTurn(appId, text, written = []) {
     }
   }
   const notes = [...(tag && tag.repaired ? ["Forge repaired the JSON syntax the model wrote. Read the rules before you approve them."] : []), ...(checked.notes || [])];
-  const state = { phase, specKappa, spec: checked.spec || null, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: null, updated: now() };
+  const state = { phase, specKappa, logicKappa, spec: checked.spec || null, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: null, updated: now() };
   await saveRules(appId, state);
   return { changed, card: prism.card(state) };
 }
+// The kernel's answer to a reword. A kernel guest older than the event (KERNEL_REV pins the guest the page
+// runs) answers invalid; the edit is then decided as an edit, by the kernel's own answer to that, and the
+// proof is dropped as before. Nothing here decides a phase.
+async function rewordPhase(phase) {
+  try { return await nextPhase(phase, "reword"); } catch (e) { return null; }
+}
 // Lean proves the rules on the hosted verifier; the kernel moves the phase on its attestation or its
-// refusal. A proof of rules that changed meanwhile is dropped: it is about other rules. Resolves the
-// prover's result, or null when the rules changed under it.
-async function proveRules(appId, specKappa, onWait) {
+// refusal. A proof whose logic changed meanwhile is dropped: it is about other rules. A reword meanwhile
+// keeps it, since the logic kappa is the same. Resolves the prover's result, or null when the logic
+// changed under it.
+async function proveRules(appId, logicKey, onWait) {
   const state = await rulesOf(appId);
   const result = await prism.prove(state.spec, { onWait }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
   const latest = await rulesOf(appId);
-  if (!latest || latest.specKappa !== specKappa || latest.phase !== "proving") return null;
+  if (!latest || (latest.logicKappa || latest.specKappa) !== logicKey || latest.phase !== "proving") return null;
   const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
   // The axiom sets Lean settled on are kept: the model the SDK builds must be the model Lean proved.
   await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, axioms: result.ok ? result.axioms || {} : null, proofError: result.ok ? null : result.error, updated: now() });
   refreshLive(appId);
-  await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.rules.prove", resource: specKappa, outcome: result.ok ? "proved" : "refused" });
+  await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.rules.prove", resource: logicKey, outcome: result.ok ? "proved" : "refused" });
   return result;
 }
 // "approve" is the user's yes to the guarantees on the card: no model is asked. The answer is a
@@ -852,7 +875,7 @@ async function approveRules(appId) {
   const phase = await nextPhase("checked", "approve");
   await saveRules(appId, { ...state, phase, approved: now() });
   refreshLive(appId);
-  return { text: prism.provingMessage(state.spec), spec: state.spec, prove: (onWait) => proveRules(appId, state.specKappa, onWait) };
+  return { text: prism.provingMessage(state.spec), spec: state.spec, prove: (onWait) => proveRules(appId, state.logicKappa || state.specKappa, onWait) };
 }
 // The approve turn stays open while Lean works, as a build turn stays open while the model writes:
 // the renderer shows it working, the message counts the seconds, and the result completes it.
