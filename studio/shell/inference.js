@@ -89,15 +89,16 @@ export async function deviceKeyGet() { const s = await settingsGet(); const v = 
 // The site may include a key of its own (warmup.json, written at deploy time from a repository secret,
 // never in the tree): it counts as a key for the route and warm up rules and answers every visitor
 // while their local model loads; the visitor's own key wins over it.
-export const site = { key: "", model: "", ready: null };
+export const site = { key: "", model: "", featherless: "", ready: null };
 export function siteKeyReady() {
-  if (!site.ready) site.ready = fetch(new URL("warmup.json", BASE), { cache: "no-store" }).then(async (r) => { if (r.ok) { const j = await r.json(); site.key = String(j.key || ""); site.model = String(j.model || ""); } }).catch(() => {}).then(() => site.key);
+  if (!site.ready) site.ready = fetch(new URL("warmup.json", BASE), { cache: "no-store" }).then(async (r) => { if (r.ok) { const j = await r.json(); site.key = String(j.key || ""); site.model = String(j.model || ""); site.featherless = String(j.featherless || ""); } }).catch(() => {}).then(() => site.key);
   return site.ready;
 }
 export async function keyGet() { return (await deviceKeyGet()) || (await siteKeyReady()); }
-// Featherless is the second cloud provider. Its key is the visitor's, kept on this device in the same
-// settings record (providerSettings.featherless); the site never carries one.
-export async function featherlessKeyGet() { const s = await settingsGet(); const v = s && s.providerSettings && s.providerSettings.featherless && s.providerSettings.featherless.apiKey && s.providerSettings.featherless.apiKey.value; return v ? String(v) : ""; }
+// Featherless is the second cloud provider. The visitor's own key (providerSettings.featherless, on this
+// device) wins; without one, the site's shared key answers (warmup.json's "featherless", written at deploy
+// time from the FEATHERLESS_SITE_KEY repository secret, never in the tree). It is public by design.
+export async function featherlessKeyGet() { const s = await settingsGet(); const v = s && s.providerSettings && s.providerSettings.featherless && s.providerSettings.featherless.apiKey && s.providerSettings.featherless.apiKey.value; return v ? String(v) : (await siteKeyReady(), site.featherless); }
 export const providerOf = (model) => (String(model).startsWith("featherless/") ? "featherless" : "openrouter");
 export const keyFor = (model) => (providerOf(model) === "featherless" ? featherlessKeyGet() : keyGet());
 export async function keySet(value) { const s = (await settingsGet()) || {}; s.providerSettings = { ...(s.providerSettings || {}), openrouter: { ...((s.providerSettings || {}).openrouter || {}), apiKey: { value } } }; await settingsPut(s); }
@@ -317,7 +318,18 @@ export async function paidGenerate(body, onDelta, signal, onReasoning) {
   // OpenRouter reads (usage.include, reasoning, provider), and the standard usage option in their place.
   if (provider === "featherless") { const j = JSON.parse(bytes); delete j.usage; delete j.reasoning; delete j.provider; if (j.stream) j.stream_options = { include_usage: true }; bytes = JSON.stringify(j); }
   const headers = provider === "featherless" ? { Authorization: "Bearer " + key, "content-type": "application/json" } : { Authorization: "Bearer " + key, "content-type": "application/json", "HTTP-Referer": location.origin, "X-Title": "hologram-forge" };
-  const r = await fetch(provider === "featherless" ? FEATHERLESS : OPENROUTER, { method: "POST", signal, headers, body: bytes });
+  // A shared Featherless plan runs one GLM request at a time; another visitor's request answers 429
+  // "concurrency limit". That is a queue, not a failure: wait for the slot (about five minutes at most),
+  // saying so where the reasoning shows.
+  let r;
+  for (let attempt = 0; ; attempt++) {
+    r = await fetch(provider === "featherless" ? FEATHERLESS : OPENROUTER, { method: "POST", signal, headers, body: bytes });
+    if (!(provider === "featherless" && r.status === 429) || attempt >= 60) break;
+    const said = await r.text().catch(() => "");
+    if (!/concurren/i.test(said)) { r = new Response(said, { status: 429 }); break; }
+    if (onReasoning) onReasoning(`Waiting for a free slot on the shared Featherless plan (another request is running), ${attempt * 5} s…`);
+    await new Promise((res, rej) => { const t = setTimeout(res, 5000); if (signal) signal.addEventListener("abort", () => { clearTimeout(t); rej(new DOMException("aborted", "AbortError")); }, { once: true }); });
+  }
   if (!r.ok) {
     let msg = ""; try { msg = (await r.json()).error.message; } catch (e) {}
     const word = r.status === 401 ? V.noKeyLabel : r.status === 402 ? V.noCreditLabel : V.providerBusyLabel;
