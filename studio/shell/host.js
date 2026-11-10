@@ -417,8 +417,8 @@ async function buildPreview(appId) {
   await cache.put(appUrl.pathname + "index.html", new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } }));
   return { appUrl: appUrl.href, bytes: js.length };
 }
-// ---- the live preview. An app with rules is not built: it is projected. One fixed frame
-// (shell/live/), addressed by the kappa of its own bytes and served once under the preview route with
+// ---- the live preview. An app with rules is not built: it is projected. One fixed frame on shadcn/ui
+// (shell/live/, compiled once by tools/live_components.mjs), addressed by the kappa of its own bytes and served once under the preview route with
 // no network grant at all, draws any spec it is sent. The host sends it the projection of the spec as
 // it stands (mid-stream, checked, proved) and the frame patches only the nodes whose kappa changed,
 // so a change to the spec reaches the screen without a build or a reload.
@@ -428,7 +428,7 @@ function liveFrame() {
     const text = async (p) => { const r = await fetch(new URL(p, BASE)); if (!r.ok) throw new Error(p + " answered " + r.status); return r.text(); };
     const fonts = {};
     for (const p of FONTS) { const r = await fetch(new URL(p, BASE)); if (r.ok) fonts[p] = b64(new Uint8Array(await r.arrayBuffer())); }
-    const html = frameHtml({ brandCss: await text("brand.css"), frameCss: await text("live/frame.css"), frameJs: await text("live/frame.js"), interpreter: prism.INTERPRETER, fonts });
+    const html = frameHtml({ brandCss: await text("brand.css"), componentsCss: await text("live/components.css"), componentsJs: await text("live/components.js"), interpreter: prism.INTERPRETER, fonts });
     await coreReady;
     const { path } = core.run({ op: "preview", kappa: await kappa(enc.encode(html)) });
     const url = new URL(path.slice(1), BASE);

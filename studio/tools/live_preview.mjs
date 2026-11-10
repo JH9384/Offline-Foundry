@@ -74,7 +74,7 @@ claim("streaming: nothing drawn is taken away", stray.size === 0, stray.size ? [
 claim("streaming: the last prefix is the spec", live.project(live.partialSpec(answer)).root === live.project(fixture).root);
 
 // interpreter
-const html = frameHtml({ brandCss: fs.readFileSync(path.join(shell, "brand.css"), "utf8"), frameCss: fs.readFileSync(path.join(shell, "live/frame.css"), "utf8"), frameJs: fs.readFileSync(path.join(shell, "live/frame.js"), "utf8"), interpreter: prism.INTERPRETER, fonts: Object.fromEntries(FONTS.map((p) => [p, fs.readFileSync(path.join(shell, p)).toString("base64")])) });
+const html = frameHtml({ brandCss: fs.readFileSync(path.join(shell, "brand.css"), "utf8"), componentsCss: fs.readFileSync(path.join(shell, "live/components.css"), "utf8"), componentsJs: fs.readFileSync(path.join(shell, "live/components.js"), "utf8"), interpreter: prism.INTERPRETER, fonts: Object.fromEntries(FONTS.map((p) => [p, fs.readFileSync(path.join(shell, p)).toString("base64")])) });
 const module = checked.module;
 const inFrame = html.includes(prism.INTERPRETER);
 const inModule = prism.INTERPRETER.split("\n").filter(Boolean).every((l) => module.includes(l));
@@ -99,9 +99,9 @@ runs.sort((x, y) => x - y);
 const median = runs[runs.length >> 1];
 claim("budget: projection under 4 ms", median < 4, `median ${median.toFixed(2)} ms, p95 ${runs[Math.floor(runs.length * 0.95)].toFixed(2)} ms; the whole ${answer.length}-character stream ${streamMs.toFixed(0)} ms`);
 
-// the frame's script parses as the classic script the page loads it as
+// the frame's compiled script parses as the classic script the page loads it as
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "live-"));
-try { fs.copyFileSync(path.join(shell, "live/frame.js"), path.join(tmp, "frame.cjs")); execFileSync(process.execPath, ["--check", path.join(tmp, "frame.cjs")], { stdio: "pipe" }); claim("frame parses", true); }
+try { fs.copyFileSync(path.join(shell, "live/components.js"), path.join(tmp, "frame.cjs")); execFileSync(process.execPath, ["--check", path.join(tmp, "frame.cjs")], { stdio: "pipe" }); claim("frame parses", true); }
 catch (e) { claim("frame parses", false, String(e.stderr || e).split("\n").slice(0, 3).join(" ")); }
 fs.rmSync(tmp, { recursive: true, force: true });
 

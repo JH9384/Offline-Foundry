@@ -171,7 +171,7 @@ def brand_json():
 GENERATED = {"shell/brand.css": brand_css, "vendor/dyad/hologram.theme.css": theme_css, "shell/brand.json": brand_json}
 HAND = re.compile(r"#[0-9a-fA-F]{3,8}\b|oklch\(|rgba?\(|hsla?\(")
 # The projected pages carry the meta colour brand.json gives them; the check reads their source instead.
-HAND_FREE = ["shell/appearance.css", "shell/appearance.js", "shell/holo.js", "shell/live/frame.css", "shell/live/frame.js", "core/src/bin/project_shell.rs", "vendor/dyad/vite.shell.config.mts", "scripts/stamp_shell.py"]
+HAND_FREE = ["shell/appearance.css", "shell/appearance.js", "shell/holo.js", "core/src/bin/project_shell.rs", "vendor/dyad/vite.shell.config.mts", "scripts/stamp_shell.py"]
 
 if "--check" in sys.argv:
     bad = []
