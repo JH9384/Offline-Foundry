@@ -801,7 +801,13 @@ async function chatTurn(chatId, intent) {
       if (!engine.rules) await onText("Loading the on-device rules model…");
       const held = await rulesModel();
       const inst = held.instance;
-      const deviceMessages = prism.deviceRequest(intent.prompt, await get("files", appId + ":prism/spec.json"));
+      // Rules that checked are the base of an edit. Rules that did not are left out: given them, the small
+      // model copies them back unchanged, so it is asked again from the user's own words, every request so far.
+      const current = await rulesOf(appId);
+      const asks = messages.filter((x) => x.role === "user" && x.content && !prism.isApproval(x.content)).map((x) => x.content);
+      const deviceMessages = current && current.spec && current.phase !== "drafting"
+        ? prism.deviceRequest(intent.prompt, await get("files", appId + ":prism/spec.json"))
+        : prism.deviceRequest(asks.join("\n"), null);
       const { ids } = gpuIds(inst, deviceMessages, held.model);
       const room = held.model.ctx - ids.length - 8;
       if (room < 128) throw new Error("This request does not fit the on-device model. Choose a paid model in the model picker.");
