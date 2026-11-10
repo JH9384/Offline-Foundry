@@ -8,7 +8,7 @@
 // It writes what Dyad's own picker writes, so every screen stays in sync: the settings record's
 // selectedModel, and the chat's own selection once that chat has a history (the host's chat turn
 // prefers the chat's).
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import {
@@ -27,8 +27,11 @@ import type { LargeLanguageModel } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
 const ORDER = ["featherless", "local"];
-// Where each provider's model runs, in one word.
+// Where each provider's model runs, in one word, shown as a quiet pill beside the name.
 const WHERE: Record<string, string> = { featherless: "Cloud", local: "Local" };
+const Pill = ({ where }: { where: string }) => (
+  <span className="shrink-0 rounded-full border border-border/50 px-1.5 py-px text-[10px] font-normal leading-4 text-muted-foreground/70">{where}</span>
+);
 
 export function ModelPicker() {
   const { settings, updateSettings } = useSettings();
@@ -70,12 +73,13 @@ export function ModelPicker() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
-        className="inline-flex h-7 max-w-[220px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border-none bg-transparent px-2 text-xs font-medium text-foreground/80 shadow-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="inline-flex h-8 max-w-[240px] cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border border-border/70 bg-background/40 pl-3 pr-2 text-xs font-medium text-foreground/90 shadow-none transition-colors hover:border-border hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/60"
         data-testid="model-picker"
         title={where ? `${label}, ${where}` : label}
       >
         <span className="truncate">{label}</span>
-        {where && <span className="shrink-0 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">{where}</span>}
+        {where && <Pill where={where} />}
+        <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72" align="start">
         {isLoading && <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading models</div>}
@@ -86,7 +90,7 @@ export function ModelPicker() {
             className={cn("cursor-pointer gap-2", isSelected(provider, model) && "bg-accent")}
           >
             <span className="min-w-0 flex-1 truncate">{model.displayName}</span>
-            <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{WHERE[provider]}</span>
+            <Pill where={WHERE[provider]} />
             {isSelected(provider, model) && <CheckIcon className="size-3.5 shrink-0 text-brand" />}
           </DropdownMenuItem>
         ))}
