@@ -11,6 +11,7 @@ import { buildSystemPrompt } from "./prompts.js";
 import * as inference from "./inference.js";
 import { viewReady, lookup, routeOf, refusalWord, seal as sealAnswer, sealPaid, paidGenerate, gpuReady, gpuIds, rememberSession, withEngine, engine, readWho, MODEL_ID, site, siteKeyReady, deviceKeyGet } from "./inference.js";
 import { install, installed, encodeView, b64, unb64, sha256 } from "./holo.js";
+import * as prism from "./prism.js";
 
 const MARKER = "dyad-ipc-envelope-v1";
 const BASE = new URL("./", import.meta.url); // the shell's directory, wherever it is served
@@ -599,6 +600,82 @@ async function codebaseOf(appId) {
   }
   return "Files in the project:\n" + paths.join("\n") + "\n\n" + parts.join("\n\n");
 }
+// ---- proved rules. An app that decides something carries prism/spec.json, a Prism spec. Its build
+// phase (drafting, checked, proving, proved, published) is the Forge kernel's answer, never this
+// file's: the kernel is the Prism app whose state machine Lean proves (FK-01 to FK-04), so the chat
+// can say proved only after Lean attested the current rules, and publish only proved rules. The
+// state lives at refs["prism:<appId>"].
+const kernelReady = import(new URL("kernel.js", BASE).href).then(() => self.ForgeKernel.load((p) => fetch(new URL(p, BASE))));
+const PHASES = ["drafting", "checked", "proving", "proved", "published"];
+async function nextPhase(phase, event) {
+  const answer = await (await kernelReady).ask(phase + " " + event);
+  if (!PHASES.includes(answer)) throw new Error("the kernel answered " + answer + " to " + phase + " " + event);
+  return answer;
+}
+const rulesOf = (appId) => get("refs", "prism:" + appId);
+const saveRules = (appId, state) => put("refs", "prism:" + appId, state);
+// After a turn: the spec the model wrote (if any) becomes prism/spec.json; new rules drop the proof
+// (the kernel's edit), are checked (its check), and on a pass the app's rule module is written.
+// Returns the files changed and the card that replaces the spec in the chat.
+async function rulesAfterTurn(appId, text) {
+  const tag = prism.parseSpecTag(text);
+  let changed = 0;
+  if (tag && tag.spec) {
+    const json = JSON.stringify(tag.spec, null, 2) + "\n";
+    if ((await get("files", appId + ":prism/spec.json")) !== json) { await put("objects", await kappa(enc.encode(json)), enc.encode(json)); await put("files", appId + ":prism/spec.json", json); changed++; }
+  }
+  const current = await get("files", appId + ":prism/spec.json");
+  const before = await rulesOf(appId);
+  if (!current) return { changed, card: tag && tag.error ? `**Rules** · not checked\n\n- ${tag.error}\n\nAsk me to fix the rules.` : null };
+  const specKappa = await kappa(enc.encode(current));
+  if (before && before.specKappa === specKappa) return { changed, card: tag ? prism.card(before) : null };
+  let phase = before ? await nextPhase(before.phase, "edit") : "drafting";
+  let checked;
+  try { checked = prism.checkSpec(JSON.parse(current)); } catch (e) { checked = { ok: false, issues: ["The rules are not valid JSON: " + e.message] }; }
+  if (checked.ok) {
+    phase = await nextPhase(phase, "check");
+    if ((await get("files", appId + ":src/lib/prism.ts")) !== checked.module) { await put("objects", await kappa(enc.encode(checked.module)), enc.encode(checked.module)); await put("files", appId + ":src/lib/prism.ts", checked.module); changed++; }
+  }
+  const state = { phase, specKappa, spec: checked.spec || null, issues: checked.issues, vectors: checked.vectors || 0, proof: null, updated: now() };
+  await saveRules(appId, state);
+  return { changed, card: prism.card(state) };
+}
+// A message from Forge outside a model turn (a proof that ended): saved, then the renderer is told.
+async function postAssistant(chatId, content) {
+  const messages = await messagesOf(chatId);
+  const id = messages.length ? Math.max(...messages.map((x) => x.id)) + 1 : 1;
+  messages.push({ id, role: "assistant", content, approvalState: "approved", commitHash: null, createdAt: now() });
+  await saveMessages(chatId, messages);
+  emit("chat:response:chunk", { chatId, invocationRef: null, messages });
+  emit("chat:stream:end", { chatId });
+}
+// Lean proves the rules on the hosted verifier; the kernel moves the phase on its attestation or its
+// refusal. A proof of rules that changed meanwhile is dropped: it is about other rules.
+async function proveRules(appId, chatId, specKappa) {
+  const state = await rulesOf(appId);
+  const result = await prism.prove(state.spec).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+  const latest = await rulesOf(appId);
+  if (!latest || latest.specKappa !== specKappa || latest.phase !== "proving") return;
+  const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
+  await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, proofError: result.ok ? null : result.error, updated: now() });
+  await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.rules.prove", resource: specKappa, outcome: result.ok ? "proved" : "refused" });
+  await postAssistant(chatId, prism.proofMessage(state.spec, result));
+}
+// "approve" is the user's yes to the guarantees on the card: no model is asked.
+async function approveRules(appId, chatId) {
+  const state = await rulesOf(appId);
+  if (!state) return "This app has no rules to prove yet. Tell me what it decides and I will draft them.";
+  if (state.phase === "proving") return "Lean is already proving these rules.";
+  if (state.phase === "proved" || state.phase === "published") return "These rules are already proved by Lean.";
+  if (state.phase !== "checked") return "The rules are not checked yet, so there is nothing to approve. Ask me to fix them.";
+  const phase = await nextPhase("checked", "approve");
+  await saveRules(appId, { ...state, phase, approved: now() });
+  proveRules(appId, chatId, state.specKappa).catch((e) => console.error("[host] prove", e));
+  return prism.provingMessage(state.spec);
+}
+handlers.set("prism:status", async ({ appId }) => (await rulesOf(appId)) || null);
+window.__prism = { rulesAfterTurn, approveRules, rulesOf, nextPhase, check: prism.checkSpec };
+
 async function chatTurn(chatId, intent) {
   const m = chatMachineOf(chatId);
   const chat = await get("chats", chatId);
@@ -616,6 +693,17 @@ async function chatTurn(chatId, intent) {
   await saveMessages(chatId, messages);
   publishChat(chatId, { phase: "streaming", lastAcceptance: { intentId: intent.intentId, acceptance: "message-accepted", acceptedMessageId: userId } });
   emit("chat:stream:start", { chatId, invocationRef: ref });
+  if (prism.isApproval(intent.prompt)) {
+    let content;
+    try { content = await approveRules(appId, chatId); } catch (e) { content = `<dyad-output type="error" message="${String((e && e.message) || e).replace(/"/g, "'")}"></dyad-output>`; }
+    messages.push({ id: userId + 1, role: "assistant", content, approvalState: "approved", commitHash: null, createdAt: now() });
+    await saveMessages(chatId, messages);
+    emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
+    publishChat(chatId, { phase: "finalizing", error: null, lastCompletion: { intentId: intent.intentId, invocationRef: ref, outcome: "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
+    publishChat(chatId, { phase: "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
+    emit("chat:stream:end", { chatId });
+    return;
+  }
   // T3: the assistant placeholder
   const head = (await get("refs", appId + ":main")) || null;
   const asstId = userId + 1;
@@ -630,7 +718,7 @@ async function chatTurn(chatId, intent) {
     const rules = await get("files", appId + ":AI_RULES.md");
     const history = messages.slice(0, -2).filter((x) => x.content).map((x) => ({ role: x.role, content: x.content }));
     const request = [
-      { role: "system", content: buildSystemPrompt(rules) },
+      { role: "system", content: buildSystemPrompt(rules) + "\n\n" + prism.SPEC_RULES },
       { role: "user", content: "This is my codebase. " + (await codebaseOf(appId)) },
       { role: "assistant", content: "OK, got it. I'm ready to help" },
       ...history,
@@ -689,11 +777,13 @@ async function chatTurn(chatId, intent) {
     const sm = full.match(/<dyad-chat-summary>([\s\S]*?)<\/dyad-chat-summary>/); summary = sm ? sm[1].trim() : undefined;
     if (summary && (!chat.title || chat.title === "New chat")) { const c = await get("chats", chatId); c.title = summary; await put("chats", chatId, c); }
     const tags = parseDyadTags(full);
-    const changed = await applyDyadTags(appId, tags);
+    let changed = await applyDyadTags(appId, tags);
+    const spec = await rulesAfterTurn(appId, full);
+    changed += spec.changed;
     updatedFiles = changed > 0;
     let commit = null;
     if (updatedFiles) commit = await seal(appId, summary || `${changed} file(s) changed`);
-    messages[messages.length - 1] = { ...messages[messages.length - 1], content: full, commitHash: commit, approvalState: "approved", requestId: provenance && provenance.receipt || null };
+    messages[messages.length - 1] = { ...messages[messages.length - 1], content: prism.withCard(full, spec.card), commitHash: commit, approvalState: "approved", requestId: provenance && provenance.receipt || null };
     await saveMessages(chatId, messages);
     emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
   } catch (e) {
@@ -939,8 +1029,19 @@ handlers.set("holo:publish", async ({ appId }) => {
   const version = await get("refs", appId + ":main");
   const row = (outcome, resource) => put("audit", Date.now() + ":publish:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "holo.application.publish", resource, outcome });
   if (decision !== "Accept") { await row("refused", version || ""); return { decision, word: words.publishRefusedLabel, closure, built, attestation }; }
+  // An app with rules publishes only proved rules: the kernel's answer to `<phase> publish`. The View
+  // then carries the rules and Lean's record beside the page, at prism/spec.json and prism/proof.json.
+  const rules = await rulesOf(appId);
+  const ruleFiles = [];
+  if (rules) {
+    if ((await nextPhase(rules.phase, "publish")) !== "published") {
+      await row("refused", version || "");
+      return { decision: "Refuse", word: `Publishing waits for proved rules. These rules are ${rules.phase === "checked" ? "checked, not yet proved: reply approve in the chat" : rules.phase}.`, closure, built, attestation };
+    }
+    ruleFiles.push({ path: "prism/spec.json", bytes: enc.encode(JSON.stringify(rules.spec, null, 2) + "\n") }, { path: "prism/proof.json", bytes: enc.encode(JSON.stringify(rules.proof, null, 2) + "\n") });
+  }
   const page = await buildPortable(appId);
-  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }]);
+  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }, ...ruleFiles]);
   const guest = new Uint8Array(await (await fetch(new URL("core.wasm", BASE), { cache: "no-store" })).arrayBuffer());
   const model = core.run({ op: "publish-preimage", application: app.name, version, closure, attestation }).bytes;
   const modelBytes = enc.encode(model);
@@ -956,6 +1057,7 @@ handlers.set("holo:publish", async ({ appId }) => {
   if (address !== composed.identities.archive_kappa) throw new Error("the page's address of the archive differs from PrismPM's: " + address);
   const done = await install(bytes, { appId, application: app.name, version });
   await row("granted", address);
+  if (rules) await saveRules(appId, { ...rules, phase: await nextPhase(rules.phase, "publish"), publishedAs: address, updated: now() });
   const record = { application: app.name, version, closure, attestation, provenance: prov, identities: composed.identities, directory: composed.directory, byteLength: bytes.length, modelId, viewBytes: view.length, guestBytes: guest.length };
   lastPublish = { record, bytes, guest, view, model: modelBytes, source: sourceBytes, page };
   return { decision, kappa: address, url: done.url, byteLength: bytes.length, viewBytes: view.length, guestBytes: guest.length, ms: Math.round(performance.now() - t0), buildMs: page.ms, composeMs, installMs: done.ms, modules: page.modules, jsBytes: page.jsBytes, cssBytes: page.cssBytes, tailwindBytes: page.tailwindBytes, identities: composed.identities, record };
