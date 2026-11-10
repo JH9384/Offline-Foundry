@@ -19,7 +19,7 @@ const PROFILE = "prism-app";
 // ---- what the model is told
 export const SPEC_RULES = `# Proved rules
 When the app decides an answer from a few inputs (a price tier, an eligibility, a grade, a risk level), state its rules as a Prism spec, so Lean can prove them, and make the screen use them.
-- Before the files, write one <dyad-spec> block of JSON: name (kebab-case), title, purpose (one sentence), fields (1 to 8, each {"name","kind":"number"|"choice","min","max","values","means"}), outcomes (lower-case words), rules (in order, the first that matches decides; each {"when":[{"field","op","value"}],"then","why"}), otherwise, otherwiseWhy, properties (what must never or always happen; each {"kind":"never"|"always","when","then","why"}), examples ([{"request":"<field values separated by spaces>","response"}]), limits.
+- Before the files, write one <dyad-spec> block of JSON: name (kebab-case), title, purpose (one sentence), fields (1 to 8, each {"name","kind":"number"|"choice","min","max","values","means"}), outcomes (lower-case words), rules (in order, the first that matches decides; each {"when":[{"field","op","value"}],"then","why"}), otherwise, otherwiseWhy, properties (what must never or always happen; each {"kind":"never"|"always","when","then","why"}), examples ([{"request":"<field values separated by spaces>","response"}]), limits (a list of sentences).
 - op is "is" or "is not" for a choice field, and "<", "<=", ">", ">=", "=" or "!=" for a number field, against a whole number or {"field":"<other number field>"}. Numbers are whole and not negative.
 - Forge writes src/lib/prism.ts from the spec. Import { decide, FIELDS, OUTCOMES } from "@/lib/prism" and show decide({ <field>: <value>, ... }) as the answer; it returns an outcome word, or "invalid". Never re-implement the rules in the screen, and never write src/lib/prism.ts or prism/spec.json yourself.
 - To change the rules, write a whole new <dyad-spec> block. When the app decides nothing (a landing page, a gallery), write no spec.
@@ -225,6 +225,8 @@ function lowerAnswers(input) {
 export function checkSpec(raw) {
   const issues = [], notes = [];
   let input = lowerAnswers(raw);
+  // `limits` is a list; a model that writes one sentence means a list of one.
+  if (typeof input.limits === "string") { input.limits = [input.limits]; notes.push("Forge made `limits` a list."); }
   // An example is the model's own word for what the rules answer. One that is not a request, or that the
   // rules answer differently, is set aside and named on the card, so the user sees the disagreement.
   try {
