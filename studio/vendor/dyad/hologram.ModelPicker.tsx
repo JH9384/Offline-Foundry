@@ -1,8 +1,9 @@
 // dyad-prism (ours, not Dyad's; see VENDORED.md): the model picker, replacing Dyad's at build time
-// through `resolveId` in vite.shell.config.mts. Three providers answer here, the device, OpenRouter and
-// Featherless (shell/host.js), so the menu is the flat list of their models and nothing else: no submenus, no
-// recent section, no effort levels, no price badges, no trial banner, no Pro upsell. Choosing a model
-// is choosing who answers, which is the only decision this control makes.
+// through `resolveId` in vite.shell.config.mts. Two models answer here (shell/host.js): GLM 5.3 Flash in the
+// cloud (Featherless) and BitNet 2B on this device. The menu is those two, each with one word saying where
+// it runs, and nothing else: no provider headers, no submenus, no recent section, no effort levels, no price
+// badges, no trial banner, no Pro upsell. Choosing a model is choosing who answers, which is the only
+// decision this control makes.
 //
 // It writes what Dyad's own picker writes, so every screen stays in sync: the settings record's
 // selectedModel, and the chat's own selection once that chat has a history (the host's chat turn
@@ -14,8 +15,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useChatMode } from "@/hooks/useChatMode";
@@ -27,7 +26,9 @@ import type { LanguageModel } from "@/ipc/types";
 import type { LargeLanguageModel } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
-const ORDER = ["local", "openrouter", "featherless"];
+const ORDER = ["featherless", "local"];
+// Where each provider's model runs, in one word.
+const WHERE: Record<string, string> = { featherless: "Cloud", local: "Local" };
 
 export function ModelPicker() {
   const { settings, updateSettings } = useSettings();
@@ -50,11 +51,12 @@ export function ModelPicker() {
     (selected.provider === providerId || (selected.provider === "auto" && providerId === "local")) &&
     (selected.name === model.apiName || selected.provider === "auto");
 
-  const label =
-    listed
-      .flatMap((provider) => modelsOf(provider.id).map((model) => ({ provider: provider.id, model })))
-      .find(({ provider, model }) => isSelected(provider, model))?.model.displayName ??
-    selected.name;
+  const options = listed.flatMap((provider) => modelsOf(provider.id).map((model) => ({ provider: provider.id, model })));
+  // A selection no longer offered (OpenRouter) answers on the device, so it reads as the device's model.
+  const current =
+    options.find(({ provider, model }) => isSelected(provider, model)) ?? options.find(({ provider }) => provider === "local");
+  const label = current ? current.model.displayName : selected.name;
+  const where = current ? WHERE[current.provider] : "";
 
   const choose = async (providerId: string, model: LanguageModel) => {
     const next: LargeLanguageModel = { name: model.apiName, provider: providerId };
@@ -70,32 +72,23 @@ export function ModelPicker() {
       <DropdownMenuTrigger
         className="inline-flex h-7 max-w-[220px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border-none bg-transparent px-2 text-xs font-medium text-foreground/80 shadow-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         data-testid="model-picker"
-        title={label}
+        title={where ? `${label}, ${where}` : label}
       >
         <span className="truncate">{label}</span>
+        {where && <span className="shrink-0 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">{where}</span>}
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72" align="start">
         {isLoading && <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading models</div>}
-        {listed.map((provider, index) => (
-          <div key={provider.id}>
-            {index > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
-              {provider.name}
-            </DropdownMenuLabel>
-            {modelsOf(provider.id).map((model) => (
-              <DropdownMenuItem
-                key={provider.id + ":" + model.apiName}
-                onClick={() => choose(provider.id, model)}
-                className={cn(
-                  "cursor-pointer gap-2",
-                  isSelected(provider.id, model) && "bg-accent",
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{model.displayName}</span>
-                {isSelected(provider.id, model) && <CheckIcon className="size-3.5 shrink-0 text-brand" />}
-              </DropdownMenuItem>
-            ))}
-          </div>
+        {options.map(({ provider, model }) => (
+          <DropdownMenuItem
+            key={provider + ":" + model.apiName}
+            onClick={() => choose(provider, model)}
+            className={cn("cursor-pointer gap-2", isSelected(provider, model) && "bg-accent")}
+          >
+            <span className="min-w-0 flex-1 truncate">{model.displayName}</span>
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{WHERE[provider]}</span>
+            {isSelected(provider, model) && <CheckIcon className="size-3.5 shrink-0 text-brand" />}
+          </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>

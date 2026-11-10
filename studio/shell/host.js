@@ -110,14 +110,17 @@ const OPENROUTER_MODELS = [
 const LOCAL = { id: "local", name: "On your device", type: "custom", hasFreeTier: true, envVarName: "HOLOGRAM_DEVICE" };
 // The window is the engine's own (q/core/loader.js: BitNet 2B, ctx 3000), not a round number: a build
 // turn carries the project's files, so the renderer must know what actually fits.
-const LOCAL_MODELS = [{ apiName: MODEL_ID, displayName: "BitNet 2B, on your device", description: "Runs on this browser's GPU; every answer is sealed on the device", contextWindow: 3000 }];
+const LOCAL_MODELS = [{ apiName: MODEL_ID, displayName: "BitNet 2B", description: "Runs on this browser's GPU; every answer is sealed on the device", contextWindow: 3000 }];
 // Featherless: open-weight models behind an OpenAI chat endpoint that admits this origin. The key is the
 // visitor's, entered on the provider's settings page and kept on this device; the site carries none.
 const FEATHERLESS = { id: "featherless", name: "Featherless", hasFreeTier: false, websiteUrl: "https://featherless.ai/account/api-keys", gatewayPrefix: "featherless/", type: "cloud" };
 const FEATHERLESS_MODELS = [{ apiName: "zai-org/GLM-5.3-Flash", displayName: "GLM 5.3 Flash", description: "Z.ai's GLM 5.3 Flash on Featherless", contextWindow: 262144 }];
-handlers.set("get-language-model-providers", () => [LOCAL, OPENROUTER, FEATHERLESS]);
+// Two models are offered: GLM 5.3 Flash in the cloud (Featherless) and BitNet 2B on the device. OpenRouter is
+// withdrawn from the picker and Settings for now; its models stay defined here, and the warm-up that answers
+// while the device model loads is unchanged.
+handlers.set("get-language-model-providers", () => [FEATHERLESS, LOCAL]);
 handlers.set("get-language-models", ({ providerId }) => (providerId === "openrouter" ? OPENROUTER_MODELS : providerId === "featherless" ? FEATHERLESS_MODELS : providerId === "local" ? LOCAL_MODELS : []));
-handlers.set("get-language-models-by-providers", () => ({ openrouter: OPENROUTER_MODELS, featherless: FEATHERLESS_MODELS, local: LOCAL_MODELS }));
+handlers.set("get-language-models-by-providers", () => ({ featherless: FEATHERLESS_MODELS, local: LOCAL_MODELS }));
 handlers.set("validate-provider-api-key", async ({ provider, apiKey }) => {
   if (provider !== "openrouter") return { ok: true };
   const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { authorization: "Bearer " + apiKey } });
@@ -782,7 +785,8 @@ async function chatTurn(chatId, intent) {
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
   const V = await viewReady();
   const chosen = (chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  const paid = (chosen.provider === "openrouter" || chosen.provider === "featherless") && chosen.name;
+  // Only Featherless is offered as a cloud model now; a selection left on OpenRouter answers on the device.
+  const paid = chosen.provider === "featherless" && chosen.name;
   const model = paid ? chosen.provider + "/" + chosen.name.replace(/^(openrouter|featherless)\//, "") : MODEL_ID;
   // T2: the user message, accepted
   const messages = await messagesOf(chatId);
