@@ -13,6 +13,7 @@
 #   ./scripts/plant.sh hand      # type a colour into appearance.css by hand: the Brand gate must refuse
 #   ./scripts/plant.sh parse     # put a raw newline in a string in host.js: the Parse gate must refuse
 #   ./scripts/plant.sh hole      # drop a handler a screen reads on mount: the Contract gate must refuse
+#   ./scripts/plant.sh live      # make a node's kappa ignore its content: the Live gate must refuse
 # `hole` runs the Contract gate, which bundles the vendored contracts with the renderer's own esbuild,
 # so run it where those dependencies were installed for this platform -- otherwise esbuild refuses to
 # start and the gate looks like it fired when it never ran.
@@ -94,7 +95,13 @@ EOF
     # the screen that reads it dies on the refusal.
     perl -0pi -e 's/handlers\.set\("get-context-paths"/handlers.set("get-context-paths-planted"/' shell/host.js
     expect_fail node tools/contract_shapes.mjs --check ;;
-  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole" >&2; exit 2 ;;
+  live)
+    # A kappa that ignores what a node says: an edited rule keeps its old kappa, so the frame never redraws it.
+    cp shell/live/project.mjs /tmp/plant-project.mjs
+    sed -i 's/kappa: kappaOfValue({ kind: n.kind, data: n.data })/kappa: kappaOfValue({ kind: n.kind })/' shell/live/project.mjs
+    expect_fail node tools/live_preview.mjs --check
+    cp /tmp/plant-project.mjs shell/live/project.mjs ;;
+  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live" >&2; exit 2 ;;
 esac
 restore
 echo "restored"
