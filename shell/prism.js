@@ -245,6 +245,11 @@ export function checkSpec(raw) {
   if (words.length) notes.push("Forge respelled " + words.map(([a, b]) => `\`${a}\` as \`${b}\``).join(", ") + ", the form Prism words take.");
   // `limits` is a list; a model that writes one sentence means a list of one.
   if (typeof input.limits === "string") { input.limits = [input.limits]; notes.push("Forge made `limits` a list."); }
+  // A model may write the otherwise answer as the last rule ({"otherwise": "standard"}); it means the otherwise.
+  if (Array.isArray(input.rules)) {
+    const stray = input.rules.filter((r) => r && !r.when && typeof r.otherwise === "string");
+    if (stray.length) { input.rules = input.rules.filter((r) => !stray.includes(r)); if (!input.otherwise) input.otherwise = stray[stray.length - 1].otherwise; notes.push("Forge read the rule `otherwise` as the answer when no rule matches."); }
+  }
   // An example is the model's own word for what the rules answer. One that is not a request, or that the
   // rules answer differently, is set aside and named on the card, so the user sees the disagreement.
   try {
