@@ -26,6 +26,8 @@ AI can take you from prompt to production in minutes. What it can't tell you is 
 
 Forge adds the step that settles it: **formal verification**. Every rule your app promises is proved mathematically, for every possible input, before it can go live. Not tested. Proved.
 
+It all runs in your browser. No install, no account, no server.
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ## How it works
@@ -56,15 +58,25 @@ Edit anything after it is proved and Forge returns to step 2. The proof badge al
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Try it
+## Start building
 
 ```
 Open https://uor-foundation.github.io/forge/ in any modern browser.
 ```
 
-This page runs the Forge kernel, the proved core this repository holds. It decides when an app may move to the next step and what the app may access. In your browser, before it answers, the page checks three things: the bytes are authentic, the proof is attached, and every example gives its proved answer. Type `drafting check` and it answers `checked`.
+Type your first prompt. The model starts in your browser and the preview appears beside the chat. When you are ready, choose **Publish**.
 
-Prefer a terminal? [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/UOR-Foundation/forge?devcontainer_path=.devcontainer/try/devcontainer.json)
+Want to see the proof engine on its own? The [kernel page](https://uor-foundation.github.io/forge/app/) runs the core that decides when an app may move to the next step and what it may access. Before it answers, it checks that the bytes are authentic, the proof is attached, and every example gives its proved answer. Type `drafting check` and it answers `checked`.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## What's inside
+
+| Part | What it is | Where |
+|---|---|---|
+| Studio | The app builder: chat, preview, publish | [`studio/`](studio/) |
+| Kernel | The proved core that governs every step | [`app/`](app/) |
+| Promises | Every rule, registered with a scenario and a test | [`model/`](model/), [`features/`](features/) |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -88,7 +100,7 @@ Forge holds itself to the same standard. Lean proves each of these for every req
 
 ## Verify it yourself
 
-Every published app is one file, a holo, that holds the app, its rules, its proof, and how it was built. Its name comes from its contents, so changing one byte changes the name. Check any app offline:
+Every published app is one file, a holo, that holds the app, its rules, its proof, and how it was built. Its name comes from its contents, so changing one byte changes the name. Open any holo on any device with [`holo.html`](https://uor-foundation.github.io/forge/holo.html), or check one offline:
 
 ```bash
 npx prism-code inspect app/.prism/build/*/*.holo
@@ -126,6 +138,8 @@ npx prism-code build --remote github
 | `just app` | Build and verify the holo |
 | `just new-capability <ID> <level> <suite> "<statement>"` | Add a promise with its scenario and failing test |
 | `just model-write` | Regenerate `CONFORMANCE.md` |
+
+The studio builds on its own lane: see [`studio/README.md`](studio/README.md).
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

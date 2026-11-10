@@ -1,0 +1,6 @@
+name = "HologramForge"
+version = "0.1.0"
+defaultTargets = ["HologramForge"]
+
+[[lean_lib]]
+name = "HologramForge"

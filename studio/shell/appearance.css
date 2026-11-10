@@ -1,0 +1,34 @@
+/* The appearance switch on the renderer's UI: the button, the popover, the three looks. Layout and behaviour
+   only: every colour, font and radius comes from brand.css, generated from the Hologram brand kit's
+   tokens, through the same variables the renderer's own components read. Immersive is brand.css's business too
+   (the photo behind a transparent main surface, glass on the panels); this file only places the switch. */
+
+/* The switch: a sun at the top right, above the renderer's UI; the popover under it. */
+.appearance {
+  position: fixed; top: 6px; right: 14px; z-index: 60; width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--popover); color: var(--popover-foreground); display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  opacity: 0.85; transition: opacity 0.15s, transform 0.15s;
+}
+.appearance:hover { opacity: 1; transform: translateY(1px) scale(1.04); }
+.popover {
+  position: fixed; top: 42px; right: 14px; z-index: 61; width: 236px; padding: 6px; border-radius: calc(var(--radius) + 4px);
+  border: 1px solid var(--border); background: var(--popover); color: var(--popover-foreground);
+  font-family: var(--font-sans); font-size: 14px;
+}
+.popover[hidden] { display: none; }
+.mode { display: flex; align-items: center; justify-content: space-between; gap: 13px; width: 100%; text-align: left; padding: 8px 13px; border: 0; border-radius: calc(var(--radius) - 2px); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.mode svg { flex: none; opacity: 0.8; }
+.mode:hover { background: var(--accent); color: var(--accent-foreground); }
+.mode[aria-pressed="true"] { background: var(--accent); color: var(--accent-foreground); font-weight: 500; }
+.walls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 2px 5px 8px; }
+.walls:not(.on) { display: none; }
+.wall { aspect-ratio: 1.618; border-radius: calc(var(--radius) - 2px); border: 1.5px solid transparent; background-size: cover; background-position: center; cursor: pointer; }
+.wall[aria-pressed="true"] { border-color: var(--brand); }
+
+/* Electron's title bar (the logo, "Manage app", the window controls) is window chrome, not the
+   product: hidden, and the layout's offset for it set to zero so the page starts at the top. */
+:root { --layout-title-bar-offset: 0px !important; }
+.app-region-drag { display: none !important; }
+
+/* Voice to text is the renderer's Pro feature: the button and its recording states are not offered here. */
+button[aria-label^="Voice to text"], button[aria-label="Stop recording"], button[aria-label^="Transcribing"] { display: none !important; }

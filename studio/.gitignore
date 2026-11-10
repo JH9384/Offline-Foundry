@@ -1,0 +1,17 @@
+.lexlean/
+.prism/
+target/
+core/target/
+__pycache__/
+shell/core.wasm
+shell/app/
+shell/assets/
+vendor/dyad/dist/
+vendor/dyad/node_modules/
+shell/scaffold/
+shell/404.html
+shell/sw.js
+shell/manifest.json
+shell/provenance.json
+shell/v1/
+shell/warmup.json
