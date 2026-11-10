@@ -1,9 +1,16 @@
-name: ci
+# Forge (studio/): its own checks, on every push and pull request that touches it. Project content, not
+# universal policy. Forge has its own Rust core and Lean lane (studio/core, studio/src, scripts/lane.sh),
+# kept out of the template's Cargo workspace; the template's gate (bootstrap.yml) does not build it, so
+# this does. Every `uses:` is pinned to a commit and every checkout keeps full history and no credentials,
+# as audit-bootstrap requires of every workflow here.
+name: studio
 
 on:
   push:
     branches: [main]
+    paths: ["studio/**", ".github/workflows/studio.yml"]
   pull_request:
+    paths: ["studio/**", ".github/workflows/studio.yml"]
 
 permissions:
   contents: read
@@ -11,8 +18,16 @@ permissions:
 jobs:
   lane:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: studio
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check out the exact event revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: wasm32-unknown-unknown
@@ -25,7 +40,7 @@ jobs:
           path: |
             ~/.cache/hologram-forge-lane
             ~/.elan
-          key: lane-${{ hashFiles('PRISMPM_REV', 'lean-toolchain') }}
+          key: lane-${{ hashFiles('studio/PRISMPM_REV', 'studio/lean-toolchain') }}
       - name: The authored model is what the author script writes
         run: python3 tools/author.py && git diff --exit-code -- src/Forge.lex.tex
       - name: The lane, byte compared against the committed artifacts
@@ -43,3 +58,5 @@ jobs:
         run: node tools/prism_journey.mjs --check
       - name: The commit Forge makes on a template instance is prism-code's, byte for byte
         run: node tools/prism_template.mjs --check
+      - name: Nothing in this repository names Forge's old home
+        run: node tools/self_contained.mjs

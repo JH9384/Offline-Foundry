@@ -201,6 +201,8 @@ self.addEventListener("fetch", (event) => {
       return;
     }
     if (event.request.method !== "GET") return;
+    // app/ is the Forge kernel's Prism page, a separate site with its own worker: never answered here.
+    if (path === "app" || path.startsWith("app/")) return;
     // The chat app under ui/ routes on the client: every navigation there is its one page, from the closure first.
     if (path.startsWith("ui/") && event.request.mode === "navigate") { event.respondWith((async () => (await caches.match(BASE + "ui/index.html")) || fetch(new Request(BASE + "ui/index.html")))()); return; }
     // The renderer's files under assets/ keep fixed names outside the closure: always revalidated
