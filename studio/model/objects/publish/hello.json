@@ -1,0 +1,41 @@
+{
+ "application": "hello",
+ "version": "blake3:98937c3b4b1e0a5466133498761b0fff2a429cfc8ddaa294be08d1b1ea4f369e",
+ "closure": "ec549f350322b1f39b9fe1a73cc977838e2cbe7b0386a019196c2bd3935fe6b4",
+ "attestation": "afc3a20682063217404ee32185ac687627dc7b8c40e80e3fe2d5080b52ce37d4",
+ "provenance": {
+  "source_id": "043bf7b59a9cd385b335f84c7b640d77eed0fd3078e2271b47249e9147ac5334",
+  "semantic_id": "77d4777fbac53420e1ac5478396a9c53ce2a28522b67bdffc6f35cac6774a07d",
+  "compiler_semantics_id": "49561889f77c9c3571da51e8e53233da9df5ab8f46d16165159425ba2e82dc44",
+  "snapshot_id": "71787d0506fab558fe0fd1f21649f5b74fdcc6d99e78f8b804cc3ece6cb93133",
+  "stdlib_semantics_id": "dfa9f4ee23fd2fa3d36f556266b6b5df658f937370d05e33a44dfd87616d668e",
+  "prism_stdlib_crate_sha256": "8ee6f21bc88d40bf012b96f8f841e7221b7fed78b7d24c97f937a4dde3d6d17e",
+  "lexlean_commit": "e1dc296a5695b3454d99473562ba0390c9f6c0e3",
+  "lexlean_package_sha256": "371f12553f58f85009ffdb048560211f873850221ab064fa4c05c469cd1c7a56",
+  "lean4_prod_commit": "f10f0616e8c676acc9c1f7f555c5d3a6920a3c66",
+  "hologram_live_commit": "d8208266d8abdc2445b7bbc0cef412a566adfaf1",
+  "uor_hologram_commit": "2bda6a9a9476872dade705bd61ece4209607f6da",
+  "target_profile_id": "e12bc2b3ba2ad24cf31172061bbd008ee424e6abce52524914a67b5517cf07d1",
+  "lean_manifest_sha256": "2a09850e3eff4aa48ee9dc8b0a5a7cb250a3b81cdce608ae28e3b91df594a3f4",
+  "lcnf_manifest_sha256": "f9d51a572ae00fbcd0a3b7ac613203e05634f938011bb5d3f744ed91b028ccf4",
+  "generated_core_sha256": "e31e6f548c043755e02493b3d169d05fba6333d69998e14bb148f5eed811afa2",
+  "cargo_name": "hologram-forge-core",
+  "cargo_version": "0.1.0",
+  "cargo_crate_sha256": "edda831629df6f963f7527437b4ef1eabb8f2c9ba7d96fcc04f5d958d1e837d2",
+  "view_model_id": "a87164dd18c3502f5427e08b7710411c1da1d0e4fafbdd6c29c8538f0705931d",
+  "browser_projection_sha256": "ec549f350322b1f39b9fe1a73cc977838e2cbe7b0386a019196c2bd3935fe6b4"
+ },
+ "identities": {
+  "guest_content_kappa": "blake3:3673fac8454fdc2943eaedd80c4b183c144bf440d30d0599df10c145215574ad",
+  "view_content_kappa": "blake3:6e1f8c505c5ec361e0c6e276522fbe03410b2c3b5c141aa4496f826e14553f08",
+  "model_content_kappa": "blake3:61bee92ed2d796d28a6ce0fb80df0ea6f403f8e1d72b72d0751426ff7cac37f1",
+  "application_kappa": "blake3:4cf6b2a59d7ea2be8f766350b625ada88c11dbc0a34037034eab6c7f09c50287",
+  "archive_fingerprint": "fabfcff87869b9c3d8f1766317d7e733a53eecba762c84d3339f7e2e4f5d765e",
+  "archive_kappa": "blake3:94518e8e5dbed1b99c745f4eac63cb8991d2e1a3b0289bc6ab069f73b3af6f13"
+ },
+ "directory": "{\"schema_version\":1,\"primary_layer\":0,\"requires_kappa\":\"blake3:cf46eb3028b50fde0444a1a648f5ce7cba94013f541c86537df54adf5d203e1c\",\"layers\":[{\"position\":0,\"kind\":\"wasm\",\"content_kappa\":\"blake3:3673fac8454fdc2943eaedd80c4b183c144bf440d30d0599df10c145215574ad\",\"entry\":\"holo_run\",\"contract\":\"hologram:guest/core-wasm@1\",\"architecture\":null,\"surface\":null,\"engine\":null},{\"position\":1,\"kind\":\"view\",\"content_kappa\":\"blake3:6e1f8c505c5ec361e0c6e276522fbe03410b2c3b5c141aa4496f826e14553f08\",\"entry\":\"index.html\",\"contract\":null,\"architecture\":null,\"surface\":\"portable\",\"engine\":null}],\"children\":[],\"blobs\":[{\"kappa\":\"blake3:3673fac8454fdc2943eaedd80c4b183c144bf440d30d0599df10c145215574ad\",\"byte_length\":391791},{\"kappa\":\"blake3:61bee92ed2d796d28a6ce0fb80df0ea6f403f8e1d72b72d0751426ff7cac37f1\",\"byte_length\":303},{\"kappa\":\"blake3:6e1f8c505c5ec361e0c6e276522fbe03410b2c3b5c141aa4496f826e14553f08\",\"byte_length\":5672},{\"kappa\":\"blake3:cf46eb3028b50fde0444a1a648f5ce7cba94013f541c86537df54adf5d203e1c\",\"byte_length\":104}]}",
+ "byteLength": 402629,
+ "modelId": "a995603ac73329898a70b90511245fe4971d904829b3180adef2af8d86f41fc5",
+ "viewBytes": 5672,
+ "guestBytes": 391791
+}

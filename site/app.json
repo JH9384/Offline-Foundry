@@ -1,7 +1,7 @@
 {
   "name": "Forge kernel",
   "shortName": "Forge",
-  "live": "https://uor-foundation.github.io/forge/",
+  "live": "https://uor-foundation.github.io/forge/app/",
   "purpose": "Decide the next build phase of a Hologram Forge app, and whether an origin may use an effect. Send phase and event separated by a space, and it answers drafting, checked, proving, proved or published. Send gate, then origin, effect, whether a grant record exists, whether it grants and whether it denies, and it answers allow or deny. Anything else gets invalid request.",
   "inputLabel": "Request: phase event, or gate origin effect record granted denied",
   "placeholder": "drafting check",

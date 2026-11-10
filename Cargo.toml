@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/*", "xtask"]
+# Forge (studio/) has its own Rust core and Lean lane; it is built and checked by studio.yml.
+exclude = ["studio"]
 
 [workspace.package]
 version = "0.1.0"

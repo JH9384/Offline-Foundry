@@ -1,0 +1,358 @@
+[
+ {
+  "name": "single user",
+  "messages": [
+   {
+    "role": "user",
+    "content": "What is the capital of France?"
+   }
+  ],
+  "max_tokens": null,
+  "seed": null,
+  "temperature": null,
+  "prompt": "user: What is the capital of France?",
+  "params": "{\"max_tokens\":null,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "system and user",
+  "messages": [
+   {
+    "role": "system",
+    "content": "Be brief."
+   },
+   {
+    "role": "user",
+    "content": "hello"
+   }
+  ],
+  "max_tokens": 64,
+  "seed": 1,
+  "temperature": "0.7",
+  "prompt": "system: Be brief.\nuser: hello",
+  "params": "{\"max_tokens\":64,\"seed\":1,\"temperature\":0.7}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"Be brief.\"},{\"role\":\"user\",\"content\":\"hello\"}],\"max_tokens\":64,\"seed\":1,\"temperature\":0.7,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"system\",\"content\":\"Be brief.\"},{\"role\":\"user\",\"content\":\"hello\"}],\"max_tokens\":64,\"seed\":1,\"temperature\":0.7,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "three turns",
+  "messages": [
+   {
+    "role": "user",
+    "content": "a"
+   },
+   {
+    "role": "assistant",
+    "content": "b"
+   },
+   {
+    "role": "user",
+    "content": "c"
+   }
+  ],
+  "max_tokens": 512,
+  "seed": null,
+  "temperature": "0.0",
+  "prompt": "user: a\nassistant: b\nuser: c",
+  "params": "{\"max_tokens\":512,\"seed\":null,\"temperature\":0.0}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"a\"},{\"role\":\"assistant\",\"content\":\"b\"},{\"role\":\"user\",\"content\":\"c\"}],\"max_tokens\":512,\"temperature\":0.0,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"a\"},{\"role\":\"assistant\",\"content\":\"b\"},{\"role\":\"user\",\"content\":\"c\"}],\"max_tokens\":512,\"temperature\":0.0,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "empty content",
+  "messages": [
+   {
+    "role": "user",
+    "content": ""
+   }
+  ],
+  "max_tokens": null,
+  "seed": null,
+  "temperature": null,
+  "prompt": "user: ",
+  "params": "{\"max_tokens\":null,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"\"}],\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"\"}],\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "unicode",
+  "messages": [
+   {
+    "role": "user",
+    "content": "κ addressed, naïve café, 日本語, emoji 🙂"
+   }
+  ],
+  "max_tokens": 32,
+  "seed": 0,
+  "temperature": "1.0",
+  "prompt": "user: κ addressed, naïve café, 日本語, emoji 🙂",
+  "params": "{\"max_tokens\":32,\"seed\":0,\"temperature\":1.0}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"κ addressed, naïve café, 日本語, emoji 🙂\"}],\"max_tokens\":32,\"seed\":0,\"temperature\":1.0,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"κ addressed, naïve café, 日本語, emoji 🙂\"}],\"max_tokens\":32,\"seed\":0,\"temperature\":1.0,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "newlines inside content",
+  "messages": [
+   {
+    "role": "user",
+    "content": "line one\nline two\n"
+   },
+   {
+    "role": "assistant",
+    "content": "ok\n"
+   }
+  ],
+  "max_tokens": 16,
+  "seed": null,
+  "temperature": null,
+  "prompt": "user: line one\nline two\n\nassistant: ok\n",
+  "params": "{\"max_tokens\":16,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"line one\\nline two\\n\"},{\"role\":\"assistant\",\"content\":\"ok\\n\"}],\"max_tokens\":16,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"line one\\nline two\\n\"},{\"role\":\"assistant\",\"content\":\"ok\\n\"}],\"max_tokens\":16,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "colon in content",
+  "messages": [
+   {
+    "role": "user",
+    "content": "role: content: more"
+   }
+  ],
+  "max_tokens": null,
+  "seed": null,
+  "temperature": null,
+  "prompt": "user: role: content: more",
+  "params": "{\"max_tokens\":null,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"role: content: more\"}],\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"role: content: more\"}],\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "max seed",
+  "messages": [
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "max_tokens": 4096,
+  "seed": 18446744073709551615,
+  "temperature": "2.0",
+  "prompt": "user: x",
+  "params": "{\"max_tokens\":4096,\"seed\":18446744073709551615,\"temperature\":2.0}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"max_tokens\":4096,\"seed\":18446744073709551615,\"temperature\":2.0,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"max_tokens\":4096,\"seed\":18446744073709551615,\"temperature\":2.0,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "temperature only",
+  "messages": [
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "max_tokens": null,
+  "seed": null,
+  "temperature": "0.7",
+  "prompt": "user: x",
+  "params": "{\"max_tokens\":null,\"seed\":null,\"temperature\":0.7}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"temperature\":0.7,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"temperature\":0.7,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "max tokens only",
+  "messages": [
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "max_tokens": 1,
+  "seed": null,
+  "temperature": null,
+  "prompt": "user: x",
+  "params": "{\"max_tokens\":1,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"max_tokens\":1,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"max_tokens\":1,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "seed only",
+  "messages": [
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "max_tokens": null,
+  "seed": 7,
+  "temperature": null,
+  "prompt": "user: x",
+  "params": "{\"max_tokens\":null,\"seed\":7,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"seed\":7,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"seed\":7,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "long transcript",
+  "messages": [
+   {
+    "role": "user",
+    "content": "turn 0"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 1"
+   },
+   {
+    "role": "user",
+    "content": "turn 2"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 3"
+   },
+   {
+    "role": "user",
+    "content": "turn 4"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 5"
+   },
+   {
+    "role": "user",
+    "content": "turn 6"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 7"
+   },
+   {
+    "role": "user",
+    "content": "turn 8"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 9"
+   },
+   {
+    "role": "user",
+    "content": "turn 10"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 11"
+   },
+   {
+    "role": "user",
+    "content": "turn 12"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 13"
+   },
+   {
+    "role": "user",
+    "content": "turn 14"
+   },
+   {
+    "role": "assistant",
+    "content": "reply 15"
+   }
+  ],
+  "max_tokens": 256,
+  "seed": 3,
+  "temperature": "0.5",
+  "prompt": "user: turn 0\nassistant: reply 1\nuser: turn 2\nassistant: reply 3\nuser: turn 4\nassistant: reply 5\nuser: turn 6\nassistant: reply 7\nuser: turn 8\nassistant: reply 9\nuser: turn 10\nassistant: reply 11\nuser: turn 12\nassistant: reply 13\nuser: turn 14\nassistant: reply 15",
+  "params": "{\"max_tokens\":256,\"seed\":3,\"temperature\":0.5}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"turn 0\"},{\"role\":\"assistant\",\"content\":\"reply 1\"},{\"role\":\"user\",\"content\":\"turn 2\"},{\"role\":\"assistant\",\"content\":\"reply 3\"},{\"role\":\"user\",\"content\":\"turn 4\"},{\"role\":\"assistant\",\"content\":\"reply 5\"},{\"role\":\"user\",\"content\":\"turn 6\"},{\"role\":\"assistant\",\"content\":\"reply 7\"},{\"role\":\"user\",\"content\":\"turn 8\"},{\"role\":\"assistant\",\"content\":\"reply 9\"},{\"role\":\"user\",\"content\":\"turn 10\"},{\"role\":\"assistant\",\"content\":\"reply 11\"},{\"role\":\"user\",\"content\":\"turn 12\"},{\"role\":\"assistant\",\"content\":\"reply 13\"},{\"role\":\"user\",\"content\":\"turn 14\"},{\"role\":\"assistant\",\"content\":\"reply 15\"}],\"max_tokens\":256,\"seed\":3,\"temperature\":0.5,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"turn 0\"},{\"role\":\"assistant\",\"content\":\"reply 1\"},{\"role\":\"user\",\"content\":\"turn 2\"},{\"role\":\"assistant\",\"content\":\"reply 3\"},{\"role\":\"user\",\"content\":\"turn 4\"},{\"role\":\"assistant\",\"content\":\"reply 5\"},{\"role\":\"user\",\"content\":\"turn 6\"},{\"role\":\"assistant\",\"content\":\"reply 7\"},{\"role\":\"user\",\"content\":\"turn 8\"},{\"role\":\"assistant\",\"content\":\"reply 9\"},{\"role\":\"user\",\"content\":\"turn 10\"},{\"role\":\"assistant\",\"content\":\"reply 11\"},{\"role\":\"user\",\"content\":\"turn 12\"},{\"role\":\"assistant\",\"content\":\"reply 13\"},{\"role\":\"user\",\"content\":\"turn 14\"},{\"role\":\"assistant\",\"content\":\"reply 15\"}],\"max_tokens\":256,\"seed\":3,\"temperature\":0.5,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "odd role",
+  "messages": [
+   {
+    "role": "tool",
+    "content": "result"
+   },
+   {
+    "role": "user",
+    "content": "and?"
+   }
+  ],
+  "max_tokens": null,
+  "seed": null,
+  "temperature": null,
+  "prompt": "tool: result\nuser: and?",
+  "params": "{\"max_tokens\":null,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"tool\",\"content\":\"result\"},{\"role\":\"user\",\"content\":\"and?\"}],\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"tool\",\"content\":\"result\"},{\"role\":\"user\",\"content\":\"and?\"}],\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "whitespace content",
+  "messages": [
+   {
+    "role": "user",
+    "content": "   "
+   },
+   {
+    "role": "assistant",
+    "content": "\t"
+   }
+  ],
+  "max_tokens": null,
+  "seed": null,
+  "temperature": null,
+  "prompt": "user:    \nassistant: \t",
+  "params": "{\"max_tokens\":null,\"seed\":null,\"temperature\":null}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"   \"},{\"role\":\"assistant\",\"content\":\"\\t\"}],\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"   \"},{\"role\":\"assistant\",\"content\":\"\\t\"}],\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "quotes and braces",
+  "messages": [
+   {
+    "role": "user",
+    "content": "say \"hi\" {now}"
+   }
+  ],
+  "max_tokens": 8,
+  "seed": 8,
+  "temperature": "0.7",
+  "prompt": "user: say \"hi\" {now}",
+  "params": "{\"max_tokens\":8,\"seed\":8,\"temperature\":0.7}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"say \\\"hi\\\" {now}\"}],\"max_tokens\":8,\"seed\":8,\"temperature\":0.7,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"say \\\"hi\\\" {now}\"}],\"max_tokens\":8,\"seed\":8,\"temperature\":0.7,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ },
+ {
+  "name": "model like names in content",
+  "messages": [
+   {
+    "role": "user",
+    "content": "webgpu:BitNet smollm2"
+   }
+  ],
+  "max_tokens": 100,
+  "seed": 100,
+  "temperature": "0.1",
+  "prompt": "user: webgpu:BitNet smollm2",
+  "params": "{\"max_tokens\":100,\"seed\":100,\"temperature\":0.1}",
+  "openrouter_model": "qwen/qwen3.8-flash",
+  "openrouter_stream": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"webgpu:BitNet smollm2\"}],\"max_tokens\":100,\"seed\":100,\"temperature\":0.1,\"stream\":true,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}",
+  "openrouter_plain": "{\"model\":\"qwen/qwen3.8-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"webgpu:BitNet smollm2\"}],\"max_tokens\":100,\"seed\":100,\"temperature\":0.1,\"stream\":false,\"usage\":{\"include\":true},\"reasoning\":{\"enabled\":false},\"provider\":{\"require_parameters\":true}}"
+ }
+]
