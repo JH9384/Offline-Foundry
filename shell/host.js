@@ -640,38 +640,60 @@ async function rulesAfterTurn(appId, text) {
   await saveRules(appId, state);
   return { changed, card: prism.card(state) };
 }
-// A message from Forge outside a model turn (a proof that ended): saved, then the renderer is told.
-async function postAssistant(chatId, content) {
-  const messages = await messagesOf(chatId);
-  const id = messages.length ? Math.max(...messages.map((x) => x.id)) + 1 : 1;
-  messages.push({ id, role: "assistant", content, approvalState: "approved", commitHash: null, createdAt: now() });
-  await saveMessages(chatId, messages);
-  emit("chat:response:chunk", { chatId, invocationRef: null, messages });
-  emit("chat:stream:end", { chatId });
-}
 // Lean proves the rules on the hosted verifier; the kernel moves the phase on its attestation or its
-// refusal. A proof of rules that changed meanwhile is dropped: it is about other rules.
-async function proveRules(appId, chatId, specKappa) {
+// refusal. A proof of rules that changed meanwhile is dropped: it is about other rules. Resolves the
+// prover's result, or null when the rules changed under it.
+async function proveRules(appId, specKappa, onWait) {
   const state = await rulesOf(appId);
-  const result = await prism.prove(state.spec).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+  const result = await prism.prove(state.spec, { onWait }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
   const latest = await rulesOf(appId);
-  if (!latest || latest.specKappa !== specKappa || latest.phase !== "proving") return;
+  if (!latest || latest.specKappa !== specKappa || latest.phase !== "proving") return null;
   const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
   await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, proofError: result.ok ? null : result.error, updated: now() });
   await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.rules.prove", resource: specKappa, outcome: result.ok ? "proved" : "refused" });
-  await postAssistant(chatId, prism.proofMessage(state.spec, result));
+  return result;
 }
-// "approve" is the user's yes to the guarantees on the card: no model is asked.
-async function approveRules(appId, chatId) {
+// "approve" is the user's yes to the guarantees on the card: no model is asked. The answer is a
+// message, and, when Lean was started, the proof to wait for.
+async function approveRules(appId) {
   const state = await rulesOf(appId);
-  if (!state) return "This app has no rules to prove yet. Tell me what it decides and I will draft them.";
-  if (state.phase === "proving") return "Lean is already proving these rules.";
-  if (state.phase === "proved" || state.phase === "published") return "These rules are already proved by Lean.";
-  if (state.phase !== "checked") return "The rules are not checked yet, so there is nothing to approve. Ask me to fix them.";
+  if (!state) return { text: "This app has no rules to prove yet. Tell me what it decides and I will draft them." };
+  if (state.phase === "proving") return { text: "Lean is already proving these rules." };
+  if (state.phase === "proved" || state.phase === "published") return { text: "These rules are already proved by Lean." };
+  if (state.phase !== "checked") return { text: "The rules are not checked yet, so there is nothing to approve. Ask me to fix them." };
   const phase = await nextPhase("checked", "approve");
   await saveRules(appId, { ...state, phase, approved: now() });
-  proveRules(appId, chatId, state.specKappa).catch((e) => console.error("[host] prove", e));
-  return prism.provingMessage(state.spec);
+  return { text: prism.provingMessage(state.spec), spec: state.spec, prove: (onWait) => proveRules(appId, state.specKappa, onWait) };
+}
+// The approve turn stays open while Lean works, as a build turn stays open while the model writes:
+// the renderer shows it working, the message counts the seconds, and the result completes it.
+async function approveTurn(chatId, appId, messages, userId, ref, intentId) {
+  const m = chatMachineOf(chatId);
+  messages.push({ id: userId + 1, role: "assistant", content: "", approvalState: "approved", commitHash: null, createdAt: now() });
+  const show = async (content) => {
+    messages[messages.length - 1] = { ...messages[messages.length - 1], content };
+    await saveMessages(chatId, messages);
+    emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
+  };
+  let started;
+  try { started = await approveRules(appId); } catch (e) { started = { text: `<dyad-output type="error" message="${String((e && e.message) || e).replace(/"/g, "'")}"></dyad-output>` }; }
+  await show(started.text);
+  if (started.prove) {
+    const abort = new AbortController(); m.abort = abort;
+    const proof = started.prove((s) => { if (!abort.signal.aborted) show(started.text + `\n\nLean is working, ${s} s.`); });
+    const stopped = new Promise((res) => abort.signal.addEventListener("abort", () => res("stopped")));
+    const result = await Promise.race([proof, stopped]);
+    m.abort = null;
+    if (result === "stopped") {
+      await show(started.text + "\n\nStopped watching. Lean keeps working; the result is kept with the app's rules.");
+      proof.catch(() => {});
+    } else {
+      await show(started.text + "\n\n" + (result ? prism.proofMessage(started.spec, result) : "The rules changed while Lean worked, so this proof is about other rules and was dropped."));
+    }
+  }
+  publishChat(chatId, { phase: "finalizing", error: null, lastCompletion: { intentId, invocationRef: ref, outcome: "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
+  publishChat(chatId, { phase: "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
+  emit("chat:stream:end", { chatId });
 }
 handlers.set("prism:status", async ({ appId }) => (await rulesOf(appId)) || null);
 window.__prism = { rulesAfterTurn, approveRules, rulesOf, nextPhase, check: prism.checkSpec };
@@ -693,17 +715,7 @@ async function chatTurn(chatId, intent) {
   await saveMessages(chatId, messages);
   publishChat(chatId, { phase: "streaming", lastAcceptance: { intentId: intent.intentId, acceptance: "message-accepted", acceptedMessageId: userId } });
   emit("chat:stream:start", { chatId, invocationRef: ref });
-  if (prism.isApproval(intent.prompt)) {
-    let content;
-    try { content = await approveRules(appId, chatId); } catch (e) { content = `<dyad-output type="error" message="${String((e && e.message) || e).replace(/"/g, "'")}"></dyad-output>`; }
-    messages.push({ id: userId + 1, role: "assistant", content, approvalState: "approved", commitHash: null, createdAt: now() });
-    await saveMessages(chatId, messages);
-    emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
-    publishChat(chatId, { phase: "finalizing", error: null, lastCompletion: { intentId: intent.intentId, invocationRef: ref, outcome: "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
-    publishChat(chatId, { phase: "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
-    emit("chat:stream:end", { chatId });
-    return;
-  }
+  if (prism.isApproval(intent.prompt)) return approveTurn(chatId, appId, messages, userId, ref, intent.intentId);
   // T3: the assistant placeholder
   const head = (await get("refs", appId + ":main")) || null;
   const asstId = userId + 1;

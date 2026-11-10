@@ -34,7 +34,8 @@ export function parseSpecTag(text) {
   if (fence) body = fence[1];
   try { return { spec: JSON.parse(body) }; } catch (e) { return { error: "The rules are not valid JSON: " + e.message }; }
 }
-export const withCard = (text, card) => (text || "").replace(TAG, card || "");
+// The card stands in its own paragraphs, whatever the model wrote around the tag.
+export const withCard = (text, card) => (text || "").replace(TAG, card ? "\n\n" + card + "\n\n" : "");
 export const isApproval = (prompt) => /^\s*\/?(yes,?\s*)?approve(d)?(\s+(the\s+)?(rules|guarantees|spec))?\s*[.!]?\s*$/i.test(prompt || "");
 
 // ---- the app's rule module: these two functions are shipped verbatim (their source text) in
@@ -222,7 +223,7 @@ export function card(state) {
   for (const r of spec.rules) lines.push(`- When ${describeConditions(r.when)}: **${r.then}**${r.why ? ` *${r.why}*` : ""}`);
   lines.push(`- Otherwise: **${spec.otherwise}**${spec.otherwiseWhy ? ` *${spec.otherwiseWhy}*` : ""}`, "");
   lines.push(`Request: \`${spec.fields.map((f) => f.name).join(" ")}\` · answers: ${spec.outcomes.join(", ")}, or invalid`);
-  if (spec.examples.length) lines.push(`Examples: ${spec.examples.map((e) => `\`${e.request}\` → ${e.response}`).join(" · ")}`);
+  if (spec.examples.length) lines.push("", `Examples: ${spec.examples.map((e) => `\`${e.request}\` → ${e.response}`).join(" · ")}`);
   if (state.issues && state.issues.length) lines.push("", "Not checked:", ...state.issues.map((i) => "- " + i), "", "Ask me to fix the rules.");
   else if (state.phase === "checked") lines.push("", `Checked: consistent, ${spec.examples.length} examples pass, ${state.vectors} acceptance vectors replayed through the app's rule module.`, "", "Reply **approve** to have Lean prove the guarantees. The rules go to the hosted verifier, unlisted.");
   return lines.join("\n");
