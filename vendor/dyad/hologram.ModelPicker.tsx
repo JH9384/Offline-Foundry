@@ -1,6 +1,6 @@
 // dyad-prism (ours, not Dyad's; see VENDORED.md): the model picker, replacing Dyad's at build time
-// through `resolveId` in vite.shell.config.mts. Two providers answer here, the device and OpenRouter
-// (shell/host.js), so the menu is the flat list of their models and nothing else: no submenus, no
+// through `resolveId` in vite.shell.config.mts. Three providers answer here, the device, OpenRouter and
+// Featherless (shell/host.js), so the menu is the flat list of their models and nothing else: no submenus, no
 // recent section, no effort levels, no price badges, no trial banner, no Pro upsell. Choosing a model
 // is choosing who answers, which is the only decision this control makes.
 //
@@ -27,7 +27,7 @@ import type { LanguageModel } from "@/ipc/types";
 import type { LargeLanguageModel } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
-const ORDER = ["local", "openrouter"];
+const ORDER = ["local", "openrouter", "featherless"];
 
 export function ModelPicker() {
   const { settings, updateSettings } = useSettings();
