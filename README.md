@@ -1,7 +1,7 @@
 <a id="top"></a>
 
 <p align="center">
-  <img src="assets/banner.svg" alt="Hologram Forge" width="100%">
+  <img src=".github/banner.svg" alt="Hologram Forge" width="100%">
 </p>
 
 # Hologram Forge
