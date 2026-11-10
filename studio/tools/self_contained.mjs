@@ -1,4 +1,4 @@
-// The self-contained gate: Forge lives in UOR-Foundation/forge, whole. No file in this repository, and no
+// The self-contained gate: Foundry lives in UOR-Foundation/foundry, whole. No file in this repository, and no
 // file the Pages build serves, names the account Forge moved from or the path it was served under there.
 // Git history keeps its authors; the files and the site do not point back.
 //
@@ -31,4 +31,4 @@ for (const dir of process.argv.slice(2)) for (const file of walk(dir)) scan(path
 
 if (waived.length) console.log(`self-contained: waived until regenerated: ${waived.join(", ")}`);
 if (bad.length) { console.error("self-contained gate refused:\n  " + bad.join("\n  ")); process.exit(1); }
-console.log(`self-contained: ${tracked.length} tracked files${process.argv.length > 2 ? " and the served site" : ""} name nothing outside UOR-Foundation/forge's own`);
+console.log(`self-contained: ${tracked.length} tracked files${process.argv.length > 2 ? " and the served site" : ""} name nothing outside UOR-Foundation/foundry's own`);

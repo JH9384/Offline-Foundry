@@ -1,30 +1,30 @@
 <a id="top"></a>
 
 <p align="center">
-  <img src=".github/banner.svg" alt="Prism AI Studio" width="100%">
+  <img src=".github/banner.svg" alt="Prism AI Foundry" width="100%">
 </p>
 
-# Prism AI Studio
+# Prism AI Foundry
 
 <p align="center">
-  <a href="https://uor-foundation.github.io/forge/"><b>Start building</b></a> &nbsp;|&nbsp; <a href="openspec/specs/forge-kernel/spec.md">Spec</a> &nbsp;|&nbsp; <a href="CONFORMANCE.md">Conformance</a> &nbsp;|&nbsp; <a href="AGENTS.md">For AI agents</a> &nbsp;|&nbsp; <a href="https://discord.gg/ZwuZaNyuve">Community</a>
+  <a href="https://uor-foundation.github.io/foundry/"><b>Start building</b></a> &nbsp;|&nbsp; <a href="openspec/specs/forge-kernel/spec.md">Spec</a> &nbsp;|&nbsp; <a href="CONFORMANCE.md">Conformance</a> &nbsp;|&nbsp; <a href="AGENTS.md">For AI agents</a> &nbsp;|&nbsp; <a href="https://discord.gg/ZwuZaNyuve">Community</a>
 </p>
 
 <p align="center">
-  <a href="https://uor-foundation.github.io/forge/"><img src="https://img.shields.io/badge/Runs%20in-your%20browser-111111?style=for-the-badge" alt="Runs in your browser"></a>
+  <a href="https://uor-foundation.github.io/foundry/"><img src="https://img.shields.io/badge/Runs%20in-your%20browser-111111?style=for-the-badge" alt="Runs in your browser"></a>
   <a href="app/src/ForgeKernelProofs.lex.tex"><img src="https://img.shields.io/badge/Proved%20in-Lean%204-5B8CFF?style=for-the-badge" alt="Proved in Lean 4"></a>
-  <a href="https://github.com/UOR-Foundation/forge/actions/workflows/bootstrap.yml"><img src="https://img.shields.io/github/actions/workflow/status/UOR-Foundation/forge/bootstrap.yml?branch=main&style=for-the-badge&label=Gate" alt="Gate"></a>
+  <a href="https://github.com/UOR-Foundation/foundry/actions/workflows/bootstrap.yml"><img src="https://img.shields.io/github/actions/workflow/status/UOR-Foundation/foundry/bootstrap.yml?branch=main&style=for-the-badge&label=Gate" alt="Gate"></a>
   <a href="https://discord.gg/ZwuZaNyuve"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-3FB950?style=for-the-badge" alt="License"></a>
 </p>
 
 > **Turn your ideas into apps you can prove.**
 >
-> Describe what you want to build. Prism AI Studio builds it, proves it, and publishes it to a live URL.
+> Describe what you want to build. Prism AI Foundry builds it, proves it, and publishes it to a live URL.
 
 AI can take you from prompt to production in minutes. What it can't tell you is whether the app does what you asked. A preview shows that it worked once. Tests show that it worked for the cases someone thought of.
 
-Prism AI Studio adds the step that settles it: **formal verification**. Every rule your app promises is proved mathematically, for every possible input, before it can go live. Not tested. Proved.
+Prism AI Foundry adds the step that settles it: **formal verification**. Every rule your app promises is proved mathematically, for every possible input, before it can go live. Not tested. Proved.
 
 It all runs in your browser. No install, no account, no server.
 
@@ -34,20 +34,20 @@ It all runs in your browser. No install, no account, no server.
 
 The same flow you already know, with one more step.
 
-| Step | You | Prism AI Studio |
+| Step | You | Prism AI Foundry |
 |---|---|---|
 | **1. Describe** | Say what you want, in plain words | Writes the app and the rules it must follow |
 | **2. Iterate** | Chat, tweak, preview | Checks the rules are complete and consistent |
 | **3. Prove** | Approve the rules | Proves every rule in Lean, for every input |
 | **4. Publish** | Share one link | Ships the app with its proof inside |
 
-Edit anything after it is proved and Prism AI Studio returns to step 2. The proof badge always describes the app you have, never an older version.
+Edit anything after it is proved and Prism AI Foundry returns to step 2. The proof badge always describes the app you have, never an older version.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ## Why proof matters
 
-| | Typical AI app builder | Prism AI Studio |
+| | Typical AI app builder | Prism AI Foundry |
 |---|---|---|
 | You describe | An app | An app |
 | You get | Code that seems to work | Rules proved for every input |
@@ -61,12 +61,12 @@ Edit anything after it is proved and Prism AI Studio returns to step 2. The proo
 ## Start building
 
 ```
-Open https://uor-foundation.github.io/forge/ in any modern browser.
+Open https://uor-foundation.github.io/foundry/ in any modern browser.
 ```
 
 Type your first prompt. The model starts in your browser and the preview appears beside the chat. When you are ready, choose **Publish**.
 
-Want to see the proof engine on its own? The [kernel page](https://uor-foundation.github.io/forge/app/) runs the core that decides when an app may move to the next step and what it may access. Before it answers, it checks that the bytes are authentic, the proof is attached, and every example gives its proved answer. Type `drafting check` and it answers `checked`.
+Want to see the proof engine on its own? The [kernel page](https://uor-foundation.github.io/foundry/app/) runs the core that decides when an app may move to the next step and what it may access. Before it answers, it checks that the bytes are authentic, the proof is attached, and every example gives its proved answer. Type `drafting check` and it answers `checked`.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -80,9 +80,9 @@ Want to see the proof engine on its own? The [kernel page](https://uor-foundatio
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## What Prism AI Studio proves about itself
+## What Prism AI Foundry proves about itself
 
-Prism AI Studio holds itself to the same standard. Lean proves each of these for every request:
+Prism AI Foundry holds itself to the same standard. Lean proves each of these for every request:
 
 | Promise | ID |
 |---|---|
@@ -90,7 +90,7 @@ Prism AI Studio holds itself to the same standard. Lean proves each of these for
 | Never publishes an unproved app | FK-02 |
 | Every edit sends the app back to drafting | FK-03 |
 | Never proves rules that skipped the check | FK-04 |
-| With no grant, only Prism AI Studio itself may act | FK-05 |
+| With no grant, only Prism AI Foundry itself may act | FK-05 |
 | With no grant, nothing reaches the network | FK-06 |
 | A denial always wins | FK-07 |
 | A preview or published app needs an explicit grant | FK-08 |
@@ -100,7 +100,7 @@ Prism AI Studio holds itself to the same standard. Lean proves each of these for
 
 ## Verify it yourself
 
-Every published app is one file, a holo, that holds the app, its rules, its proof, and how it was built. Its name comes from its contents, so changing one byte changes the name. Open any holo on any device with [`holo.html`](https://uor-foundation.github.io/forge/holo.html), or check one offline:
+Every published app is one file, a holo, that holds the app, its rules, its proof, and how it was built. Its name comes from its contents, so changing one byte changes the name. Open any holo on any device with [`holo.html`](https://uor-foundation.github.io/foundry/holo.html), or check one offline:
 
 ```bash
 npx prism-code inspect app/.prism/build/*/*.holo
@@ -120,7 +120,7 @@ Words used here:
 You need Git, Docker with Buildx, and a devcontainer client.
 
 ```bash
-git clone https://github.com/UOR-Foundation/forge
+git clone https://github.com/UOR-Foundation/foundry
 cd forge
 # open in the devcontainer, then:
 just vv      # the whole gate: format, model, lint, tests, audits, proved build
@@ -170,7 +170,7 @@ A change is done when it can prove itself.
 
 ## Community and acknowledgments
 
-Join the [Discord](https://discord.gg/ZwuZaNyuve), or open an issue on GitHub. Prism AI Studio is built with [PrismPM](https://github.com/UOR-Foundation/PrismPM), [LexLean](https://github.com/UOR-Foundation/LexLean) and [prism-code](https://www.npmjs.com/package/prism-code), on the work of the [UOR Foundation](https://uor.foundation/), and opens in the same frame as [Hologram OS](https://github.com/Hologram-Technologies/hologram-os).
+Join the [Discord](https://discord.gg/ZwuZaNyuve), or open an issue on GitHub. Prism AI Foundry is built with [PrismPM](https://github.com/UOR-Foundation/PrismPM), [LexLean](https://github.com/UOR-Foundation/LexLean) and [prism-code](https://www.npmjs.com/package/prism-code), on the work of the [UOR Foundation](https://uor.foundation/), and opens in the same frame as [Hologram OS](https://github.com/Hologram-Technologies/hologram-os).
 
 ## License
 

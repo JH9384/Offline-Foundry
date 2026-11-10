@@ -1,8 +1,8 @@
 {
-  "name": "Forge kernel",
-  "shortName": "Forge",
-  "live": "https://uor-foundation.github.io/forge/app/",
-  "purpose": "Decide the next build phase of a Hologram Forge app, and whether an origin may use an effect. Send phase and event separated by a space, and it answers drafting, checked, proving, proved or published. Send gate, then origin, effect, whether a grant record exists, whether it grants and whether it denies, and it answers allow or deny. Anything else gets invalid request.",
+  "name": "Foundry kernel",
+  "shortName": "Foundry",
+  "live": "https://uor-foundation.github.io/foundry/app/",
+  "purpose": "Decide the next build phase of a Prism AI Foundry app, and whether an origin may use an effect. Send phase and event separated by a space, and it answers drafting, checked, proving, proved or published. Send gate, then origin, effect, whether a grant record exists, whether it grants and whether it denies, and it answers allow or deny. Anything else gets invalid request.",
   "inputLabel": "Request: phase event, or gate origin effect record granted denied",
   "placeholder": "drafting check",
   "submitLabel": "Decide",
@@ -29,7 +29,7 @@
   "proposition": {
     "name": "judge",
     "text": "judge request :=\n  event is edit → drafting\n  event is check and phase is drafting → checked\n  event is approve and phase is checked → proving\n  event is attest and phase is proving → proved\n  event is fail and phase is proving → checked\n  event is publish and phase is proved → published\n  phase is drafting → drafting\n  phase is checked → checked\n  phase is proving → proving\n  phase is proved → proved\n  otherwise → published",
-    "plain": "Decide the next build phase of a Hologram Forge app from its current phase and the event that just happened."
+    "plain": "Decide the next build phase of a Prism AI Foundry app from its current phase and the event that just happened."
   },
   "theorems": [
     {
@@ -159,13 +159,13 @@
   "attestations": {
     "proof": {
       "id": "09ea4af02fc554df4b471d2ba0e3dda92f2c8a9d51563e0bb907fc0736f2a1dd",
-      "url": "https://github.com/UOR-Foundation/forge/actions/workflows/bootstrap.yml"
+      "url": "https://github.com/UOR-Foundation/foundry/actions/workflows/bootstrap.yml"
     },
     "build": {
       "id": "printed by prismpm verify in every pages run",
-      "url": "https://github.com/UOR-Foundation/forge/actions/workflows/pages.yml"
+      "url": "https://github.com/UOR-Foundation/foundry/actions/workflows/pages.yml"
     }
   },
-  "repository": "https://github.com/UOR-Foundation/forge",
-  "report": "https://github.com/UOR-Foundation/forge/blob/main/TEMPLATE-VERIFICATION.md"
+  "repository": "https://github.com/UOR-Foundation/foundry",
+  "report": "https://github.com/UOR-Foundation/foundry/blob/main/TEMPLATE-VERIFICATION.md"
 }
