@@ -23,6 +23,7 @@ import base from "./vite.renderer.config.mts";
 const src = path.resolve(__dirname, "src").replace(/\\/g, "/");
 const mark = path.resolve(__dirname, "../../shell/mark.svg");
 const picker = path.resolve(__dirname, "hologram.ModelPicker.tsx");
+const githubIntegration = path.resolve(__dirname, "hologram.GitHubIntegration.tsx");
 const contracts = path.resolve(__dirname, "hologram.contracts.ts").split(path.sep).join("/");
 const theme = fs.readFileSync(path.resolve(__dirname, "hologram.theme.css"), "utf8");
 const arbitrary: Record<string, string> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "hologram.arbitrary.json"), "utf8"));
@@ -37,6 +38,8 @@ const hologramWords: Plugin = {
     // of their models, nothing else. Dyad's has submenus, a recent section, effort levels, price
     // badges, a trial banner and a Pro upsell, none of which this product has.
     if (/(^|\/)ModelPicker$/.test(id) && from.startsWith(src)) return picker;
+    // GitHub connects with a pasted token: Dyad's device flow is served to apps, not to web pages.
+    if (/(^|\/)GitHubIntegration$/.test(id) && from.startsWith(src)) return githubIntegration;
     return null;
   },
   transform(code, id) {

@@ -136,6 +136,8 @@ export function repairJson(text) {
 // The card stands in its own paragraphs, whatever the model wrote around the tag.
 export const withCard = (text, card) => (text || "").replace(TAG, card ? "\n\n" + card + "\n\n" : "");
 export const isApproval = (prompt) => /^\s*\/?(yes,?\s*)?approve(d)?(\s+(the\s+)?(rules|guarantees|spec))?\s*[.!]?\s*$/i.test(prompt || "");
+// "publish" builds the proved app with the Prism SDK and puts it live; no model is asked.
+export const isPublish = (prompt) => /^\s*\/?(yes,?\s*)?(publish|ship)(\s+(it|the\s+app|now))?\s*[.!]?\s*$/i.test(prompt || "");
 
 // ---- the app's rule module: these two functions are shipped verbatim (their source text) in
 // src/lib/prism.ts, and replayed against every acceptance vector before they are.

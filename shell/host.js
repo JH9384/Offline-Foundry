@@ -12,6 +12,7 @@ import * as inference from "./inference.js";
 import { viewReady, lookup, routeOf, refusalWord, seal as sealAnswer, sealPaid, paidGenerate, gpuReady, gpuIds, heldFor, rulesModel, rememberSession, withEngine, engine, readWho, MODEL_ID, paidId, site, siteKeyReady, deviceKeyGet } from "./inference.js";
 import { install, installed, encodeView, b64, unb64, sha256 } from "./holo.js";
 import * as prism from "./prism.js";
+import { buildOnGitHub } from "./github-build.js";
 
 const MARKER = "dyad-ipc-envelope-v1";
 const BASE = new URL("./", import.meta.url); // the shell's directory, wherever it is served
@@ -661,7 +662,8 @@ async function proveRules(appId, specKappa, onWait) {
   const latest = await rulesOf(appId);
   if (!latest || latest.specKappa !== specKappa || latest.phase !== "proving") return null;
   const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
-  await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, proofError: result.ok ? null : result.error, updated: now() });
+  // The axiom sets Lean settled on are kept: the model the SDK builds must be the model Lean proved.
+  await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, axioms: result.ok ? result.axioms || {} : null, proofError: result.ok ? null : result.error, updated: now() });
   await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.rules.prove", resource: specKappa, outcome: result.ok ? "proved" : "refused" });
   return result;
 }
@@ -708,6 +710,68 @@ async function approveTurn(chatId, appId, messages, userId, ref, intentId) {
   emit("chat:stream:end", { chatId });
 }
 handlers.set("prism:status", async ({ appId }) => (await rulesOf(appId)) || null);
+
+// "publish": the proved app built with the Prism SDK, as `npx prism-code` builds it when Docker is not on the
+// machine: a repository from UOR-Foundation/template under the visitor's GitHub account, one commit (the
+// commit prism-code makes, prism.templateCommit), the template's pages and bootstrap workflows (Lean export,
+// Rust, WebAssembly; Lean checks every theorem in the gate), then GitHub Pages. The holo is fetched back and
+// opened with prism-code's own code; only when every acceptance vector passes in its compiled guest does
+// the kernel move the rules to published, and the preview shows the live app. The turn stays open and
+// counts the build, like the approve turn; Stop stops watching, not the build on GitHub.
+const prismCode = () => import("./prism-code/src/index.mjs");
+async function publishTurn(chatId, appId, messages, userId, ref, intentId) {
+  const m = chatMachineOf(chatId);
+  messages.push({ id: userId + 1, role: "assistant", content: "", approvalState: "approved", commitHash: null, createdAt: now() });
+  const show = async (content) => {
+    messages[messages.length - 1] = { ...messages[messages.length - 1], content };
+    await saveMessages(chatId, messages);
+    emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
+  };
+  const finish = () => {
+    publishChat(chatId, { phase: "finalizing", error: null, lastCompletion: { intentId, invocationRef: ref, outcome: "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
+    publishChat(chatId, { phase: "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
+    emit("chat:stream:end", { chatId });
+  };
+  const rules = await rulesOf(appId);
+  const settings = (await get("settings", "user")) || {};
+  const token = settings.githubAccessToken && settings.githubAccessToken.value;
+  const refusal = !rules || !rules.spec ? "This app has no rules to build yet. Tell me what it decides, approve the rules, then say publish."
+    : rules.phase !== "proved" && rules.phase !== "published" ? (rules.phase === "checked" ? "Reply approve first: Lean proves the rules, then the Prism SDK builds them." : `The rules are ${rules.phase === "proving" ? "being proved by Lean; say publish when it is done" : "not checked yet; ask me to fix them"}.`)
+    : !token ? "Publishing builds the app with the Prism SDK on GitHub Actions, in a public repository in your account. Connect GitHub in Settings, under Integrations, then say publish."
+    : null;
+  if (refusal) { await show(refusal); return finish(); }
+  const spec = rules.spec;
+  const head = `**Publishing ${spec.title}** with the Prism SDK on GitHub Actions, as \`npx prism-code\` builds it. The repository is public, so anyone can read its rules and LexLean model.`;
+  let links = "";
+  const step = (word, detail, extra) => {
+    if (extra && extra.runs) links = `\n\n[Build run](${extra.runs["pages.yml"]}) · [Lean gate](${extra.runs["bootstrap.yml"]})`;
+    if (!m.abort || !m.abort.signal.aborted) show(`${head}\n\n${word}: ${detail}.${links}`);
+  };
+  const abort = new AbortController(); m.abort = abort;
+  const stopped = new Promise((res) => abort.signal.addEventListener("abort", () => res("stopped")));
+  const t0 = Date.now();
+  const build = buildOnGitHub({ token, spec, axioms: rules.axioms || {}, attestation: rules.proof && rules.proof.attestation_id, templateCommit: prism.templateCommit, open: async (bytes) => (await prismCode()).loadArchive(bytes), step })
+    .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+  const result = await Promise.race([build, stopped]);
+  m.abort = null;
+  if (result === "stopped") { await show(`${head}\n\nStopped watching. The build goes on on GitHub; say publish again to pick it up.${links}`); return finish(); }
+  const row = (outcome, resource) => put("audit", Date.now() + ":publish:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.application.publish", resource, outcome });
+  if (!result.ok) {
+    await row("refused", (result.repository || "") + (result.sha ? "@" + result.sha : ""));
+    const why = result.error || (result.vectors ? `${result.vectors.total - result.vectors.passed} of ${result.vectors.total} acceptance vectors failed in the built guest, or the live page names another holo` : "the build did not pass");
+    await show(`${head}\n\nNothing was published: ${why}.${links}`);
+    return finish();
+  }
+  const next = await nextPhase(rules.phase, "publish");
+  await saveRules(appId, { ...rules, phase: next === "published" ? next : rules.phase, publishedAs: result.live, build: { repository: result.repository, sha: result.sha, fingerprint: result.fingerprint, vectors: result.vectors, runs: Object.fromEntries(Object.entries(result.runs).map(([w, r]) => [w, r.html_url])), at: now() }, updated: now() });
+  await row("granted", result.live);
+  // The preview shows what was published: the live app, from GitHub Pages.
+  const run = machineOf(appId);
+  publish(appId, { phase: "ready", operation: null, url: { appUrl: result.live, originalUrl: result.live, mode: "cloud" }, previewReloadEpoch: run.state.previewReloadEpoch + 1 });
+  const minutes = Math.max(1, Math.round((Date.now() - t0) / 60000));
+  await show(`${head}\n\n**Live:** ${result.live}\n\nBuilt by the Prism SDK on GitHub Actions in ${minutes} min: Lean export, Rust, WebAssembly, and Lean checked every theorem in the gate. Forge fetched the holo and replayed ${result.vectors.passed} of ${result.vectors.total} acceptance vectors in its compiled guest. Holo \`${String(result.fingerprint).slice(0, 12)}…\` · [repository](https://github.com/${result.repository})${links}`);
+  finish();
+}
 window.__prism = { rulesAfterTurn, approveRules, rulesOf, nextPhase, check: prism.checkSpec };
 
 async function chatTurn(chatId, intent) {
@@ -728,6 +792,7 @@ async function chatTurn(chatId, intent) {
   publishChat(chatId, { phase: "streaming", lastAcceptance: { intentId: intent.intentId, acceptance: "message-accepted", acceptedMessageId: userId } });
   emit("chat:stream:start", { chatId, invocationRef: ref });
   if (prism.isApproval(intent.prompt)) return approveTurn(chatId, appId, messages, userId, ref, intent.intentId);
+  if (prism.isPublish(intent.prompt)) return publishTurn(chatId, appId, messages, userId, ref, intent.intentId);
   // T3: the assistant placeholder
   const head = (await get("refs", appId + ":main")) || null;
   const asstId = userId + 1;
@@ -1084,6 +1149,9 @@ handlers.set("holo:publish", async ({ appId }) => {
   // then carries the rules and Lean's record beside the page, at prism/spec.json and prism/proof.json.
   const rules = await rulesOf(appId);
   const ruleFiles = [];
+  // An app with rules is published with the Prism SDK, through the chat ("publish", publishTurn), so the
+  // holo's guest is its rules compiled; this route is for apps that decide nothing.
+  if (rules && rules.spec) { await row("refused", version || ""); return { decision: "Chat", word: "This app has rules, so it is built with the Prism SDK: say publish in the chat.", closure, built, attestation }; }
   if (rules) {
     if ((await nextPhase(rules.phase, "publish")) !== "published") {
       await row("refused", version || "");

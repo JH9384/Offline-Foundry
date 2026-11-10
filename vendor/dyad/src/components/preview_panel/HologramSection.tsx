@@ -1,7 +1,12 @@
 // dyad-prism: Publish as a Hologram application. Ours, not Dyad's (see VENDORED.md). The words come
 // from the verified View through the host; the host composes the .holo through PrismPM's own archive
 // code in the core, keeps it at its address on this device, and serves it under that address.
+// An app with rules is built with the Prism SDK instead (shell/host.js publishTurn): the button says
+// "publish" in the app's chat, as a person would, so the build streams there.
 import { useCallback, useEffect, useState } from "react";
+import { useAtomValue } from "jotai";
+import { selectedChatIdAtom } from "@/atoms/chatAtoms";
+import { useStreamChat } from "@/hooks/useStreamChat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +22,8 @@ export function HologramSection({ appId }: { appId: number }) {
   const [apps, setApps] = useState<Installed[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Published | null>(null);
+  const chatId = useAtomValue(selectedChatIdAtom);
+  const { streamMessage } = useStreamChat();
   const refresh = useCallback(() => {
     ipc().invoke("holo:list", appId).then(setApps).catch(() => setApps([]));
   }, [appId]);
@@ -29,6 +36,12 @@ export function HologramSection({ appId }: { appId: number }) {
     setBusy(true);
     setResult(null);
     try {
+      const rules = await ipc().invoke("prism:status", { appId }).catch(() => null);
+      if (rules && rules.spec && chatId) {
+        await streamMessage({ prompt: "publish", chatId, redo: false });
+        setResult({ decision: "Chat", word: "Publishing in the chat: the Prism SDK builds the app on GitHub Actions." });
+        return;
+      }
       setResult(await ipc().invoke("holo:publish", { appId }));
       refresh();
     } catch (e: any) {
@@ -55,7 +68,12 @@ export function HologramSection({ appId }: { appId: number }) {
             </a>
           </p>
         )}
-        {result && result.decision !== "Accept" && (
+        {result && result.decision === "Chat" && (
+          <p className="text-sm text-muted-foreground" data-testid="hologram-chat">
+            {result.word}
+          </p>
+        )}
+        {result && result.decision !== "Accept" && result.decision !== "Chat" && (
           <p className="text-sm text-red-600 dark:text-red-400" data-testid="hologram-refused">
             {result.word}
           </p>

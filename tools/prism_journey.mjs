@@ -12,6 +12,10 @@
 //   shell/prism/template.mjs                           src/journey/template.mjs (the GitHub template writer)
 //   shell/prism/text-request/*                         templates/text-request/{lexlean.toml, lakefile.toml, lake-manifest.json, prismpm.toml}
 //
+//   shell/prism-code/src/*                             src/{browser,index,archive,...}.mjs: prism-code's browser
+//                                                      graph, so Forge opens, checks and runs a built holo with
+//                                                      prism-code's own code (loadArchive, acceptance, dispatch)
+//
 // One line differs, on purpose: template.mjs imports createHash from node:crypto, which no browser has,
 // so the shell's copy imports it from ./sha256.mjs. SUBSTITUTE names it; nothing else may differ.
 //
@@ -36,6 +40,8 @@ const FILES = [
   ["templates/text-request/lake-manifest.json", "shell/prism/text-request/lake-manifest.json"],
   ["templates/text-request/prismpm.toml", "shell/prism/text-request/prismpm.toml"],
 ];
+// Everything src/browser.mjs reaches, statically or through index.mjs's browser branch.
+for (const file of ["browser.mjs", "index.mjs", "archive.mjs", "errors.mjs", "blake3.mjs", "attestations.mjs", "view.mjs", "core.mjs", "capabilities.mjs", "closure.mjs", "sha256.mjs", "inspect.mjs", "vendor/verify.mjs", "verify.mjs", "replay.mjs", "version.mjs", "middleware.mjs", "containers.mjs", "canonical/index.js", "tracing.mjs", "manifest.mjs", "toml.mjs", "provenance.mjs"]) FILES.push(["src/" + file, "shell/prism-code/src/" + file]);
 const SUBSTITUTE = { "shell/prism/template.mjs": ["import { createHash } from 'node:crypto';", "import { createHash } from './sha256.mjs';"] };
 
 const prefix = path.join(os.tmpdir(), "hologram-forge-prism-code-" + PRISM_CODE);
