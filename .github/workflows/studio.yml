@@ -64,5 +64,7 @@ jobs:
         run: node tools/live_preview.mjs --check
       - name: The decision table decides as the rules do, on every request
         run: node tools/live_table.mjs --check
+      - name: Every word on the live screen is edited in the spec, and only there
+        run: node tools/live_edit.mjs --check
       - name: Nothing in this repository names Forge's old home
         run: node tools/self_contained.mjs

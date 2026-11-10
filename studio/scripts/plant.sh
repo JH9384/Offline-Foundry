@@ -16,6 +16,7 @@
 #   ./scripts/plant.sh live      # make a node's kappa ignore its content: the Live gate must refuse
 #   ./scripts/plant.sh shadcn    # change one class in a vendored shadcn component: the components gate must refuse
 #   ./scripts/plant.sh table     # invert a condition mask in the decision table: the Table gate must refuse
+#   ./scripts/plant.sh edit      # keep a patch that does not check: the Edit gate must refuse
 # `hole` runs the Contract gate, which bundles the vendored contracts with the renderer's own esbuild,
 # so run it where those dependencies were installed for this platform -- otherwise esbuild refuses to
 # start and the gate looks like it fired when it never ran.
@@ -115,7 +116,13 @@ EOF
     sed -i 's/mask\[k\] = test(probe) ? 1 : 0;/mask[k] = test(probe) ? 0 : 1;/' shell/live/table.mjs
     expect_fail node tools/live_table.mjs --check
     cp /tmp/plant-table.mjs shell/live/table.mjs ;;
-  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|table" >&2; exit 2 ;;
+  edit)
+    # An editor that keeps whatever it is given: a click could leave rules that do not check.
+    cp shell/live/edit.mjs /tmp/plant-edit.mjs
+    sed -i 's/      if (!verdict.ok) return/      if (false) return/' shell/live/edit.mjs
+    expect_fail node tools/live_edit.mjs --check
+    cp /tmp/plant-edit.mjs shell/live/edit.mjs ;;
+  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|table|edit" >&2; exit 2 ;;
 esac
 restore
 echo "restored"

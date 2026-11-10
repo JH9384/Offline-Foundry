@@ -14,6 +14,7 @@ import { install, installed, encodeView, b64, unb64, sha256 } from "./holo.js";
 import * as prism from "./prism.js";
 import * as live from "./live/project.mjs";
 import { frameHtml, FONTS } from "./live/frame-html.mjs";
+import { applyOps, createEditor, PatchError } from "./live/edit.mjs";
 import { buildOnGitHub } from "./github-build.js";
 
 const MARKER = "dyad-ipc-envelope-v1";
@@ -450,21 +451,27 @@ function sendLive(appId) {
   const latest = liveLatest.get(appId);
   if (!latest) return;
   const p = live.project(latest.raw);
-  const message = { type: "live/projection", app: appId, root: p.root, logic: p.logic, logicKappa: p.logicKappa, nodes: p.nodes, trust: latest.trust, theme: themeOf() };
+  const message = { type: "live/projection", app: appId, root: p.root, logic: p.logic, logicKappa: p.logicKappa, nodes: p.nodes, trust: latest.trust, theme: themeOf(), edit: !!latest.edit };
   for (const [win, app] of liveWindows) { if (win.closed) liveWindows.delete(win); else if (app === appId) win.postMessage(message, "*"); }
 }
 // Coalesced to one projection per animation frame: a model streams far faster than a screen draws.
-function pushLive(appId, raw, trust) {
-  liveLatest.set(appId, { raw, trust });
+function pushLive(appId, raw, trust, edit = false) {
+  liveLatest.set(appId, { raw, trust, edit });
   if (livePending.has(appId)) return;
   livePending.add(appId);
   requestAnimationFrame(() => { livePending.delete(appId); sendLive(appId); });
 }
 window.addEventListener("message", (e) => {
   const m = e.data;
-  if (!m || (m.type !== "live/hello" && m.type !== "live/painted") || !isLiveFrame(e.source)) return;
-  if (m.type === "live/hello") { liveWindows.set(e.source, m.app); if (liveLatest.has(m.app)) sendLive(m.app); else refreshLive(m.app); }
-  else if (m.changed) { liveTimes.push(m.ms); if (liveTimes.length > 200) liveTimes.shift(); }
+  if (!m || typeof m.type !== "string" || !m.type.startsWith("live/") || !isLiveFrame(e.source)) return;
+  if (m.type === "live/hello") { liveWindows.set(e.source, m.app); if (liveLatest.has(m.app)) sendLive(m.app); else refreshLive(m.app); return; }
+  if (m.type === "live/painted") { if (m.changed) { liveTimes.push(m.ms); if (liveTimes.length > 200) liveTimes.shift(); } return; }
+  // Everything else acts on an app: the one this frame was shown, never the one the message names.
+  const appId = liveWindows.get(e.source);
+  if (!appId) return;
+  if (m.type === "live/patch" && Array.isArray(m.ops)) patchSpec(appId, m.ops, { author: "user", key: m.key || null });
+  else if (m.type === "live/undo" || m.type === "live/redo") stepSpec(appId, m.type === "live/undo" ? "undo" : "redo");
+  else if (m.type === "live/point") { if (livePointed.get(appId)?.key === m.key) livePointed.delete(appId); else livePointed.set(appId, { key: m.key, kind: m.kind, edit: m.edit || {}, text: String(m.text || "").slice(0, 200) }); }
 });
 new MutationObserver(() => { for (const appId of liveLatest.keys()) pushLive(appId, liveLatest.get(appId).raw, liveLatest.get(appId).trust); }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 // The rules as they stand: the checked spec at its kernel phase, else what the model wrote, as a draft.
@@ -472,8 +479,71 @@ async function refreshLive(appId) {
   const json = await get("files", appId + ":prism/spec.json");
   if (!json) return;
   const state = await rulesOf(appId);
-  if (state && state.spec) return pushLive(appId, state.spec, state.phase);
-  try { pushLive(appId, JSON.parse(json), "draft"); } catch (e) {}
+  // The spec as written is drawn, not the checker's normalised copy: every edit path on the screen is a
+  // path in this spec, so a click patches exactly what the model or the user wrote.
+  try { pushLive(appId, JSON.parse(json), state && state.spec ? state.phase : "draft"); } catch (e) {}
+}
+
+// ---- the one write path. A click on the screen and a patch the agent writes arrive here alike, as
+// spec patches (shell/live/edit.mjs). Each is drawn at once (optimistic), then checked by Forge's
+// checker in milliseconds; a patch that does not check is refused, the last good spec is drawn again,
+// and the reason is shown on the node that was edited. A patch that checks is saved through the same
+// path as a chat turn (rulesAfterTurn: the kernel's phase, the rule module) and sealed as a version.
+// Patches to one app run one at a time, in order, so the user and the agent never race.
+const liveEditors = new Map(); // appId -> its edit history
+const livePointed = new Map(); // appId -> the node the user points the agent at
+const liveQueue = new Map();
+const checkForEdit = (spec) => { try { const c = prism.checkSpec(spec); return { ok: !!c.ok, issues: c.issues || [] }; } catch (e) { return { ok: false, issues: [String((e && e.message) || e)] }; } };
+async function editorOf(appId) {
+  const json = await get("files", appId + ":prism/spec.json");
+  if (!json) return null;
+  const spec = JSON.parse(json);
+  let ed = liveEditors.get(appId);
+  if (!ed) { ed = createEditor(spec, checkForEdit); liveEditors.set(appId, ed); } else ed.sync(spec);
+  return ed;
+}
+function inOrder(appId, job) {
+  const next = (liveQueue.get(appId) || Promise.resolve()).then(job, job);
+  liveQueue.set(appId, next.catch(() => {}));
+  return next;
+}
+function refuse(appId, key, message) {
+  for (const [win, app] of liveWindows) if (app === appId && !win.closed) win.postMessage({ type: "live/refused", app: appId, key, message }, "*");
+}
+async function saveSpec(appId, spec, summary) {
+  const result = await rulesAfterTurn(appId, "<dyad-spec>" + JSON.stringify(spec) + "</dyad-spec>", []);
+  if (result.changed) await seal(appId, summary);
+  await refreshLive(appId);
+  return result;
+}
+async function patchSpec(appId, ops, { author = "user", key = null } = {}) {
+  return inOrder(appId, async () => {
+    const ed = await editorOf(appId);
+    if (!ed) return { ok: false, issues: ["This app has no rules yet."] };
+    const before = ed.spec, trust = ((await rulesOf(appId)) || {}).phase || "draft";
+    try { pushLive(appId, applyOps(before, ops), "draft", true); }
+    catch (e) { if (!(e instanceof PatchError)) throw e; refuse(appId, key, e.message); return { ok: false, issues: [e.message] }; }
+    const result = ed.apply(ops);
+    if (!result.ok) { pushLive(appId, before, trust); refuse(appId, key, result.issues[0]); return result; }
+    await saveSpec(appId, result.spec, `${author === "agent" ? "The agent" : "You"} changed ${ops.map((o) => o.path.join(".")).join(", ")}`);
+    return result;
+  });
+}
+async function stepSpec(appId, way) {
+  return inOrder(appId, async () => {
+    const ed = await editorOf(appId);
+    if (!ed || !(way === "undo" ? ed.canUndo : ed.canRedo)) return;
+    const spec = way === "undo" ? ed.undo() : ed.redo();
+    pushLive(appId, spec, "draft", true);
+    await saveSpec(appId, spec, way === "undo" ? "Undo" : "Redo");
+  });
+}
+// What the user points at, said to the agent with the request, so "make this cheaper" has a "this".
+function pointedNote(appId) {
+  const p = livePointed.get(appId);
+  if (!p) return "";
+  const paths = Object.entries(p.edit).filter(([, v]) => Array.isArray(v)).map(([slot, v]) => `${slot} at ${JSON.stringify(v)}`).join("; ");
+  return `\n\n(The user is pointing at the ${p.kind} "${p.text}" on the screen${paths ? ": " + paths : ""}. To change it, write a <dyad-spec-patch>.)`;
 }
 // Point the app's preview at the live frame. The iframe loads once: after this, the address it shows
 // never changes for this app, so the preview never reloads.
@@ -503,7 +573,7 @@ function warmLive() {
   }).catch(() => {});
 }
 (window.requestIdleCallback || ((fn) => setTimeout(fn, 1500)))(warmLive, { timeout: 4000 });
-window.__live = { liveFrame, showLive, pushLive, refreshLive, times: liveTimes, project: live.project };
+window.__live = { liveFrame, showLive, pushLive, refreshLive, patchSpec, stepSpec, pointed: livePointed, times: liveTimes, project: live.project };
 
 handlers.set("distributed-machine:subscribe", async ({ machineId, encodedKey }) => {
   if (machineId === "chat_stream") return chatSubscribe({ machineId, encodedKey });
@@ -917,7 +987,7 @@ async function chatTurn(chatId, intent) {
       { role: "user", content: "This is my codebase. " + (await codebaseOf(appId)) },
       { role: "assistant", content: "OK, got it. I'm ready to help" },
       ...history,
-      { role: "user", content: intent.prompt },
+      { role: "user", content: intent.prompt + pointedNote(appId) },
     ];
     // The route table decides who answers: a sealed answer to the same request is served without
     // running anything; the device runs the Q engine; a paid model answers with the visitor's key;
@@ -1006,6 +1076,13 @@ async function chatTurn(chatId, intent) {
     const tags = parseDyadTags(full);
     let changed = await applyDyadTags(appId, tags);
     const spec = await rulesAfterTurn(appId, full, tags.writes.map((w) => w.path));
+    // A patch the agent wrote goes through the same write path as a click: checked, or refused.
+    for (const m of full.matchAll(/<dyad-spec-patch>([\s\S]*?)<\/dyad-spec-patch>/g)) {
+      let ops = null; try { ops = JSON.parse(m[1].trim()); } catch (e) {}
+      const r = ops ? await patchSpec(appId, Array.isArray(ops) ? ops : [ops], { author: "agent" }) : { ok: false, issues: ["The patch is not JSON."] };
+      if (!r.ok) spec.card = (spec.card ? spec.card + "\n\n" : "") + "**Patch refused.** " + r.issues[0];
+      else spec.changed += 1;
+    }
     changed += spec.changed;
     if (await hasRules(appId)) { await showLive(appId).catch(() => {}); await refreshLive(appId); }
     updatedFiles = changed > 0;
