@@ -7,7 +7,7 @@
 # Hologram Forge
 
 <p align="center">
-  <a href="https://uor-foundation.github.io/forge/">Open Forge</a> &nbsp;|&nbsp; <a href="openspec/specs/forge-kernel/spec.md">Spec</a> &nbsp;|&nbsp; <a href="CONFORMANCE.md">Conformance</a> &nbsp;|&nbsp; <a href="AGENTS.md">For AI agents</a> &nbsp;|&nbsp; <a href="https://discord.gg/ZwuZaNyuve">Community</a>
+  <a href="https://uor-foundation.github.io/forge/"><b>Start building</b></a> &nbsp;|&nbsp; <a href="openspec/specs/forge-kernel/spec.md">Spec</a> &nbsp;|&nbsp; <a href="CONFORMANCE.md">Conformance</a> &nbsp;|&nbsp; <a href="AGENTS.md">For AI agents</a> &nbsp;|&nbsp; <a href="https://discord.gg/ZwuZaNyuve">Community</a>
 </p>
 
 <p align="center">
@@ -18,53 +18,65 @@
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-3FB950?style=for-the-badge" alt="License"></a>
 </p>
 
-> **Describe an app. Get one you can prove.**
+> **Turn your ideas into apps you can prove.**
 >
-> Forge turns a sentence into a working app, and never calls it done until the proof says so.
+> Describe what you want to build. Forge builds it, proves it, and publishes it to a live URL.
 
-Building with AI is fast, but you can't tell whether the result does what you asked. Forge closes that gap. You describe the app, Forge writes its rules, checks them, proves them in Lean, and only then lets you publish. Change one rule and the proof is reset, so the badge you see is always about the app you have.
+AI can take you from prompt to production in minutes. What it can't tell you is whether the app does what you asked. A preview shows that it worked once. Tests show that it worked for the cases someone thought of.
 
-This repository is Forge's kernel: the small, proved core that decides when an app may move forward and what it is allowed to touch.
+Forge adds the step that settles it: **formal verification**. Every rule your app promises is proved mathematically, for every possible input, before it can go live. Not tested. Proved.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Open it
+## How it works
+
+The same flow you already know, with one more step.
+
+| Step | You | Forge |
+|---|---|---|
+| **1. Describe** | Say what you want, in plain words | Writes the app and the rules it must follow |
+| **2. Iterate** | Chat, tweak, preview | Checks the rules are complete and consistent |
+| **3. Prove** | Approve the rules | Proves every rule in Lean, for every input |
+| **4. Publish** | Share one link | Ships the app with its proof inside |
+
+Edit anything after it is proved and Forge returns to step 2. The proof badge always describes the app you have, never an older version.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Why proof matters
+
+| | Typical AI app builder | Forge |
+|---|---|---|
+| You describe | An app | An app |
+| You get | Code that seems to work | Rules proved for every input |
+| "Done" means | The preview looked right | The proof passed |
+| After an edit | Hope nothing broke | Re-proved before it can ship |
+| Network access | Whatever the code does | Off until you grant it |
+| Why you trust it | It ran once | Anyone can verify it |
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+## Try it
 
 ```
 Open https://uor-foundation.github.io/forge/ in any modern browser.
 ```
 
-The page loads the kernel, verifies its bytes, replays its examples, and runs it, all in your browser. Type `drafting check` and it answers `checked`.
+This page runs the Forge kernel, the proved core this repository holds. It decides when an app may move to the next step and what the app may access. In your browser, before it answers, the page checks three things: the bytes are authentic, the proof is attached, and every example gives its proved answer. Type `drafting check` and it answers `checked`.
 
 Prefer a terminal? [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/UOR-Foundation/forge?devcontainer_path=.devcontainer/try/devcontainer.json)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## How an app moves
+## What Forge proves about itself
 
-Every Forge app walks one path. The kernel decides each step.
-
-| Phase | What happens | What moves it on |
-|---|---|---|
-| **Drafting** | You describe the app and edit its rules | `check` |
-| **Checked** | The rules are complete and consistent | `approve` |
-| **Proving** | Lean proves every promise the app makes | `attest`, or `fail` back to checked |
-| **Proved** | The proof matches the current rules | `publish` |
-| **Published** | Anyone can open, verify and run it | `edit` starts over |
-
-Any edit sends the app back to drafting, from any phase. A proof never outlives the rules it was about.
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-## What Forge promises
-
-These are not goals. Lean proves each one for every possible request.
+Forge holds itself to the same standard. Lean proves each of these for every request:
 
 | Promise | ID |
 |---|---|
-| Never says proved without an attestation | FK-01 |
+| Never says proved without a proof | FK-01 |
 | Never publishes an unproved app | FK-02 |
-| Every edit resets to drafting | FK-03 |
+| Every edit sends the app back to drafting | FK-03 |
 | Never proves rules that skipped the check | FK-04 |
 | With no grant, only Forge itself may act | FK-05 |
 | With no grant, nothing reaches the network | FK-06 |
@@ -72,70 +84,37 @@ These are not goals. Lean proves each one for every possible request.
 | A preview or published app needs an explicit grant | FK-08 |
 | A preview never fetches without a grant | FK-09 |
 
-The capability gate answers `allow` or `deny`. Ask it with `gate ORIGIN EFFECT RECORD GRANTED DENIED`. It denies by default.
-
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## You don't trust it. You verify it.
+## Verify it yourself
 
-Forge ships as a holo: one file holding the model, the proof, the compiled app, and how it was built. It is named by its own contents, so a single changed byte changes the name. Check it yourself, offline:
+Every published app is one file, a holo, that holds the app, its rules, its proof, and how it was built. Its name comes from its contents, so changing one byte changes the name. Check any app offline:
 
 ```bash
 npx prism-code inspect app/.prism/build/*/*.holo
 ```
 
-The live page runs the same checks before it shows you anything: authentic bytes, a Lean proof, and every example giving its proved answer. Green only when all three pass.
+Words used here:
 
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-## How it works
-
-You never need this to use Forge. It is here for the curious.
-
-| Layer | In plain words | Where |
-|---|---|---|
-| Model | The rules, written once | [`app/src/ForgeKernel.lex.tex`](app/src/ForgeKernel.lex.tex) |
-| Proof | Why the promises always hold | [`app/src/ForgeKernelProofs.lex.tex`](app/src/ForgeKernelProofs.lex.tex) |
-| Claims | Every promise, registered once | [`model/`](model/) |
-| Scenarios | Each promise as a readable example | [`features/suites/`](features/suites/) |
-| Page | The browser app that verifies and runs it | [`site/`](site/) |
-
-Words this README uses:
-
-* **Lean** is a language whose checker proves code correct.
-* **LexLean** is the readable language the rules are written in.
+* **Formal verification** is proving code correct with mathematics.
+* **Lean** is the proof checker that does it.
 * **Holo** is a self-verifying app in one file.
-* **Attestation** is a signed record that a proof passed.
-* **Grant** is your explicit permission for one effect.
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-## The usual app builder, and this one
-
-| | The usual app builder | Forge |
-|---|---|---|
-| You describe | An app | An app |
-| You get | Code that probably works | Rules proved for every input |
-| "Done" means | It looked right | Lean said so |
-| After an edit | Hope nothing broke | The proof resets until re-proved |
-| Network access | Whatever the code does | Denied until you grant it |
-| Why you trust it | Because it ran once | Because you can verify it |
+* **Grant** is your explicit permission for one action.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ## Build from source
 
-You need Git, Docker with Buildx, and a devcontainer client. Nothing else goes on your machine.
+You need Git, Docker with Buildx, and a devcontainer client.
 
 ```bash
 git clone https://github.com/UOR-Foundation/forge
 cd forge
 # open in the devcontainer, then:
 just vv      # the whole gate: format, model, lint, tests, audits, proved build
-just app     # build and verify the holo only
 ```
 
-No Docker? Push a commit. [`build.yml`](.github/workflows/build.yml) builds on GitHub and hands back a signed holo, which you verify rather than trust:
+No Docker? Push a commit. [`build.yml`](.github/workflows/build.yml) builds on GitHub and hands back a signed holo, which you verify instead of trusting:
 
 ```bash
 npx prism-code build --remote github
@@ -145,23 +124,20 @@ npx prism-code build --remote github
 |---|---|
 | `just vv` | The whole gate, the same locally and in CI |
 | `just app` | Build and verify the holo |
-| `just new-capability <ID> <level> <suite> "<statement>"` | Register a new promise with its scenario and failing test |
+| `just new-capability <ID> <level> <suite> "<statement>"` | Add a promise with its scenario and failing test |
 | `just model-write` | Regenerate `CONFORMANCE.md` |
-| `just fmt` | Format the workspace |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ## Contributing
 
-One rule makes contributing simple: **a change is done when it can prove itself.**
+A change is done when it can prove itself.
 
-1. Read [AGENTS.md](AGENTS.md). It is short and holds the six rules.
-2. Add a promise with `just new-capability`. It writes the claim, the scenario and a failing test.
-3. Make the test pass, then plant the bug it exists to catch and watch it fail.
+1. Read [AGENTS.md](AGENTS.md). It is short.
+2. Add a promise with `just new-capability`.
+3. Make its test pass, then plant the bug it should catch and watch it fail.
 4. Run `just vv` until it is green.
-5. Open a pull request that says, in plain words, why the change matters.
-
-Every gate failure names the rule it broke, so a red build tells you what to fix.
+5. Open a pull request that says why the change matters.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -170,27 +146,17 @@ Every gate failure names the rule it broke, so a red build tells you what to fix
 | Document | What is inside |
 |---|---|
 | [Spec](openspec/specs/forge-kernel/spec.md) | Every promise, with its reason and example |
-| [Conformance](CONFORMANCE.md) | The generated list of claims and their status |
-| [Agent rules](AGENTS.md) | Rules R1 to R6 and the order of work |
-| [Verification](VERIFICATION.md) | What the gate accepts and why |
-| [Template contract](TEMPLATE-CONTRACT.md) | The policy files this repository inherits and must not edit |
+| [Conformance](CONFORMANCE.md) | The generated list of claims |
+| [Agent rules](AGENTS.md) | The six rules and the order of work |
+| [Verification](VERIFICATION.md) | What the gate accepts |
+| [Template contract](TEMPLATE-CONTRACT.md) | Inherited policy files |
 | [Identity](identity/README.md) | Passkey sign-in with no server to trust |
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## Community
+## Community and acknowledgments
 
-* Join the [Discord](https://discord.gg/ZwuZaNyuve).
-* Questions and ideas are welcome in GitHub issues and discussions.
-* Learn about the foundation behind it at the [UOR Foundation](https://uor.foundation/).
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-## Acknowledgments
-
-Forge is built with [PrismPM](https://github.com/UOR-Foundation/PrismPM), [LexLean](https://github.com/UOR-Foundation/LexLean) and [prism-code](https://www.npmjs.com/package/prism-code), on the work of the **[UOR Foundation](https://uor.foundation/)** and its community. It opens in the same frame as [Hologram OS](https://github.com/Hologram-Technologies/hologram-os).
-
-<p align="right">(<a href="#top">back to top</a>)</p>
+Join the [Discord](https://discord.gg/ZwuZaNyuve), or open an issue on GitHub. Forge is built with [PrismPM](https://github.com/UOR-Foundation/PrismPM), [LexLean](https://github.com/UOR-Foundation/LexLean) and [prism-code](https://www.npmjs.com/package/prism-code), on the work of the [UOR Foundation](https://uor.foundation/), and opens in the same frame as [Hologram OS](https://github.com/Hologram-Technologies/hologram-os).
 
 ## License
 
@@ -199,5 +165,3 @@ Licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).
 ---
 
 <p align="center"><i>Describe it. Prove it. Share it.</i></p>
-
-<p align="right">(<a href="#top">back to top</a>)</p>
