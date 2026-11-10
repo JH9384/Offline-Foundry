@@ -240,6 +240,56 @@ handlers.set("app:list-screenshots", () => ({ screenshots: [] }));
 handlers.set("app:list-thumbnails", () => ({ thumbnails: [] }));
 handlers.set("appCollections:list", () => []);
 
+// ---- moving in. A browser keeps this store per origin, so apps made on the site Forge was served from
+// before stay there; its moved page writes them to a file (hologram-forge/export/1) and Import App on the
+// home page hands that file here. Ids are renumbered past the ones in use, so nothing here is replaced;
+// a name already taken gets " (moved)". The file carries apps, their files, chats, versions, rules state
+// and the objects those versions name; it never carries settings (keys), the audit, seals, grants or
+// installed holos, and anything else in it is ignored. An object is kept only when its bytes derive to
+// its address. Everything is written in one transaction: a failure leaves the store as it was.
+const EXPORT_SCHEMA = "hologram-forge/export/1";
+handlers.set("forge:import", async (input) => {
+  const doc = typeof input === "string" ? JSON.parse(input) : input;
+  if (!doc || doc.schema !== EXPORT_SCHEMA || !Array.isArray(doc.apps)) throw new Error("This is not a Forge export file (" + EXPORT_SCHEMA + ").");
+  const objects = new Map();
+  let refused = 0;
+  const keep = async (k, bytes) => { if ((await kappa(bytes)) === k) objects.set(k, bytes); else refused += 1; };
+  for (const [k, text] of Object.entries(doc.objects || {})) { let bytes = null; try { bytes = unb64(String(text)); } catch (e) { refused += 1; continue; } await keep(k, bytes); }
+  const taken = new Set((await all("apps")).map((a) => a.name));
+  let appId = await nextId("apps"), chatId = await nextId("chats");
+  const writes = [], apps = [];
+  for (const entry of doc.apps) {
+    const a = entry && entry.app;
+    if (!a || typeof a.name !== "string" || !a.name) throw new Error("An app in the file has no name.");
+    let name = a.name;
+    if (taken.has(name)) { name = a.name + " (moved)"; for (let n = 2; taken.has(name); n += 1) name = a.name + " (moved " + n + ")"; }
+    taken.add(name);
+    const id = appId++, at = new Date().toISOString();
+    writes.push(["apps", id, { ...nulls, ...a, id, name, path: name, createdAt: a.createdAt || at, updatedAt: a.updatedAt || at }]);
+    const files = Object.entries(entry.files || {}).filter(([, text]) => typeof text === "string");
+    for (const [path, text] of files) { writes.push(["files", id + ":" + path, text]); const bytes = enc.encode(text); objects.set(await kappa(bytes), bytes); }
+    if (Array.isArray(entry.versions)) writes.push(["versions", id, entry.versions]);
+    if (typeof entry.main === "string" && entry.main) writes.push(["refs", id + ":main", entry.main]);
+    if (entry.rules && typeof entry.rules === "object") writes.push(["refs", "prism:" + id, entry.rules]);
+    const chats = [];
+    for (const c of Array.isArray(entry.chats) ? entry.chats : []) {
+      if (!c || typeof c !== "object") continue;
+      const cid = chatId++;
+      writes.push(["chats", cid, { ...c, id: cid, appId: id, messages: Array.isArray(c.messages) ? c.messages : [], referencedApps: [] }]);
+      chats.push(cid);
+    }
+    apps.push({ id, name, from: a.name, chats, files: files.length });
+  }
+  for (const [k, bytes] of objects) writes.push(["objects", k, bytes]);
+  const db = await dbReady;
+  await new Promise((res, rej) => {
+    const t = db.transaction(["apps", "chats", "files", "objects", "refs", "versions"], "readwrite");
+    for (const [store, key, value] of writes) t.objectStore(store).put(value, key);
+    t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error("the import was aborted"));
+  });
+  return { apps, objects: objects.size, refused };
+});
+
 // ---- versions: a branch is a name pointing at an address; rollback restores the object at an
 // address only when its bytes re-derive to it (the core's restore rule).
 handlers.set("list-versions", async ({ appId }) => (await get("versions", appId)) || []);

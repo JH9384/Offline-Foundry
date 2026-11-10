@@ -24,6 +24,7 @@ const src = path.resolve(__dirname, "src").replace(/\\/g, "/");
 const mark = path.resolve(__dirname, "../../shell/mark.svg");
 const picker = path.resolve(__dirname, "hologram.ModelPicker.tsx");
 const githubIntegration = path.resolve(__dirname, "hologram.GitHubIntegration.tsx");
+const importDialog = path.resolve(__dirname, "hologram.ImportAppDialog.tsx");
 const contracts = path.resolve(__dirname, "hologram.contracts.ts").split(path.sep).join("/");
 const theme = fs.readFileSync(path.resolve(__dirname, "hologram.theme.css"), "utf8");
 const arbitrary: Record<string, string> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "hologram.arbitrary.json"), "utf8"));
@@ -40,6 +41,9 @@ const hologramWords: Plugin = {
     if (/(^|\/)ModelPicker$/.test(id) && from.startsWith(src)) return picker;
     // GitHub connects with a pasted token: Dyad's device flow is served to apps, not to web pages.
     if (/(^|\/)GitHubIntegration$/.test(id) && from.startsWith(src)) return githubIntegration;
+    // Import App takes a Forge export file: a web page has no folder to import from, and apps made on the
+    // site Forge was served from before stay in that origin's storage until its moved page exports them.
+    if (/(^|\/)ImportAppDialog$/.test(id) && from.startsWith(src)) return importDialog;
     return null;
   },
   transform(code, id) {
