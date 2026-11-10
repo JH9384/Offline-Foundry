@@ -1,0 +1,28 @@
+# Vendored: dyad-sh/dyad at 00d5f5af7fd0 (v1.15.0-beta.1, 2026-09-10)
+
+Taken with `git archive` from the pinned commit: src, scaffold, worker, shared, packages, index.html,
+package.json, package-lock.json, vite.renderer.config.mts, tsconfig*.json, components.json, LICENSE,
+NOTICE, README.md, AGENTS.md.
+
+Removed: `src/pro/` (Functional Source License 1.1; not reused). Everything kept is Apache 2.0 per
+LICENSE.
+
+Changes to reused files are listed here, one line each, so upstream can be tracked:
+
+- `src/pro/` is not Dyad's: four small files of ours export the names the renderer imports from the
+  removed folder, so the renderer builds without the Functional Source License code:
+  `shared/search_replace_parser.ts` (a parser for the SEARCH / REPLACE blocks the chat renders),
+  `ui/components/Annotator/Annotator.tsx` (hands the screenshot back as one attachment; no drawing),
+  `main/ipc/handlers/local_agent/tool_definitions.ts` (the tool name type; the names are the PrismPM tool contract's),
+  `main/prompts/turbo_edits_v2_prompt.ts` (empty; turbo edits are a Pro feature and not offered).
+- `scaffold/src/App.tsx`, as staged for the shell only (the vendored file is untouched): `<BrowserRouter basename={import.meta.env.BASE_URL}>`, so a project routes correctly when served under its address path instead of an origin root.
+- `src/router.ts`: `basepath: import.meta.env.BASE_URL.replace(/\/$/, "")` on `createRouter`, so Dyad's routes live under the base the shell is served from (`/app/` locally, `/dyad-prism/app/` on Pages) and a refresh finds them.
+- `src/components/preview_panel/PublishPanel.tsx`: one import and one mount of `HologramSection` (ours, `src/components/preview_panel/HologramSection.tsx`) above Dyad's deployment section, so the Publish panel offers "Publish as a Hologram application": the host composes a `.holo` v4 through PrismPM's own archive code in the core and serves it under its address. The words are the View's. For an app with rules the button says "publish" in the app's chat instead (through `useStreamChat`, as Dyad's Refactor button does), and the host builds the app with the Prism SDK on GitHub Actions (`shell/host.js` publishTurn).
+- `vite.shell.config.mts` (ours, added): the vendored Vite config plus fixed output names, so the shell's projected homepage can reference `assets/index.js` and `assets/index.css`; the renderer is now the homepage at the shell's root, the `--base` is the shell's base.
+- The product's name: `vite.shell.config.mts` replaces every standalone `Dyad` word in `src/**` (sources, locales, markdown) with `Hologram` at build time and resolves `assets/logo.svg` to Hologram's mark; identifiers (`DyadError`, `dyad-write`, `__dyadIpcEnvelope`) are untouched. The vendored files themselves keep Dyad's words. `scripts/stamp_shell.py` does the same for the staged scaffold (the badge reads "Made with Hologram" and links to gethologram.ai).
+- Three controls removed at build (`vite.shell.config.mts`): the setup pill under the home composer ("Manage AI setup" / "Connect AI to build", `src/pages/home.tsx`, its condition becomes `false`), the Pro selector (`src/components/ChatInputControls.tsx`, `<ProModeSelector />` becomes `{null}`); and the voice to text button (Dyad's Pro feature) is hidden by `shell/appearance.css` through its labels. The vendored files are untouched.
+- `src/components/ModelPicker.tsx` is replaced at build by ours (`vendor/dyad/hologram.ModelPicker.tsx`, aliased in `vite.shell.config.mts`): three providers answer in this product, the device, OpenRouter and Featherless, so the menu is the flat list of their models with the chosen one ticked. Dyad's picker carries an "All models" submenu, a recent section, per model effort levels, price badges, a trial banner, local provider submenus for Ollama and LM Studio, and an "Unlock all models with Pro" row; none of those apply here. Ours writes what Dyad's wrote, the settings record's `selectedModel` and the chat's own selection once the chat has a history, so every screen stays in sync.
+- `src/components/ChatInputControls.tsx`: the chat mode selector is removed at build (`<ChatModeSelector />` becomes `{null}`) and the host keeps the record's mode on build. This host implements one mode, Dyad's text tag build turn; its agent and plan modes promise tool calls that are not made here, and the composer showed "Basic Agent" while a build turn ran.
+- `src/components/chat/ChatInput.tsx`: the promo row under the composer is not rendered (`{showPromo && <PromoMessage seed={promo.seed} />}` becomes `{null}`). Its messages sell Dyad Pro and point at Dyad's GitHub, subreddit and X account; the word transform would put Hologram's name on all of it.
+- `src/renderer.tsx`: one import is prepended at build, `vendor/dyad/hologram.contracts.ts` (ours), which publishes every contract's output schema on the page as `window.__contracts`. Dyad's renderer types its calls but validates nothing it receives, so a host answer of the wrong shape used to reach a screen and crash it far from the cause; `shell/host.js` now parses every answer against the channel's own contract.
+- `hologram.GitHubIntegration.tsx` (ours) replaces `src/components/GitHubIntegration.tsx` at build time through `resolveId` in `vite.shell.config.mts`: Settings → Integrations → GitHub takes a pasted token (checked once against api.github.com), because GitHub's device flow is not served to web pages. Publishing uses it to build apps with the Prism SDK.
