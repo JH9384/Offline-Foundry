@@ -1,6 +1,6 @@
 # Vendored: fmaclen/hollama at 78c63850fa9f (tag 0.35.4, MIT), built into shell/ui/
 
-The chat app on this origin is Hollama, built as static files under the Pages subpath `/hologram-forge/ui`
+The chat app on this origin is Hollama, built as static files under the Pages subpath `/forge/ui`
 and shown as Hologram. Nothing of it is copied into this tree as source: `scripts/build-hollama.sh`
 clones the commit, applies `scripts/hollama-brand.patch`, runs `tools/kit-to-hsl.mjs`, builds with
 SvelteKit's static adapter (installed at build time, never saved to Hollama's package files) and copies

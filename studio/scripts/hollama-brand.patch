@@ -178,8 +178,8 @@ index 3912652..14ac2a2 100644
 @@ -1,2 +1,2 @@
 -export const GITHUB_RELEASES_API = 'https://api.github.com/repos/fmaclen/hollama/releases';
 -export const GITHUB_RELEASES_URL = 'https://github.com/fmaclen/hollama/releases';
-+export const GITHUB_RELEASES_API = 'https://api.github.com/repos/humuhumu33/hologram-forge/releases';
-+export const GITHUB_RELEASES_URL = 'https://github.com/humuhumu33/hologram-forge/releases';
++export const GITHUB_RELEASES_API = 'https://api.github.com/repos/UOR-Foundation/forge/releases';
++export const GITHUB_RELEASES_URL = 'https://github.com/UOR-Foundation/forge/releases';
 diff --git a/src/lib/settings.ts b/src/lib/settings.ts
 index 9e9a367..1a5461b 100644
 --- a/src/lib/settings.ts
@@ -342,7 +342,7 @@ index ca980dc..a9bfedb 100644
  							<Button
  								variant="link"
 -								href="https://github.com/fmaclen/hollama/blob/main/SELF_HOSTING.md#updating-to-the-latest-version"
-+								href="https://github.com/humuhumu33/hologram-forge#readme"
++								href="https://github.com/UOR-Foundation/forge#readme"
  								target="_blank"
  							>
  								{$LL.howToUpdateDocker()}

@@ -1,1 +1,1 @@
-export const env={"PUBLIC_BASE_PATH":"/hologram-forge/ui"}
+export const env={"PUBLIC_BASE_PATH":"/forge/ui"}

@@ -1,7 +1,7 @@
 """Byte identity corpus: the generated core against the daemon's rules.
 
 Writes model/inference.json, a fixed set of requests with the exact prompt and
-params bytes the freeinference daemon (github.com/humuhumu33/freeinference,
+params bytes the freeinference daemon (its
 src/modules/openai.rs at 5c4ded7) keys its memos on, then runs the core
 crate's corpus test, which feeds every request to the generated functions
 and compares byte for byte. The expected values here are the daemon's rule

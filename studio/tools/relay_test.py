@@ -11,7 +11,7 @@ import json, os, pathlib, socket, subprocess, sys, threading, time, urllib.error
 
 root = pathlib.Path(__file__).resolve().parent.parent
 RELAY = root / "site" / "freeinference-relay.py"
-PAGE = "https://humuhumu33.github.io"
+PAGE = "https://uor-foundation.github.io"
 HOSTILE = "https://evil.example"
 
 
