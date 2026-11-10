@@ -1,10 +1,10 @@
 <a id="top"></a>
 
 <p align="center">
-  <img src="assets/banner.svg" alt="Hologram Forge" width="100%">
+  <img src=".github/banner.svg" alt="Prism AI Studio" width="100%">
 </p>
 
-# Hologram Forge
+# Prism AI Studio
 
 <p align="center">
   <a href="https://uor-foundation.github.io/forge/"><b>Start building</b></a> &nbsp;|&nbsp; <a href="openspec/specs/forge-kernel/spec.md">Spec</a> &nbsp;|&nbsp; <a href="CONFORMANCE.md">Conformance</a> &nbsp;|&nbsp; <a href="AGENTS.md">For AI agents</a> &nbsp;|&nbsp; <a href="https://discord.gg/ZwuZaNyuve">Community</a>
@@ -20,11 +20,11 @@
 
 > **Turn your ideas into apps you can prove.**
 >
-> Describe what you want to build. Forge builds it, proves it, and publishes it to a live URL.
+> Describe what you want to build. Prism AI Studio builds it, proves it, and publishes it to a live URL.
 
 AI can take you from prompt to production in minutes. What it can't tell you is whether the app does what you asked. A preview shows that it worked once. Tests show that it worked for the cases someone thought of.
 
-Forge adds the step that settles it: **formal verification**. Every rule your app promises is proved mathematically, for every possible input, before it can go live. Not tested. Proved.
+Prism AI Studio adds the step that settles it: **formal verification**. Every rule your app promises is proved mathematically, for every possible input, before it can go live. Not tested. Proved.
 
 It all runs in your browser. No install, no account, no server.
 
@@ -34,20 +34,20 @@ It all runs in your browser. No install, no account, no server.
 
 The same flow you already know, with one more step.
 
-| Step | You | Forge |
+| Step | You | Prism AI Studio |
 |---|---|---|
 | **1. Describe** | Say what you want, in plain words | Writes the app and the rules it must follow |
 | **2. Iterate** | Chat, tweak, preview | Checks the rules are complete and consistent |
 | **3. Prove** | Approve the rules | Proves every rule in Lean, for every input |
 | **4. Publish** | Share one link | Ships the app with its proof inside |
 
-Edit anything after it is proved and Forge returns to step 2. The proof badge always describes the app you have, never an older version.
+Edit anything after it is proved and Prism AI Studio returns to step 2. The proof badge always describes the app you have, never an older version.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ## Why proof matters
 
-| | Typical AI app builder | Forge |
+| | Typical AI app builder | Prism AI Studio |
 |---|---|---|
 | You describe | An app | An app |
 | You get | Code that seems to work | Rules proved for every input |
@@ -80,9 +80,9 @@ Want to see the proof engine on its own? The [kernel page](https://uor-foundatio
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-## What Forge proves about itself
+## What Prism AI Studio proves about itself
 
-Forge holds itself to the same standard. Lean proves each of these for every request:
+Prism AI Studio holds itself to the same standard. Lean proves each of these for every request:
 
 | Promise | ID |
 |---|---|
@@ -90,7 +90,7 @@ Forge holds itself to the same standard. Lean proves each of these for every req
 | Never publishes an unproved app | FK-02 |
 | Every edit sends the app back to drafting | FK-03 |
 | Never proves rules that skipped the check | FK-04 |
-| With no grant, only Forge itself may act | FK-05 |
+| With no grant, only Prism AI Studio itself may act | FK-05 |
 | With no grant, nothing reaches the network | FK-06 |
 | A denial always wins | FK-07 |
 | A preview or published app needs an explicit grant | FK-08 |
@@ -170,7 +170,7 @@ A change is done when it can prove itself.
 
 ## Community and acknowledgments
 
-Join the [Discord](https://discord.gg/ZwuZaNyuve), or open an issue on GitHub. Forge is built with [PrismPM](https://github.com/UOR-Foundation/PrismPM), [LexLean](https://github.com/UOR-Foundation/LexLean) and [prism-code](https://www.npmjs.com/package/prism-code), on the work of the [UOR Foundation](https://uor.foundation/), and opens in the same frame as [Hologram OS](https://github.com/Hologram-Technologies/hologram-os).
+Join the [Discord](https://discord.gg/ZwuZaNyuve), or open an issue on GitHub. Prism AI Studio is built with [PrismPM](https://github.com/UOR-Foundation/PrismPM), [LexLean](https://github.com/UOR-Foundation/LexLean) and [prism-code](https://www.npmjs.com/package/prism-code), on the work of the [UOR Foundation](https://uor.foundation/), and opens in the same frame as [Hologram OS](https://github.com/Hologram-Technologies/hologram-os).
 
 ## License
 
