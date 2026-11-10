@@ -58,7 +58,7 @@ fn page() -> String {
 (function () {{
   var root = document.documentElement, s = null;
   try {{ s = JSON.parse(localStorage.getItem("holo.theme.v1") || "null"); }} catch (e) {{}}
-  if (!s || s.look !== 3) {{ s = {{ look: 3, palette: "dark", immersive: true, wallpaper: "wallpapers/{wall0}" }}; try {{ localStorage.setItem("holo.theme.v1", JSON.stringify(s)); }} catch (e) {{}} }}
+  if (!s || s.look !== 3) {{ s = {{ look: 3, palette: "dark", immersive: true, wallpaper: "https://uor-foundation.github.io/template/frame/backdrops/Q1p7bh3SHj8.jpg", photo: {{"id":"Q1p7bh3SHj8","image":"https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw1fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","alt":"City lights across Earth at night, from orbit","name":"NASA","user":"nasa"}} }}; try {{ localStorage.setItem("holo.theme.v1", JSON.stringify(s)); }} catch (e) {{}} }}
   var palette = s.palette === "light" ? "light" : "dark";
   root.setAttribute("data-holo-palette", palette);
   root.setAttribute("data-holo-immersive", s.immersive ? "on" : "off");
@@ -93,7 +93,6 @@ fn page() -> String {
         dark = esc(&v.darkLabel),
         light = esc(&v.lightLabel),
         immersive = esc(&v.immersiveLabel),
-        wall0 = esc(&v.wallpapers[0].file),
         walls = v.wallpapers.iter().map(|w| format!(r#"<button class="wall" type="button" data-wall="wallpapers/{}" title="{}" aria-label="{}" style="background-image:url(wallpapers/{})"></button>"#, esc(&w.file), esc(&w.label), esc(&w.label), esc(&w.file))).collect::<String>(),
         walls_json = serde_json::json!(v.wallpapers.iter().map(|w| serde_json::json!({ "file": format!("wallpapers/{}", w.file), "name": w.label, "by": w.author, "byUrl": w.authorUrl })).collect::<Vec<_>>()).to_string().replace("</", "<\\/"),
         view_json = view_json().to_string().replace("</", "<\\/"),

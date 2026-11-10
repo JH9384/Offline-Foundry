@@ -64,6 +64,28 @@
 @keyframes spectrum-drift { to { background-position: 200% 0; } }
 @media (prefers-reduced-motion: reduce) { :is([data-testid="home-chat-input-container"], [data-testid="chat-input-container"]) > div.rounded-2xl::before { animation: none; } }
 
+/* Glass for every pop-up: dialogs, alert dialogs, menus, popovers, selects, context menus, sheets and this
+   theme panel. One surface, from the brand's own tokens, readable over any photo in any look: the popover
+   colour at 82% (so a busy background reads as a soft field, never as detail behind the words), a 28 px blur
+   with extra saturation, a hairline edge and a soft shadow. Dyad's dialogs paint with --background, which the
+   Immersive look makes fully transparent; this gives them a ground of their own. Overlays dim and blur the
+   page behind a dialog, so the dialog is the one thing in focus. */
+:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="popover-content"], [data-slot="select-content"], [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"],
+    [data-slot="sheet-content"], #popover) {
+  background: color-mix(in srgb, var(--popover) 82%, transparent) !important;
+  color: var(--popover-foreground) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid color-mix(in srgb, var(--popover-foreground) 12%, transparent) !important;
+  box-shadow: 0 24px 64px -16px color-mix(in srgb, var(--popover) 85%, transparent), inset 0 1px 0 color-mix(in srgb, var(--popover-foreground) 7%, transparent) !important;
+}
+:is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+  background: color-mix(in srgb, var(--popover) 45%, transparent) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
 /* Electron's title bar (the logo, "Manage app", the window controls) is window chrome, not the
    product: hidden, and the layout's offset for it set to zero so the page starts at the top. */
 :root { --layout-title-bar-offset: 0px !important; }

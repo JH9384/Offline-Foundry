@@ -39,7 +39,9 @@ const keys = (store) => tx(store, "readonly", (s) => s.getAllKeys());
 
 // ---- settings
 const DEFAULT_SETTINGS = {
-  selectedModel: { name: "auto", provider: "auto" }, providerSettings: {}, telemetryConsent: "opted_out", telemetryUserId: "web",
+  // A new visitor starts on GLM 5.3 Flash in the cloud (the site's shared Featherless key answers); BitNet 2B
+  // on the device is one click away in the model picker.
+  selectedModel: { name: "zai-org/GLM-5.3-Flash", provider: "featherless" }, providerSettings: {}, telemetryConsent: "opted_out", telemetryUserId: "web",
   hasRunBefore: true, experiments: {}, enableProLazyEditsMode: false, enableProSmartFilesContextMode: false, selectedChatMode: "build",
   enableAppBlueprint: false, enableTestingForNewApps: false, enableAutoUpdate: false, releaseChannel: "stable", isRunning: false,
   enableSandboxScriptExecution: false, enableMcpToolSearch: false, enableCodeExplorer: false, runTypeScriptForWholeProject: false,
