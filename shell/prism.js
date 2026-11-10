@@ -197,10 +197,16 @@ export function answer(request) { return prismAnswer(SPEC, request); }
 
 // ---- the check: what prism_spec runs on a drafted spec, then the module against every vector
 // Answer words and field names are lower-case words in a Prism spec. A model that capitalizes an answer
-// (grades A to F) or writes debt_ratio means the same thing, so each is respelled wherever it is named;
-// no rule changes.
+// (grades A to F) or writes debt_ratio or low_fee means the same thing, so each is respelled wherever it is
+// named; no rule changes. An answer or a choice is a Prism word (letters, digits, hyphens): low_fee is low-fee.
 function lowerAnswers(input) {
-  const low = (w) => (typeof w === "string" ? w.toLowerCase() : w);
+  const respelled = new Map();
+  const low = (w) => {
+    if (typeof w !== "string") return w;
+    const word = w.trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "");
+    if (word !== w.toLowerCase()) respelled.set(w, word);
+    return word;
+  };
   const spec = structuredClone(input || {});
   if (Array.isArray(spec.outcomes)) spec.outcomes = spec.outcomes.map(low);
   spec.otherwise = low(spec.otherwise);
@@ -208,6 +214,15 @@ function lowerAnswers(input) {
   for (const p of Array.isArray(spec.properties) ? spec.properties : []) if (p) p.then = low(p.then);
   for (const e of Array.isArray(spec.examples) ? spec.examples : []) if (e) e.response = low(e.response);
   if (spec.meanings && typeof spec.meanings === "object") spec.meanings = Object.fromEntries(Object.entries(spec.meanings).map(([k, v]) => [low(k), v]));
+  // A choice is respelled the same way, in its field, in every condition on that field, and in every
+  // example request that names it.
+  const choices = new Map();
+  for (const f of Array.isArray(spec.fields) ? spec.fields : []) {
+    if (!f || f.kind !== "choice" || !Array.isArray(f.values)) continue;
+    f.values = f.values.map((v) => { const w = low(v); if (w !== v) choices.set(v, w); return w; });
+    for (const r of [...(Array.isArray(spec.rules) ? spec.rules : []), ...(Array.isArray(spec.properties) ? spec.properties : [])]) for (const c of (r && Array.isArray(r.when) ? r.when : [])) if (c && c.field === f.name && typeof c.value === "string") c.value = low(c.value);
+  }
+  if (choices.size) for (const e of Array.isArray(spec.examples) ? spec.examples : []) if (e && typeof e.request === "string") e.request = e.request.split(" ").map((t) => choices.get(t) ?? t).join(" ");
   // A field name is one lower-case word: `debt_ratio` becomes `debtratio` wherever a condition names it.
   const renamed = new Map();
   for (const f of Array.isArray(spec.fields) ? spec.fields : []) {
@@ -219,12 +234,15 @@ function lowerAnswers(input) {
     const fix = (c) => { if (!c) return; if (renamed.has(c.field)) c.field = renamed.get(c.field); if (c.value && typeof c.value === "object" && renamed.has(c.value.field)) c.value.field = renamed.get(c.value.field); };
     for (const r of [...(Array.isArray(spec.rules) ? spec.rules : []), ...(Array.isArray(spec.properties) ? spec.properties : [])]) for (const c of (r && Array.isArray(r.when) ? r.when : [])) fix(c);
   }
-  return spec;
+  return { spec, respelled };
 }
 
 export function checkSpec(raw) {
   const issues = [], notes = [];
-  let input = lowerAnswers(raw);
+  const lowered = lowerAnswers(raw);
+  let input = lowered.spec;
+  const words = [...lowered.respelled].filter(([a, b]) => b && a !== b);
+  if (words.length) notes.push("Forge respelled " + words.map(([a, b]) => `\`${a}\` as \`${b}\``).join(", ") + ", the form Prism words take.");
   // `limits` is a list; a model that writes one sentence means a list of one.
   if (typeof input.limits === "string") { input.limits = [input.limits]; notes.push("Forge made `limits` a list."); }
   // An example is the model's own word for what the rules answer. One that is not a request, or that the
