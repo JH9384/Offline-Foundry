@@ -139,7 +139,7 @@ fn openapi() -> String {
         },
         "security": [{ "anyKey": [] }],
         "servers": [
-            { "url": "https://uor-foundation.github.io/forge/v1", "description": "the page's own origin, answered by the service worker while the page is open" },
+            { "url": "https://uor-foundation.github.io/foundry/v1", "description": "the page's own origin, answered by the service worker while the page is open" },
             { "url": "http://127.0.0.1:11435/v1", "description": "the local relay, freeinference-relay.py from this page, for native clients" }
         ],
         "paths": {

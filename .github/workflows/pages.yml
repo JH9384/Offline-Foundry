@@ -1,6 +1,6 @@
 # Publishes Forge and its Prism page together, as one Pages site:
-#   https://uor-foundation.github.io/forge/      Forge (studio/), the app builder
-#   https://uor-foundation.github.io/forge/app/  the Forge kernel's Prism page: `site/` with the holo
+#   https://uor-foundation.github.io/foundry/      Foundry (studio/), the app builder
+#   https://uor-foundation.github.io/foundry/app/  the Foundry kernel's Prism page: `site/` with the holo
 #                                                that `just app` builds and verifies through the locked SDK
 # Project content, not universal policy: a repository may extend or replace it.
 #
@@ -204,7 +204,7 @@ jobs:
       - name: Every shell script parses the way the browser parses it
         run: node tools/shell_parse.mjs
       - name: The vendored renderer, built beside the shell as the homepage (no Electron, no src/pro)
-        run: cd vendor/dyad && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --engine-strict=false --force --no-audit --no-fund --loglevel=error && npx vite build --config vite.shell.config.mts --base /forge/ --outDir dist --emptyOutDir && python3 ../../scripts/stamp_shell.py
+        run: cd vendor/dyad && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --engine-strict=false --force --no-audit --no-fund --loglevel=error && npx vite build --config vite.shell.config.mts --base /foundry/ --outDir dist --emptyOutDir && python3 ../../scripts/stamp_shell.py
       - name: The host answers the renderer's own contracts (the renderer's node_modules are installed by now)
         run: node tools/contract_shapes.mjs --check
       - name: The served site names nothing outside this repository

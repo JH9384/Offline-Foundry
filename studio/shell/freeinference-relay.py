@@ -8,7 +8,7 @@ request to the freeinference page open in your browser, which executes it on you
 GPU, seals it, and streams the answer back. Nothing is computed here, nothing is
 stored here, and nothing leaves your machine.
 
-    python3 freeinference-relay.py           # then open https://uor-foundation.github.io/forge/
+    python3 freeinference-relay.py           # then open https://uor-foundation.github.io/foundry/
     OPENAI_BASE_URL=http://127.0.0.1:11435/v1  OPENAI_API_KEY=local
 
 What keeps it yours:
@@ -31,7 +31,7 @@ VERSION = "2"
 HOST = os.environ.get("FREEINFERENCE_RELAY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("FREEINFERENCE_RELAY_PORT", "11435"))
 DEFAULT_PORT = 11435
-PAGE_URL = "https://uor-foundation.github.io/forge/"
+PAGE_URL = "https://uor-foundation.github.io/foundry/"
 PAGE_ORIGINS = {"https://uor-foundation.github.io", "http://localhost:8090", "http://127.0.0.1:8090"}
 POLL_SECONDS = 25
 TIMEOUT_SECONDS = int(os.environ.get("FREEINFERENCE_RELAY_TIMEOUT", "180"))

@@ -24,7 +24,7 @@ const CLOSURE = "__CLOSURE__";   // written by the projector; a new shell is a n
 const BASE = new URL(self.registration.scope).pathname;
 
 // The kernel decides what an untrusted document may do: its capability gate is proved by Lean
-// (FK-05 to FK-09 in UOR-Foundation/forge). kernel.js checks the guest against its pin and replays
+// (FK-05 to FK-09 in UOR-Foundation/foundry). kernel.js checks the guest against its pin and replays
 // every acceptance vector before the first question; until then, and if that fails, nothing
 // untrusted is served.
 importScripts("kernel.js");

@@ -1,6 +1,6 @@
 // The Forge kernel, pinned into the shell.
 //
-// The kernel is a Prism application published by UOR-Foundation/forge: a LexLean model whose
+// The kernel is a Prism application published by UOR-Foundation/foundry: a LexLean model whose
 // guarantees Lean proves (the build phases, FK-01 to FK-04, and the capability gate, FK-05 to FK-09),
 // built into a .holo whose guest is that model compiled to Core-Wasm. Forge does not trust a URL for
 // it. KERNEL_REV names the holo by its archive fingerprint, the BLAKE3 of every byte before the

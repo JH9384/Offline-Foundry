@@ -1,4 +1,4 @@
-// The Forge kernel at run time. The kernel is a Prism application (UOR-Foundation/forge) whose rules
+// The Forge kernel at run time. The kernel is a Prism application (UOR-Foundation/foundry) whose rules
 // Lean proves: the build phases (FK-01 to FK-04) and the capability gate (FK-05 to FK-09). Its guest
 // is that LexLean model compiled to Core-Wasm; tools/kernel.mjs took it from the holo KERNEL_REV pins
 // and wrote it, with every acceptance vector, under kernel/. Here the guest's SHA-256 is checked

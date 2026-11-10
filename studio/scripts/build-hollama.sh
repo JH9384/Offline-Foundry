@@ -14,7 +14,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOLLAMA_REV="78c63850fa9fdb3dc4ce447c6b0e86c3af926123"   # tag 0.35.4
-BASE_PATH="${HOLLAMA_BASE:-/forge/ui}"
+BASE_PATH="${HOLLAMA_BASE:-/foundry/ui}"
 WORK="${HOLLAMA_WORK:-$ROOT/vendor/hollama-build}"
 rm -rf "$WORK"; mkdir -p "$WORK"
 git -c advice.detachedHead=false clone -q https://github.com/fmaclen/hollama.git "$WORK"
