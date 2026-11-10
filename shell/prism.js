@@ -6,7 +6,8 @@
 // src/lib/prism.ts: the spec as data and one small interpreter, replayed against every acceptance
 // vector before it is written. What Lean proves is the rules; the module is tested against them.
 import { SpecError, validateSpec, unreachableRules, counterexample, describeConditions, requestLimits, decodeRequest, respond } from "./prism/spec.mjs";
-import { names, renderModel, renderProofs, acceptanceVectors } from "./prism/render.mjs";
+import { names, renderModel, renderProofs, acceptanceVectors, renderSpecDocument } from "./prism/render.mjs";
+import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, rustTestText, suiteOf } from "./prism/template.mjs";
 
 // prism/render.mjs names bytes in hex through Node's Buffer; this is the one use it makes of it.
 if (!globalThis.Buffer) globalThis.Buffer = { from: (bytes) => ({ toString: (encoding) => { if (encoding !== "hex") throw new Error("only hex"); return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""); } }) };
@@ -373,9 +374,52 @@ export async function prove(spec, { onWait = () => {} } = {}) {
     const absent = modules.filter((m) => !proved.has(m));
     if (absent.length) return { ok: false, error: "the verifier did not verify " + absent.join(", ") };
     const seconds = Math.round((Date.now() - t0) / 1000);
-    return { ok: true, seconds, record: { schema: "prism/hosted-verification/1", server: HOSTED, profile: PROFILE, draft, entrypoints, verified_at: new Date().toISOString(), attestation_id: body.attestation_id, semantic_id: body.semantic_id || null, source_id: body.source_id || null, modules: [...proved], properties: spec.properties.map((p) => p.id), seconds } };
+    return { ok: true, seconds, axioms: { ...axioms }, record: { schema: "prism/hosted-verification/1", server: HOSTED, profile: PROFILE, draft, entrypoints, verified_at: new Date().toISOString(), attestation_id: body.attestation_id, semantic_id: body.semantic_id || null, source_id: body.source_id || null, modules: [...proved], properties: spec.properties.map((p) => p.id), seconds } };
   }
   return { ok: false, error: "the axiom sets did not settle" };
+}
+
+// ---- the build: the commit prism-code makes on a repository created from UOR-Foundation/template
+// prism-code builds an app on GitHub Actions by writing it into a template instance (journey/engine.mjs
+// writeTemplateApp, after journey/project.mjs writeApp); the template's pages and bootstrap workflows then
+// build the holo in the SDK image and Lean checks every theorem. This is the same commit, made in the tab:
+// the writers are prism-code's (prism/template.mjs, prism/render.mjs), the steps around them are ported,
+// and tools/prism_template.mjs --check holds the result to prism-code's own, byte for byte.
+// `tree` lists the instance's paths; `read(path)` gives the text of one. The result is what to write and
+// what to delete; nothing is sent from here.
+const RENAMED = ["lexlean.toml", "lakefile.toml", "lake-manifest.json", "prismpm.toml"];
+export async function templateCommit({ spec, axioms = {}, attestation = null, repository, tree, read, load = shellText }) {
+  const n = names(spec);
+  // writeApp: the project files, renamed from prism-code's text-request template.
+  const project = {};
+  for (const file of RENAMED) {
+    let text = (await load("./prism/text-request/" + file)).split("prism-text-request").join(`prism-${spec.name}`).split("PrismTextRequest").join(n.prefix).split("src/TextRequest.lex.tex").join(`src/${n.module}.lex.tex`);
+    if (file === "prismpm.toml") text = text.replace('project = "TextRequest"', `project = "${n.module}"`);
+    project[file] = text;
+  }
+  const model = renderModel(spec, { axioms });
+  const proofs = renderProofs(spec, { axioms });
+  const sources = [`src/${n.module}.lex.tex`, ...(proofs ? [`src/${n.proofs}.lex.tex`] : [])];
+  // writeTemplateApp: the app under app/, and every file the gate and the page read.
+  const out = new Map();
+  out.set(`app/src/${n.module}.lex.tex`, model);
+  if (proofs) out.set(`app/src/${n.proofs}.lex.tex`, proofs);
+  for (const file of ["lakefile.toml", "lake-manifest.json", "prismpm.toml"]) out.set(`app/${file}`, project[file]);
+  out.set("app/lexlean.toml", project["lexlean.toml"].replace(/^entrypoints = \[[^\]]*\]$/m, `entrypoints = [${sources.map((p) => JSON.stringify(p)).join(", ")}]`));
+  const appFile = async (p) => (out.has(`app/${p}`) ? out.get(`app/${p}`) : read(`app/${p}`));
+  const files = {};
+  for (const p of ["lexlean.toml", "lake-manifest.json", "lakefile.toml", "lean-toolchain"]) files[p] = await appFile(p);
+  out.set("app/lexlean.lock", lexleanLockText(await read("app/lexlean.lock"), files));
+  out.set("model/ids.toml", idsToml(spec, await read("model/ids.toml")));
+  out.set(`features/suites/${suiteOf(spec)}.feature`, featureText(spec));
+  out.set(`crates/conformance/tests/${suiteOf(spec)}.rs`, rustTestText(spec));
+  out.set("CONFORMANCE.md", conformanceText(spec, await read("CONFORMANCE.md")));
+  const status = { properties: Object.fromEntries(spec.properties.map((p) => [p.id, "proved"])), proved: { attestation } };
+  out.set(`openspec/specs/${spec.name}/spec.md`, renderSpecDocument(spec, status));
+  out.set("site/app.json", appJson(spec, await read("site/app.json"), { repository, attestation }));
+  // The template's example goes, and every model directly under app/src that is not this app's.
+  const remove = tree.filter((p) => !out.has(p) && (TEMPLATE_EXAMPLE.includes(p) || /^app\/src\/[^/]+\.lex\.tex$/.test(p)));
+  return { files: [...out].map(([path, content]) => ({ path, content })), remove };
 }
 
 // ---- what the chat shows

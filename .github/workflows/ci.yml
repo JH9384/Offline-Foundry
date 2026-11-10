@@ -41,3 +41,5 @@ jobs:
         run: node tools/kernel.mjs --check
       - name: The Prism journey in the shell is prism-code's, byte for byte
         run: node tools/prism_journey.mjs --check
+      - name: The commit Forge makes on a template instance is prism-code's, byte for byte
+        run: node tools/prism_template.mjs --check

@@ -9,6 +9,11 @@
 //   shell/prism/render.mjs                             src/journey/render.mjs (the model renderer)
 //   shell/prism/lex/Foundation/Bytes.lex.tex           templates/text-request/src/Foundation/Bytes.lex.tex
 //   shell/prism/lex/Foundation/View/Text/V1/Model.lex.tex  templates/text-request/src/Foundation/View/Text/V1/Model.lex.tex
+//   shell/prism/template.mjs                           src/journey/template.mjs (the GitHub template writer)
+//   shell/prism/text-request/*                         templates/text-request/{lexlean.toml, lakefile.toml, lake-manifest.json, prismpm.toml}
+//
+// One line differs, on purpose: template.mjs imports createHash from node:crypto, which no browser has,
+// so the shell's copy imports it from ./sha256.mjs. SUBSTITUTE names it; nothing else may differ.
 //
 //   node tools/prism_journey.mjs            copy them from the package
 //   node tools/prism_journey.mjs --check    the Journey gate: refuse any byte that differs
@@ -25,7 +30,13 @@ const FILES = [
   ["src/journey/render.mjs", "shell/prism/render.mjs"],
   ["templates/text-request/src/Foundation/Bytes.lex.tex", "shell/prism/lex/Foundation/Bytes.lex.tex"],
   ["templates/text-request/src/Foundation/View/Text/V1/Model.lex.tex", "shell/prism/lex/Foundation/View/Text/V1/Model.lex.tex"],
+  ["src/journey/template.mjs", "shell/prism/template.mjs"],
+  ["templates/text-request/lexlean.toml", "shell/prism/text-request/lexlean.toml"],
+  ["templates/text-request/lakefile.toml", "shell/prism/text-request/lakefile.toml"],
+  ["templates/text-request/lake-manifest.json", "shell/prism/text-request/lake-manifest.json"],
+  ["templates/text-request/prismpm.toml", "shell/prism/text-request/prismpm.toml"],
 ];
+const SUBSTITUTE = { "shell/prism/template.mjs": ["import { createHash } from 'node:crypto';", "import { createHash } from './sha256.mjs';"] };
 
 const prefix = path.join(os.tmpdir(), "hologram-forge-prism-code-" + PRISM_CODE);
 const pkg = path.join(prefix, "node_modules", "prism-code");
@@ -38,7 +49,8 @@ if (version !== PRISM_CODE) throw new Error(`prism-code ${version} installed, ${
 const text = (p) => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
 const bad = [];
 for (const [from, to] of FILES) {
-  const upstream = text(path.join(pkg, from));
+  let upstream = text(path.join(pkg, from));
+  if (SUBSTITUTE[to]) { const [was, is] = SUBSTITUTE[to]; if (!upstream.includes(was)) throw new Error(`${from} no longer has ${was}`); upstream = upstream.replace(was, is); }
   const target = path.join(root, to);
   if (process.argv[2] === "--check") {
     if (!fs.existsSync(target) || text(target) !== upstream) bad.push(to);
