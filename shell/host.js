@@ -753,7 +753,9 @@ async function chatTurn(chatId, intent) {
     // NoKey, NoGpu and PaidOffline are answered with the View's words.
     // A build turn writes whole files: a cap that cuts the answer mid tag leaves a corrupt project, so
     // the paid route is given room for several files (the device's engine keeps its own smaller cap).
-    const body = { model, messages: request, max_tokens: paid ? 16384 : 2048, temperature: "0.7" };
+    // Featherless's GLM reasons for some 14,000 tokens before it writes, inside the same budget, so it gets
+    // the most Featherless allows (32,768); 16,384 left a page cut off mid file.
+    const body = { model, messages: request, max_tokens: !paid ? 2048 : chosen.provider === "featherless" ? 32768 : 16384, temperature: "0.7" };
     const hit = await lookup(body);
     const route = await routeOf(hit, body);
     // The View's no-key word names OpenRouter; a Featherless model is told about its own key.
@@ -785,9 +787,13 @@ async function chatTurn(chatId, intent) {
         provenance = { receipt: await sealPaid(warmBody, rec, warmHit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost, warm: true };
       }
     } else if (route === "Paid") {
-      const { text, rec } = await paidGenerate(body, (t) => { onText(t); }, abort.signal);
+      // Until the answer starts, the model's reasoning shows in Dyad's open Thinking block; the answer
+      // replaces it, so the saved message, the history and the rules read only what the model answered.
+      const thinking = (r) => onText("<think>" + r.replace(/<(\/?)(dyad|think)/g, "＜$1$2"));
+      const { text, rec } = await paidGenerate(body, (t) => { onText(t); }, abort.signal, thinking);
       await onText(text);
-      provenance = { receipt: await sealPaid(body, rec, hit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost };
+      // An answer cut at the token limit is not sealed, so the same request is never served it again.
+      provenance = rec.finish === "length" ? { cut: true } : { receipt: await sealPaid(body, rec, hit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost };
     } else {
       // The device. Its window is about 3,000 tokens and a build request is several times that, so the
       // device is asked only for the app's rules, with a prompt that fits, by the rules model (the chat
@@ -833,7 +839,7 @@ async function chatTurn(chatId, intent) {
   }
   m.abort = null;
   const outcome = abort.signal.aborted ? "cancelled" : error ? "errored" : "completed";
-  const completion = { intentId: intent.intentId, invocationRef: ref, outcome, updatedFiles, suppressAutoReview: true, targetAppId: appId, ...(summary ? { chatSummary: summary } : {}), ...(error ? { error } : {}), ...(provenance && provenance.receipt ? { warningMessages: [(provenance.warm ? V.warmupLabel + " · " : "") + (provenance.served ? V.servedLabel : V.sealedLabel) + " · " + provenance.receipt.replace(/^blake3:/, "").slice(0, 12) + "…"] } : {}) };
+  const completion = { intentId: intent.intentId, invocationRef: ref, outcome, updatedFiles, suppressAutoReview: true, targetAppId: appId, ...(summary ? { chatSummary: summary } : {}), ...(error ? { error } : {}), ...(provenance && provenance.cut ? { warningMessages: ["The model ran out of room before it finished; an unfinished file was not written."] } : {}), ...(provenance && provenance.receipt ? { warningMessages: [(provenance.warm ? V.warmupLabel + " · " : "") + (provenance.served ? V.servedLabel : V.sealedLabel) + " · " + provenance.receipt.replace(/^blake3:/, "").slice(0, 12) + "…"] } : {}) };
   publishChat(chatId, { phase: "finalizing", error, lastCompletion: completion });
   publishChat(chatId, { phase: outcome === "errored" ? "errored" : "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
   emit("chat:stream:end", { chatId });

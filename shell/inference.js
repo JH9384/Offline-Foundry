@@ -307,7 +307,9 @@ export function withEngine(fn) { const run = gpuBusy.then(fn, fn); gpuBusy = run
 // ---- the paid route: OpenRouter with the visitor's key. The request bytes are the model's encoder.
 const OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
 const FEATHERLESS = "https://api.featherless.ai/v1/chat/completions";
-export async function paidGenerate(body, onDelta, signal) {
+// A reasoning model (GLM 5.3 Flash) streams its reasoning in `delta.reasoning` for minutes before the
+// answer starts; onReasoning receives it so the chat can show the work instead of an empty message.
+export async function paidGenerate(body, onDelta, signal, onReasoning) {
   const provider = providerOf(body.model);
   const c = await coreReady(); const key = await keyFor(body.model); const V = await viewReady();
   let bytes = c.run({ op: "encode-openrouter-request", model: paidId(body.model), request: body, stream: true }).bytes;
@@ -321,7 +323,7 @@ export async function paidGenerate(body, onDelta, signal) {
     const word = r.status === 401 ? V.noKeyLabel : r.status === 402 ? V.noCreditLabel : V.providerBusyLabel;
     throw Object.assign(new Error(word), { status: r.status, detail: msg });
   }
-  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", last = null, first = null;
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", text = "", thought = "", finish = null, last = null, first = null;
   const t0 = performance.now();
   for (;;) {
     const { value, done } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true });
@@ -330,13 +332,16 @@ export async function paidGenerate(body, onDelta, signal) {
       if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
       let j; try { j = JSON.parse(line.slice(6)); } catch (e) { continue; }
       if (j.error) throw new Error(V.providerBusyLabel);
-      last = j; const d = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
+      last = j; const ch = (j.choices && j.choices[0]) || {}; const delta = ch.delta || {}; const d = delta.content;
+      if (ch.finish_reason) finish = ch.finish_reason;
+      const rs = delta.reasoning || delta.reasoning_content;
+      if (rs && !text) { thought += rs; if (onReasoning) onReasoning(thought); }
       if (d) { if (first === null) first = performance.now() - t0; text += d; if (onDelta) onDelta(text); }
     }
   }
   if (!text.trim()) throw new Error(V.providerBusyLabel);
   const usage = (last && last.usage) || {};
-  const rec = { kind: provider, id: last && last.id, model: (last && last.model) || paidId(body.model), provider: last && last.provider, fingerprint: (last && last.system_fingerprint) || "", usage: { prompt: usage.prompt_tokens || 0, completion: usage.completion_tokens || 0 }, cost: String(usage.cost ?? ""), text: text.trim(), rederivable: false, ttftMs: Math.round(first || 0) };
+  const rec = { kind: provider, id: last && last.id, model: (last && last.model) || paidId(body.model), provider: last && last.provider, fingerprint: (last && last.system_fingerprint) || "", usage: { prompt: usage.prompt_tokens || 0, completion: usage.completion_tokens || 0 }, cost: String(usage.cost ?? ""), text: text.trim(), rederivable: false, ttftMs: Math.round(first || 0), finish };
   return { text: rec.text, rec };
 }
 
