@@ -15,7 +15,7 @@ import { repairJson } from "../prism.js";
 const enc = new TextEncoder();
 const OPS = new Set(["is", "is not", "<", "<=", ">", ">=", "=", "!="]);
 const OP_WORDS = { is: "is", "is not": "is not", "<": "is under", "<=": "is at most", ">": "is over", ">=": "is at least", "=": "is", "!=": "is not" };
-export const KINDS = ["heading", "text", "input", "answer", "rules", "examples"];
+export const KINDS = ["heading", "text", "input", "answer", "guarantees", "rules", "examples"];
 const MAX_BLOCKS = 40, MAX_TEXT = 280;
 
 /** JSON with sorted keys: one byte string per value, whatever order the model wrote it in. */
@@ -64,10 +64,16 @@ export function sanitize(raw) {
     const when = r && conditions(r.when);
     if (when && typeof r.then === "string" && r.then) rules.push({ when, then: r.then, why: prose(r.why) });
   }
+  // A guarantee (a Prism property) is logic: it is what Lean proves, and what the table checks.
+  const properties = [];
+  for (const p of Array.isArray(s.properties) ? s.properties : []) {
+    const when = p && (p.kind === "never" || p.kind === "always") && conditions(p.when);
+    if (when && typeof p.then === "string" && p.then) properties.push({ kind: p.kind, when, then: p.then, why: prose(p.why) });
+  }
   const examples = (Array.isArray(s.examples) ? s.examples : []).filter((e) => e && typeof e.request === "string" && typeof e.response === "string" && e.request && e.response).map((e) => ({ request: e.request, response: e.response }));
   const meanings = {};
   if (s.meanings && typeof s.meanings === "object") for (const [k, v] of Object.entries(s.meanings)) if (typeof v === "string") meanings[k] = prose(v, 160);
-  const out = { title: prose(s.title, 64), purpose: prose(s.purpose), fields, rules, examples, meanings };
+  const out = { title: prose(s.title, 64), purpose: prose(s.purpose), fields, rules, properties, examples, meanings };
   if (typeof s.otherwise === "string" && s.otherwise) { out.otherwise = s.otherwise; out.otherwiseWhy = prose(s.otherwiseWhy); }
   out.outcomes = Array.isArray(s.outcomes) ? s.outcomes.filter((o) => typeof o === "string" && o) : [];
   if (s.view && typeof s.view === "object" && Array.isArray(s.view.blocks)) out.view = { blocks: s.view.blocks.slice(0, MAX_BLOCKS) };
@@ -92,10 +98,15 @@ export function checkView(raw) {
 const describe = (when) => when.map((c) => `${c.field} ${OP_WORDS[c.op]} ${typeof c.value === "object" ? c.value.field : c.value}`).join(" and ");
 
 // The blocks to draw: the spec's view, or the default one. A field the view forgets still gets its
-// input, before the answer, since the answer depends on every field.
+// input, before the answer, since the answer depends on every field; guarantees the view forgets are
+// still shown, before the rules, since they are what the app promises.
 function blocksOf(spec) {
-  const fallback = [{ kind: "heading", text: spec.title }, { kind: "text", text: spec.purpose }, ...spec.fields.map((f) => ({ kind: "input", field: f.name })), { kind: "answer" }, { kind: "rules" }, { kind: "examples" }];
-  const chosen = spec.view ? spec.view.blocks.filter((b) => b && KINDS.includes(b.kind)) : fallback;
+  const fallback = [{ kind: "heading", text: spec.title }, { kind: "text", text: spec.purpose }, ...spec.fields.map((f) => ({ kind: "input", field: f.name })), { kind: "answer" }, { kind: "guarantees" }, { kind: "rules" }, { kind: "examples" }];
+  let chosen = spec.view ? spec.view.blocks.filter((b) => b && KINDS.includes(b.kind)) : fallback;
+  if (spec.view && !chosen.some((b) => b.kind === "guarantees")) {
+    const at = chosen.findIndex((b) => b.kind === "rules");
+    chosen = at < 0 ? [...chosen, { kind: "guarantees" }] : [...chosen.slice(0, at), { kind: "guarantees" }, ...chosen.slice(at)];
+  }
   const shown = new Set(chosen.filter((b) => b.kind === "input").map((b) => word(b.field)));
   const missing = spec.fields.filter((f) => !shown.has(f.name)).map((f) => ({ kind: "input", field: f.name }));
   if (!missing.length) return chosen;
@@ -113,6 +124,7 @@ export function nodesOf(spec) {
     if (b.kind === "heading" || b.kind === "text") { const text = prose(b.text); if (text) push(`${b.kind[0]}:${count[b.kind]++}`, b.kind, { text }); }
     else if (b.kind === "input") { const f = named.get(word(b.field)); if (f) push("in:" + f.name, "input", { field: f, label: prose(b.label, 80) || f.means || f.name }); }
     else if (b.kind === "answer") { if (spec.fields.length && spec.otherwise) push("answer", "answer", { label: prose(b.label, 80) || "Answer", meanings: spec.meanings }); }
+    else if (b.kind === "guarantees") spec.properties.forEach((p, j) => push("pr:" + j, "property", { index: j, kind: p.kind, when: describe(p.when), then: p.then, why: p.why }));
     else if (b.kind === "rules") {
       spec.rules.forEach((r, j) => push("rule:" + j, "rule", { index: j, when: describe(r.when), then: r.then, why: r.why }));
       if (spec.otherwise) push("otherwise", "otherwise", { index: spec.rules.length, then: spec.otherwise, why: spec.otherwiseWhy || "" });
@@ -123,7 +135,7 @@ export function nodesOf(spec) {
 
 /** What decides: the part of the spec the interpreter reads, and the only part a proof is about. */
 export function logicOf(spec) {
-  return { fields: spec.fields.map(({ means, ...f }) => f), rules: spec.rules.map(({ why, ...r }) => r), otherwise: spec.otherwise ?? null, outcomes: spec.outcomes };
+  return { fields: spec.fields.map(({ means, ...f }) => f), rules: spec.rules.map(({ why, ...r }) => r), otherwise: spec.otherwise ?? null, outcomes: spec.outcomes, properties: spec.properties.map(({ why, ...p }) => p) };
 }
 
 /** preview = project(spec): every node with its kappa, the logic with its kappa, and the root kappa over both. */

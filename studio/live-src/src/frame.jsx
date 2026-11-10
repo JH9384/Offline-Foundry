@@ -18,11 +18,12 @@ import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/ui/toggle-group";
 import { cn } from "@/lib/utils";
+import { tableKernel } from "../../shell/live/table.mjs";
 
 const TRUST = { draft: "Draft", drafting: "Draft", checked: "Checked", proving: "Lean is proving", proved: "Proved by Lean", published: "Proved by Lean · published" };
 
 // ---- the store: the projection as it stands, and what the user has typed
-let state = { app: "", root: null, nodes: [], logic: null, logicKappa: null, trust: "", theme: "light", values: {} };
+let state = { app: "", root: null, nodes: [], logic: null, logicKappa: null, trust: "", theme: "light", values: {}, table: null, diff: null };
 const listeners = new Set();
 const subscribe = (l) => (listeners.add(l), () => listeners.delete(l));
 const snapshot = () => state;
@@ -40,20 +41,60 @@ function defaults(logic, old) {
 }
 function setValues(patch) { state = { ...state, values: { ...state.values, ...patch } }; emit(); }
 
+// ---- the decision table, built off the main thread per logic kappa (shell/live/table.mjs). Until it
+// arrives, and for a domain too large to tabulate, the interpreter answers.
+const K = tableKernel();
+let worker = null, offMain = true;
+function tableWorker() {
+  if (worker) return worker;
+  const source = "const K = (" + tableKernel.toString() + ")(); let prev = null;\n" +
+    "onmessage = ({ data }) => { const t0 = performance.now(); const t = K.build(data.logic); const ms = performance.now() - t0;\n" +
+    "  if (!t.cells) { postMessage({ kappa: data.kappa, reason: t.reason, size: t.size, ms }); return; }\n" +
+    "  const checks = K.check(data.logic, t); const diff = prev ? K.diff(prev.logic, prev.table, data.logic, t) : null; prev = { logic: data.logic, table: t };\n" +
+    "  const cells = t.cells.slice(); postMessage({ kappa: data.kappa, size: t.size, cells, radix: t.radix, base: t.base, lists: t.lists, checks, diff, ms }, [cells.buffer]); };";
+  const onmessage = ({ data }) => {
+    if (data.kappa !== state.logicKappa) return;
+    state = { ...state, table: data, diff: data.diff && state.showDiff ? data.diff : null };
+    emit();
+    parent.postMessage({ type: "live/table", app: state.app, size: data.size, ms: Math.round(data.ms * 10) / 10, offMain, reason: data.reason || null }, "*");
+  };
+  try { worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" }))); worker.onmessage = onmessage; }
+  catch (e) {
+    // No worker in this sandbox: the same kernel on this thread, and the report says so.
+    offMain = false;
+    let prev = null;
+    worker = { postMessage(data) { setTimeout(() => {
+      const t0 = performance.now(); const t = K.build(data.logic); const ms = performance.now() - t0;
+      const msg = !t.cells ? { kappa: data.kappa, reason: t.reason, size: t.size, ms } : { kappa: data.kappa, size: t.size, cells: t.cells, radix: t.radix, base: t.base, lists: t.lists, checks: K.check(data.logic, t), diff: prev ? K.diff(prev.logic, prev.table, data.logic, t) : null, ms };
+      if (t.cells) prev = { logic: data.logic, table: t };
+      onmessage({ data: msg });
+    }, 0); } };
+  }
+  return worker;
+}
+
 // ---- the dynamic part: the answer, the rule that decides it, which examples pass
-function evaluate(logic, values) {
+function evaluate(logic, values, table, logicKappa) {
   const ready = !!(logic && logic.otherwise && logic.fields && logic.fields.length);
   if (!ready) return { ready, answer: null, fires: -1, request: "" };
   const spec = { fields: logic.fields, rules: logic.rules, otherwise: logic.otherwise };
   const request = logic.fields.map((f) => String(values[f.name])).join(" ");
-  const answer = prismDecide(spec, values);
-  let fires = -1;
-  if (answer !== "invalid") {
-    fires = spec.rules.length;
-    for (let i = 0; i < spec.rules.length; i++) if (prismAnswer({ ...spec, rules: spec.rules.slice(0, i + 1), otherwise: "\u0000" }, request) !== "\u0000") { fires = i; break; }
+  let answer, fires = -1;
+  const t = table && table.cells && table.kappa === logicKappa ? table : null;
+  const cell = t ? K.cellOf(logic, t, values) : -2;
+  if (cell >= 0) { fires = t.cells[cell]; answer = fires < spec.rules.length ? spec.rules[fires].then : spec.otherwise; } // one read
+  else if (t) answer = "invalid";
+  else {
+    answer = prismDecide(spec, values);
+    if (answer !== "invalid") {
+      fires = spec.rules.length;
+      for (let i = 0; i < spec.rules.length; i++) if (prismAnswer({ ...spec, rules: spec.rules.slice(0, i + 1), otherwise: "\u0000" }, request) !== "\u0000") { fires = i; break; }
+    }
   }
   const passes = (req, res) => prismAnswer(spec, req) === res;
-  return { ready, answer, fires, request, passes, rules: spec.rules.length };
+  const checks = t ? t.checks : null;
+  const broken = new Set((checks || []).filter((c) => !c.ok).map((c) => c.rule));
+  return { ready, answer, fires, request, passes, rules: spec.rules.length, checks, broken, size: t ? t.size : 0, reason: table && table.kappa === logicKappa ? table.reason || null : null };
 }
 const Live = createContext({ ready: false, values: {} });
 
@@ -99,15 +140,35 @@ function Answer({ data }) {
   );
 }
 function Rule({ kind, data }) {
-  const { fires } = useContext(Live);
-  const on = fires === data.index;
+  const { fires, broken } = useContext(Live);
+  const on = fires === data.index, bad = broken && broken.has(data.index);
   return (
-    <div className={cn("rounded-lg border px-4 py-3 transition-colors", on && "border-brand bg-brand/5")}>
+    <div className={cn("rounded-lg border px-4 py-3 transition-colors", on && "border-brand bg-brand/5", bad && "border-destructive bg-destructive/5")}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-sm">{kind === "rule" ? "When " + data.when : "Otherwise"}</span>
         <Badge variant={on ? "default" : "secondary"} className={cn(on && "bg-brand text-brand-foreground")}>{data.then}</Badge>
       </div>
       {data.why && <p className="mt-1 text-sm text-muted-foreground">{data.why}</p>}
+    </div>
+  );
+}
+function Guarantee({ data }) {
+  const { checks, size, reason, trust } = useContext(Live);
+  const c = checks ? checks[data.index] : null;
+  const proved = trust === "proved" || trust === "published";
+  const n = (x) => x.toLocaleString("en");
+  return (
+    <div className={cn("rounded-lg border px-4 py-3", c && !c.ok && "border-destructive")}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-medium">{data.kind === "never" ? "Never" : "Always"} {data.then} when {data.when}</span>
+        {proved ? <Badge className="bg-brand text-brand-foreground">Proved by Lean</Badge>
+          : c && c.ok ? <Badge variant="outline"><CheckIcon className="text-brand" />Tested on all {n(size)}</Badge>
+          : c ? <Badge variant="destructive">Broken</Badge>
+          : <Badge variant="secondary">{reason ? "Not tabulated" : "Checking"}</Badge>}
+      </div>
+      {c && !c.ok ? <p className="mt-1 text-sm text-destructive"><span className="font-mono">{c.request}</span> answers {c.outcome}, by {c.rule < ((state.logic && state.logic.rules.length) || 0) ? "rule " + (c.rule + 1) : "otherwise"}.</p>
+        : data.why ? <p className="mt-1 text-sm text-muted-foreground">{data.why}</p> : null}
+      {reason && !c && <p className="mt-1 text-sm text-muted-foreground">{reason}; Lean will check it for every request.</p>}
     </div>
   );
 }
@@ -137,21 +198,39 @@ const Node = memo(function Node({ node, gap }) {
     : node.kind === "input" ? <Field data={d} />
     : node.kind === "answer" ? <Answer data={d} />
     : node.kind === "rule" || node.kind === "otherwise" ? <Rule kind={node.kind} data={d} />
+    : node.kind === "property" ? <Guarantee data={d} />
     : node.kind === "example" ? <Example data={d} /> : null;
   return <div ref={ref} data-key={node.key} data-kappa={node.kappa} className={cn("flex flex-col rounded-lg animate-in fade-in-0 slide-in-from-bottom-1 duration-300", gap && "mt-3")}>{body}</div>;
 }, (a, b) => a.node.kappa === b.node.kappa && a.gap === b.gap);
 
-const group = (kind) => (kind === "rule" || kind === "otherwise" ? "rules" : kind);
+// What an edit of the rules changed, answer by answer, over every request.
+function Diff({ diff }) {
+  const n = (x) => x.toLocaleString("en");
+  const show = (request) => { const parts = request.split(" "); const patch = {}; ((state.logic && state.logic.fields) || []).forEach((f, i) => (patch[f.name] = parts[i])); setValues(patch); };
+  return (
+    <Card className="gap-2 py-4 animate-in fade-in-0 slide-in-from-top-1 duration-300">
+      <CardHeader className="px-4">
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="text-base">{diff.changed ? "This edit changes " + n(diff.changed) + " of " + n(diff.of) + " answers" : "This edit changes none of " + n(diff.of) + " answers"}</CardTitle>
+          <Button variant="ghost" size="icon" className="size-7" aria-label="dismiss" onClick={() => { state = { ...state, diff: null }; emit(); }}><XIcon /></Button>
+        </div>
+      </CardHeader>
+      {diff.samples.length > 0 && <CardContent className="grid gap-1 px-4">{diff.samples.map((x) => <p key={x.request} className="font-mono text-sm"><button className="underline-offset-4 hover:underline" onClick={() => show(x.request)}>{x.request}</button><span className="text-muted-foreground"> · {x.before} → </span><span className="text-brand">{x.after}</span></p>)}</CardContent>}
+    </Card>
+  );
+}
+const group = (kind) => (kind === "rule" || kind === "otherwise" ? "rules" : kind === "property" ? "guarantees" : kind);
 function App() {
   const s = useSyncExternalStore(subscribe, snapshot);
-  const live = useMemo(() => ({ ...evaluate(s.logic, s.values), values: s.values }), [s.logicKappa, s.values]);
+  const live = useMemo(() => ({ ...evaluate(s.logic, s.values, s.table, s.logicKappa), values: s.values, trust: s.trust }), [s.logicKappa, s.values, s.table, s.trust]);
   return (
     <Live.Provider value={live}>
       {s.trust && <Badge variant={s.trust === "proved" || s.trust === "published" ? "default" : "outline"} className={cn("fixed top-3 right-3 z-10", (s.trust === "proved" || s.trust === "published") && "bg-brand text-brand-foreground", s.trust === "proving" && "animate-pulse border-brand text-brand")} aria-live="polite">{TRUST[s.trust] || s.trust}</Badge>}
       <main className="mx-auto flex max-w-xl flex-col gap-4 px-5 pt-14 pb-16">
+        {s.diff && <Diff diff={s.diff} />}
         {s.nodes.length === 0
           ? <p className="pt-[30vh] text-center text-sm text-muted-foreground">The app appears here as its rules are written.</p>
-          : s.nodes.map((n, i) => <Node key={n.key} node={n} gap={i > 0 && group(n.kind) !== group(s.nodes[i - 1].kind) && (group(n.kind) === "rules" || n.kind === "example")} />)}
+          : s.nodes.map((n, i) => <Node key={n.key} node={n} gap={i > 0 && group(n.kind) !== group(s.nodes[i - 1].kind) && (group(n.kind) === "rules" || group(n.kind) === "guarantees" || n.kind === "example")} />)}
       </main>
     </Live.Provider>
   );
@@ -167,14 +246,17 @@ function apply(m) {
   document.documentElement.classList.toggle("dark", m.theme === "dark");
   renders = 0;
   flushSync(() => {
-    state = { ...state, root: m.root, nodes: sameRoot ? state.nodes : m.nodes, logic: logicChanged ? m.logic : state.logic, logicKappa: m.logicKappa, trust: m.trust || "", theme: m.theme, values: logicChanged ? defaults(m.logic, state.values) : state.values };
+    // The diff shows for a settled edit (a user's or an agent's, or checked rules), not while a model streams.
+    state = { ...state, root: m.root, nodes: sameRoot ? state.nodes : m.nodes, logic: logicChanged ? m.logic : state.logic, logicKappa: m.logicKappa, trust: m.trust || "", theme: m.theme, values: logicChanged ? defaults(m.logic, state.values) : state.values,
+      diff: logicChanged ? null : state.diff, showDiff: logicChanged ? !!m.edit || (!!m.trust && m.trust !== "draft") : state.showDiff };
     emit();
   });
+  if (logicChanged && m.logic && m.logic.otherwise) tableWorker().postMessage({ kappa: m.logicKappa, logic: m.logic });
   const work = Math.round((performance.now() - t0) * 10) / 10, rendered = renders;
   requestAnimationFrame(() => parent.postMessage({ type: "live/painted", app: state.app, root: m.root, changed, rendered, work, ms: Math.round((performance.now() - t0) * 10) / 10 }, "*"));
 }
 function hello() {
-  state = { app: decodeURIComponent(location.hash.slice(1)), root: null, nodes: [], logic: null, logicKappa: null, trust: "", theme: state.theme, values: {} };
+  state = { app: decodeURIComponent(location.hash.slice(1)), root: null, nodes: [], logic: null, logicKappa: null, trust: "", theme: state.theme, values: {}, table: null, diff: null };
   emit();
   parent.postMessage({ type: "live/hello", app: state.app, style: __STYLE__ }, "*");
 }

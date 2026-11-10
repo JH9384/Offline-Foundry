@@ -62,5 +62,7 @@ jobs:
         run: (cd live-src && npm ci --no-audit --no-fund) && node tools/live_components.mjs --check
       - name: The live preview draws the spec, and only the spec
         run: node tools/live_preview.mjs --check
+      - name: The decision table decides as the rules do, on every request
+        run: node tools/live_table.mjs --check
       - name: Nothing in this repository names Forge's old home
         run: node tools/self_contained.mjs
