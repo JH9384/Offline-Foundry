@@ -5,7 +5,7 @@
 // verifier, the same call `prism_prove` makes. It also writes the app's rule module,
 // src/lib/prism.ts: the spec as data and one small interpreter, replayed against every acceptance
 // vector before it is written. What Lean proves is the rules; the module is tested against them.
-import { SpecError, validateSpec, unreachableRules, counterexample, describeConditions, requestLimits } from "./prism/spec.mjs";
+import { SpecError, validateSpec, unreachableRules, counterexample, describeConditions, requestLimits, decodeRequest, respond } from "./prism/spec.mjs";
 import { names, renderModel, renderProofs, acceptanceVectors } from "./prism/render.mjs";
 
 // prism/render.mjs names bytes in hex through Node's Buffer; this is the one use it makes of it.
@@ -25,14 +25,112 @@ When the app decides an answer from a few inputs (a price tier, an eligibility, 
 - To change the rules, write a whole new <dyad-spec> block. When the app decides nothing (a landing page, a gallery), write no spec.
 Example: <dyad-spec>{"name":"parking-fee","title":"Parking fee tier","purpose":"Decide the fee tier from hours parked and vehicle type.","fields":[{"name":"hours","kind":"number","min":0,"max":24,"means":"hours parked"},{"name":"vehicle","kind":"choice","values":["car","motorcycle","truck"],"means":"vehicle type"}],"outcomes":["free","standard","premium"],"rules":[{"when":[{"field":"hours","op":"=","value":0}],"then":"free","why":"nothing was parked"},{"when":[{"field":"vehicle","op":"is","value":"truck"}],"then":"premium","why":"a truck takes two bays"}],"otherwise":"standard","otherwiseWhy":"a car or motorcycle pays the standard rate","properties":[{"kind":"never","when":[{"field":"hours","op":"=","value":0}],"then":"premium","why":"no one pays for zero hours"}],"examples":[{"request":"0 truck","response":"free"},{"request":"3 car","response":"standard"}]}</dyad-spec>`;
 
-const TAG = /<dyad-spec>([\s\S]*?)<\/dyad-spec>/;
+// ---- the device. The on-device model holds about 3,000 tokens and writes at most 900, so it is asked
+// for the one thing it can write well, the rules, and Forge draws the screen from them (screenSource).
+const DEVICE_RULES = `You write the rules of a small decision app as JSON. Reply with one <dyad-spec> block and nothing else.
+Keys: "title"; "purpose" (one sentence); "fields" (1 to 8; each {"name": a lower-case word, "kind": "number" with "min" and "max", or "choice" with "values"}); "outcomes" (the answer words); "rules" (in order, the first that matches decides; each {"when": [{"field", "op", "value"}], "then"}); "otherwise"; "properties" (what must never or always happen; each {"kind": "never" or "always", "when": [...], "then"}); "examples" (each {"request": "the field values separated by spaces", "response"}).
+"op" is "is" or "is not" for a choice field, and "<", "<=", ">", ">=" or "=" for a number field. Numbers are whole.
+Example:
+<dyad-spec>{"title":"Parking fee tier","purpose":"Decide the fee tier from hours parked and vehicle.","fields":[{"name":"hours","kind":"number","min":0,"max":24},{"name":"vehicle","kind":"choice","values":["car","motorcycle","truck"]}],"outcomes":["free","standard","premium"],"rules":[{"when":[{"field":"hours","op":"=","value":0}],"then":"free"},{"when":[{"field":"vehicle","op":"is","value":"truck"}],"then":"premium"}],"otherwise":"standard","properties":[{"kind":"never","when":[{"field":"hours","op":"=","value":0}],"then":"premium"}],"examples":[{"request":"0 truck","response":"free"},{"request":"3 car","response":"standard"}]}</dyad-spec>`;
+export function deviceRequest(prompt, currentSpec) {
+  const ask = currentSpec ? `The app's rules now:\n${JSON.stringify(JSON.parse(currentSpec))}\n\nWrite the whole new rules for this change: ${prompt}` : prompt;
+  // /no_think: the rules model is a Qwen3, which otherwise reasons aloud until its 900 tokens are gone.
+  return [{ role: "system", content: DEVICE_RULES + "\nWrite each rule once. Write at most 4 examples. /no_think" }, { role: "user", content: ask + " /no_think" }];
+}
+// What the device wrote, without a reasoning block the model may still open.
+export const withoutThinking = (text) => (text || "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
+
+// The screen Forge writes when the rules check and no page uses them yet: a form with one input per
+// field, answered by decide(). It reads everything from the rules module, so it never goes stale.
+export function screenSource() {
+  return `// Written by Hologram Forge: a form for the app's rules. The answer comes from decide(), the rules Lean proves.
+import { useState } from "react";
+import { decide, FIELDS, SPEC } from "@/lib/prism";
+
+export default function Index() {
+  const [values, setValues] = useState(() => Object.fromEntries(FIELDS.map((f) => [f.name, f.kind === "choice" ? f.values[0] : String(f.min ?? 0)])));
+  const answer = decide(values);
+  const set = (name, value) => setValues((v) => ({ ...v, [name]: value }));
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{SPEC.title}</h1>
+          <p className="text-sm text-muted-foreground">{SPEC.purpose}</p>
+        </div>
+        {FIELDS.map((f) => (
+          <label key={f.name} className="block space-y-1.5">
+            <span className="text-sm font-medium">{f.means || f.name}</span>
+            {f.kind === "choice" ? (
+              <select className="w-full rounded-md border bg-background px-3 py-2" value={values[f.name]} onChange={(e) => set(f.name, e.target.value)}>
+                {f.values.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            ) : (
+              <input className="w-full rounded-md border bg-background px-3 py-2" type="number" inputMode="numeric" step={1} min={f.min} max={f.max} value={values[f.name]} onChange={(e) => set(f.name, e.target.value)} />
+            )}
+          </label>
+        ))}
+        <div className="rounded-lg border p-4 space-y-1">
+          <div className="text-sm text-muted-foreground">Answer</div>
+          <div className="text-2xl font-semibold">{answer}</div>
+          {SPEC.meanings && SPEC.meanings[answer] ? <div className="text-sm text-muted-foreground">{SPEC.meanings[answer]}</div> : null}
+        </div>
+      </div>
+    </main>
+  );
+}
+`;
+}
+
+// A small model may stop before the closing tag: the block runs to the end of the answer then.
+const TAG = /<dyad-spec>([\s\S]*?)(?:<\/dyad-spec>|$)/;
 export function parseSpecTag(text) {
   const m = TAG.exec(text || "");
   if (!m) return null;
   let body = m[1].trim();
   const fence = body.match(/^```[\w-]*\n([\s\S]*?)\n```$/);
   if (fence) body = fence[1];
-  try { return { spec: JSON.parse(body) }; } catch (e) { return { error: "The rules are not valid JSON: " + e.message }; }
+  try { return { spec: JSON.parse(body) }; } catch (e) {
+    const repaired = repairJson(body);
+    if (repaired !== null) {
+      // An answer cut short leaves its last example half written: only whole examples are kept.
+      if (Array.isArray(repaired.examples)) repaired.examples = repaired.examples.filter((e) => e && typeof e.request === "string" && typeof e.response === "string");
+      return { spec: repaired, repaired: true };
+    }
+    return { error: "The rules are not valid JSON: " + e.message };
+  }
+}
+// The slips a small model makes in JSON: text after the closing brace, closing brackets it never wrote,
+// commas before a closer. Repair only restores syntax; the checker still judges every rule, and the
+// user still approves the card, so a repaired spec is never proved unseen.
+export function repairJson(text) {
+  // A quote glued to a closer, `}"]`, as BitNet writes it: the tokenizer's `}"` taken for `}`.
+  text = text.replace(/([}\]])"(?=\s*[\]},])/g, "$1");
+  // A doubled comma, and an operator glued to its key, `"op">=","value"`, as Bonsai writes them.
+  text = text.replace(/,(\s*,)+/g, ",").replace(/"op"\s*(>=|<=|!=|>|<|=)\s*"\s*,/g, '"op":"$1",');
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  const stack = [];
+  const cuts = []; // a comma between complete items, with the closers still open there
+  let inString = false, escaped = false, end = -1, out = "";
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    out += ch;
+    if (inString) { if (escaped) escaped = false; else if (ch === "\\") escaped = true; else if (ch === '"') inString = false; continue; }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") stack.push(ch === "{" ? "}" : "]");
+    else if (ch === "}" || ch === "]") { if (stack.pop() !== ch) return null; if (!stack.length) { end = i; break; } }
+    else if (ch === ",") cuts.push({ at: out.length - 1, closers: stack.slice().reverse().join("") });
+  }
+  const attempt = (s) => { try { return JSON.parse(s.replace(/,\s*([}\]])/g, "$1")); } catch { return null; } };
+  if (end >= 0) return attempt(out);
+  // Cut short (the model's token limit): close what is open, else go back to the last complete item.
+  let tail = out + (inString ? '"' : "");
+  tail = tail.replace(/[,:\s]+$/, "") + stack.slice().reverse().join("");
+  const whole = attempt(tail);
+  if (whole) return whole;
+  for (let k = cuts.length - 1; k >= 0; k--) { const got = attempt(out.slice(0, cuts[k].at) + cuts[k].closers); if (got) return got; }
+  return null;
 }
 // The card stands in its own paragraphs, whatever the model wrote around the tag.
 export const withCard = (text, card) => (text || "").replace(TAG, card ? "\n\n" + card + "\n\n" : "");
@@ -98,12 +196,60 @@ export function answer(request) { return prismAnswer(SPEC, request); }
 }
 
 // ---- the check: what prism_spec runs on a drafted spec, then the module against every vector
-export function checkSpec(input) {
-  const issues = [];
+// Answer words and field names are lower-case words in a Prism spec. A model that capitalizes an answer
+// (grades A to F) or writes debt_ratio means the same thing, so each is respelled wherever it is named;
+// no rule changes.
+function lowerAnswers(input) {
+  const low = (w) => (typeof w === "string" ? w.toLowerCase() : w);
+  const spec = structuredClone(input || {});
+  if (Array.isArray(spec.outcomes)) spec.outcomes = spec.outcomes.map(low);
+  spec.otherwise = low(spec.otherwise);
+  for (const r of Array.isArray(spec.rules) ? spec.rules : []) if (r) r.then = low(r.then);
+  for (const p of Array.isArray(spec.properties) ? spec.properties : []) if (p) p.then = low(p.then);
+  for (const e of Array.isArray(spec.examples) ? spec.examples : []) if (e) e.response = low(e.response);
+  if (spec.meanings && typeof spec.meanings === "object") spec.meanings = Object.fromEntries(Object.entries(spec.meanings).map(([k, v]) => [low(k), v]));
+  // A field name is one lower-case word: `debt_ratio` becomes `debtratio` wherever a condition names it.
+  const renamed = new Map();
+  for (const f of Array.isArray(spec.fields) ? spec.fields : []) {
+    if (!f || typeof f.name !== "string") continue;
+    const word = f.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (word && word !== f.name) { renamed.set(f.name, word); f.name = word; }
+  }
+  if (renamed.size) {
+    const fix = (c) => { if (!c) return; if (renamed.has(c.field)) c.field = renamed.get(c.field); if (c.value && typeof c.value === "object" && renamed.has(c.value.field)) c.value.field = renamed.get(c.value.field); };
+    for (const r of [...(Array.isArray(spec.rules) ? spec.rules : []), ...(Array.isArray(spec.properties) ? spec.properties : [])]) for (const c of (r && Array.isArray(r.when) ? r.when : [])) fix(c);
+  }
+  return spec;
+}
+
+export function checkSpec(raw) {
+  const issues = [], notes = [];
+  let input = lowerAnswers(raw);
+  // An example is the model's own word for what the rules answer. One that is not a request, or that the
+  // rules answer differently, is set aside and named on the card, so the user sees the disagreement.
+  try {
+    const bare = validateSpec({ ...input, examples: [] });
+    const kept = [];
+    for (const e of Array.isArray(input.examples) ? input.examples : []) {
+      const request = e && typeof e.request === "string" ? e.request : "";
+      if (!decodeRequest(bare, request)) { notes.push(`Set aside example \`${request}\`: it is not a request (${bare.fields.map((f) => f.name).join(" ")}).`); continue; }
+      const answer = respond(bare, new TextEncoder().encode(request));
+      if (answer !== e.response) { notes.push(`Set aside example \`${request}\` → ${e.response}: these rules answer ${answer}.`); continue; }
+      kept.push(e);
+    }
+    input = { ...input, examples: kept };
+  } catch (e) { if (!(e instanceof SpecError)) throw e; }
   let spec;
   try { spec = validateSpec(input); } catch (e) { if (e instanceof SpecError) return { ok: false, issues: [e.message] }; throw e; }
+  // A rule no request reaches never decides anything, so dropping it changes no answer; prism-code refuses
+  // such a spec, so Forge drops them and says so. unreachableRules names one only after trying every request.
   const dead = unreachableRules(validateSpec({ ...spec, properties: [], examples: [] }));
-  if (dead.length) issues.push(`No request reaches ${dead.join(", ")}: an earlier rule always decides first.`);
+  if (dead.length) {
+    const deadSet = new Set(dead);
+    try { spec = validateSpec({ ...input, rules: spec.rules.filter((r) => !deadSet.has(r.id)).map(({ id, says, ...r }) => r) }); }
+    catch (e) { if (e instanceof SpecError) return { ok: false, issues: [e.message] }; throw e; }
+    notes.push(`Dropped ${dead.length} rule${dead.length === 1 ? "" : "s"} no request reaches: an earlier rule always decides first.`);
+  }
   for (const p of spec.properties) {
     const found = counterexample(spec, p);
     if (found.request !== null) issues.push(`${p.id} does not hold: \`${found.request}\` answers ${found.outcome}${found.rule ? ` by ${found.rule}` : " by otherwise"}.`);
@@ -116,7 +262,7 @@ export function checkSpec(input) {
     if (prismAnswer(spec, text) !== v.response) failed++;
   }
   if (failed) issues.push(`The rule module disagrees with ${failed} of ${vectors.length} acceptance vectors. This is a Forge bug.`);
-  return { ok: issues.length === 0, spec, issues, vectors: vectors.length, module: issues.length ? null : moduleSource(spec, vectors.length) };
+  return { ok: issues.length === 0, spec, issues, notes, vectors: vectors.length, module: issues.length ? null : moduleSource(spec, vectors.length) };
 }
 
 // ---- the proof: the LexLean project prism-code sends, proved on the hosted verifier
@@ -224,6 +370,7 @@ export function card(state) {
   lines.push(`- Otherwise: **${spec.otherwise}**${spec.otherwiseWhy ? ` *${spec.otherwiseWhy}*` : ""}`, "");
   lines.push(`Request: \`${spec.fields.map((f) => f.name).join(" ")}\` · answers: ${spec.outcomes.join(", ")}, or invalid`);
   if (spec.examples.length) lines.push("", `Examples: ${spec.examples.map((e) => `\`${e.request}\` → ${e.response}`).join(" · ")}`);
+  if (state.notes && state.notes.length) lines.push("", ...state.notes.map((n) => "*" + n + "*"));
   if (state.issues && state.issues.length) lines.push("", "Not checked:", ...state.issues.map((i) => "- " + i), "", "Ask me to fix the rules.");
   else if (state.phase === "checked") lines.push("", `Checked: consistent, ${spec.examples.length} examples pass, ${state.vectors} acceptance vectors replayed through the app's rule module.`, "", "Reply **approve** to have Lean prove the guarantees. The rules go to the hosted verifier, unlisted.");
   return lines.join("\n");

@@ -9,7 +9,7 @@
 
 import { buildSystemPrompt } from "./prompts.js";
 import * as inference from "./inference.js";
-import { viewReady, lookup, routeOf, refusalWord, seal as sealAnswer, sealPaid, paidGenerate, gpuReady, gpuIds, rememberSession, withEngine, engine, readWho, MODEL_ID, site, siteKeyReady, deviceKeyGet } from "./inference.js";
+import { viewReady, lookup, routeOf, refusalWord, seal as sealAnswer, sealPaid, paidGenerate, gpuReady, gpuIds, heldFor, rulesModel, rememberSession, withEngine, engine, readWho, MODEL_ID, paidId, site, siteKeyReady, deviceKeyGet } from "./inference.js";
 import { install, installed, encodeView, b64, unb64, sha256 } from "./holo.js";
 import * as prism from "./prism.js";
 
@@ -110,9 +110,13 @@ const LOCAL = { id: "local", name: "On your device", type: "custom", hasFreeTier
 // The window is the engine's own (q/core/loader.js: BitNet 2B, ctx 3000), not a round number: a build
 // turn carries the project's files, so the renderer must know what actually fits.
 const LOCAL_MODELS = [{ apiName: MODEL_ID, displayName: "BitNet 2B, on your device", description: "Runs on this browser's GPU; every answer is sealed on the device", contextWindow: 3000 }];
-handlers.set("get-language-model-providers", () => [LOCAL, OPENROUTER]);
-handlers.set("get-language-models", ({ providerId }) => (providerId === "openrouter" ? OPENROUTER_MODELS : providerId === "local" ? LOCAL_MODELS : []));
-handlers.set("get-language-models-by-providers", () => ({ openrouter: OPENROUTER_MODELS, local: LOCAL_MODELS }));
+// Featherless: open-weight models behind an OpenAI chat endpoint that admits this origin. The key is the
+// visitor's, entered on the provider's settings page and kept on this device; the site carries none.
+const FEATHERLESS = { id: "featherless", name: "Featherless", hasFreeTier: false, websiteUrl: "https://featherless.ai/account/api-keys", gatewayPrefix: "featherless/", type: "cloud" };
+const FEATHERLESS_MODELS = [{ apiName: "zai-org/GLM-5.3-Flash", displayName: "GLM 5.3 Flash", description: "Z.ai's GLM 5.3 Flash on Featherless", contextWindow: 262144 }];
+handlers.set("get-language-model-providers", () => [LOCAL, OPENROUTER, FEATHERLESS]);
+handlers.set("get-language-models", ({ providerId }) => (providerId === "openrouter" ? OPENROUTER_MODELS : providerId === "featherless" ? FEATHERLESS_MODELS : providerId === "local" ? LOCAL_MODELS : []));
+handlers.set("get-language-models-by-providers", () => ({ openrouter: OPENROUTER_MODELS, featherless: FEATHERLESS_MODELS, local: LOCAL_MODELS }));
 handlers.set("validate-provider-api-key", async ({ provider, apiKey }) => {
   if (provider !== "openrouter") return { ok: true };
   const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { authorization: "Bearer " + apiKey } });
@@ -306,7 +310,7 @@ handlers.set("chat:count-tokens", async ({ chatId, input }) => {
   const chat = chatId != null ? await get("chats", chatId) : null;
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
   const chosen = (chat && chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  const models = chosen.provider === "openrouter" ? OPENROUTER_MODELS : LOCAL_MODELS;
+  const models = chosen.provider === "openrouter" ? OPENROUTER_MODELS : chosen.provider === "featherless" ? FEATHERLESS_MODELS : LOCAL_MODELS;
   const contextWindow = (models.find((m) => m.apiName === chosen.name) || models[0] || { contextWindow: 4096 }).contextWindow;
   const tokens = (text) => Math.ceil(String(text || "").length / 4);
   const codebaseTokens = chat && chat.appId != null ? tokens(await codebaseOf(chat.appId)) : 0;
@@ -617,7 +621,7 @@ const saveRules = (appId, state) => put("refs", "prism:" + appId, state);
 // After a turn: the spec the model wrote (if any) becomes prism/spec.json; new rules drop the proof
 // (the kernel's edit), are checked (its check), and on a pass the app's rule module is written.
 // Returns the files changed and the card that replaces the spec in the chat.
-async function rulesAfterTurn(appId, text) {
+async function rulesAfterTurn(appId, text, written = []) {
   const tag = prism.parseSpecTag(text);
   let changed = 0;
   if (tag && tag.spec) {
@@ -635,8 +639,16 @@ async function rulesAfterTurn(appId, text) {
   if (checked.ok) {
     phase = await nextPhase(phase, "check");
     if ((await get("files", appId + ":src/lib/prism.ts")) !== checked.module) { await put("objects", await kappa(enc.encode(checked.module)), enc.encode(checked.module)); await put("files", appId + ":src/lib/prism.ts", checked.module); changed++; }
+    // No page asks the rules yet, and this turn wrote none: Forge draws the form (the device's turns
+    // write only rules). A page the model wrote, or one that already uses the rules, is left alone.
+    const page = (await get("files", appId + ":src/pages/Index.tsx")) || "";
+    if (!page.includes("@/lib/prism") && !written.some((p) => p && p.startsWith("src/pages/"))) {
+      const screen = prism.screenSource();
+      await put("objects", await kappa(enc.encode(screen)), enc.encode(screen)); await put("files", appId + ":src/pages/Index.tsx", screen); changed++;
+    }
   }
-  const state = { phase, specKappa, spec: checked.spec || null, issues: checked.issues, vectors: checked.vectors || 0, proof: null, updated: now() };
+  const notes = [...(tag && tag.repaired ? ["Forge repaired the JSON syntax the model wrote. Read the rules before you approve them."] : []), ...(checked.notes || [])];
+  const state = { phase, specKappa, spec: checked.spec || null, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: null, updated: now() };
   await saveRules(appId, state);
   return { changed, card: prism.card(state) };
 }
@@ -706,8 +718,8 @@ async function chatTurn(chatId, intent) {
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
   const V = await viewReady();
   const chosen = (chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  const paid = chosen.provider === "openrouter" && chosen.name;
-  const model = paid ? "openrouter/" + chosen.name.replace(/^openrouter\//, "") : MODEL_ID;
+  const paid = (chosen.provider === "openrouter" || chosen.provider === "featherless") && chosen.name;
+  const model = paid ? chosen.provider + "/" + chosen.name.replace(/^(openrouter|featherless)\//, "") : MODEL_ID;
   // T2: the user message, accepted
   const messages = await messagesOf(chatId);
   const userId = messages.length ? Math.max(...messages.map((x) => x.id)) + 1 : 1;
@@ -744,7 +756,8 @@ async function chatTurn(chatId, intent) {
     const body = { model, messages: request, max_tokens: paid ? 16384 : 2048, temperature: "0.7" };
     const hit = await lookup(body);
     const route = await routeOf(hit, body);
-    const word = await refusalWord(route);
+    // The View's no-key word names OpenRouter; a Featherless model is told about its own key.
+    const word = route === "NoKey" && model.startsWith("featherless/") ? "Add your Featherless key in Settings, under Featherless, to use " + paidId(model) : await refusalWord(route);
     if (word) throw new Error(word);
     let lastSave = 0;
     const onText = async (t) => {
@@ -776,13 +789,27 @@ async function chatTurn(chatId, intent) {
       await onText(text);
       provenance = { receipt: await sealPaid(body, rec, hit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost };
     } else {
-      const inst = await gpuReady();
-      const { ids } = gpuIds(inst, request);
-      const res = await withEngine(() => inst.generate(ids, { maxNew: body.max_tokens, onToken: ({ text }) => { if (!abort.signal.aborted) onText(text); } }));
-      const text = (res.text || "").trim();
-      rememberSession(request, res, text);
-      await onText(text);
-      const rec = await inst.buildReceipt({ promptText: intent.prompt, ctxIds: [], turnIds: ids, outIds: res.outIds });
+      // The device. Its window is about 3,000 tokens and a build request is several times that, so the
+      // device is asked only for the app's rules, with a prompt that fits, by the rules model (the chat
+      // ladder's models cannot write them); Forge draws the screen from the rules after the turn.
+      if (!engine.rules) await onText("Loading the on-device rules model…");
+      const held = await rulesModel();
+      const inst = held.instance;
+      const deviceMessages = prism.deviceRequest(intent.prompt, await get("files", appId + ":prism/spec.json"));
+      const { ids } = gpuIds(inst, deviceMessages, held.model);
+      const room = held.model.ctx - ids.length - 8;
+      if (room < 128) throw new Error("This request does not fit the on-device model. Choose a paid model in the model picker.");
+      await onText("");
+      // No repetition penalty: rules are JSON, which repeats its keys by nature, and a penalty pushes a
+      // small model off valid syntax. The receipt records the penalty used, so the answer stays re-derivable.
+      const maxNew = Math.min(held.model.cap, room);
+      const res = await withEngine(() => inst.generate(ids, { maxNew, repPenalty: 1, onToken: ({ text }) => { if (!abort.signal.aborted) onText(text); } }));
+      const text = prism.withoutThinking(res.text);
+      window.__prism.lastDevice = res.text || "";
+      messages[messages.length - 1].model = "webgpu:" + held.model.fam; // the model that wrote the rules
+      rememberSession(deviceMessages, res, text, held.model);
+      await onText(/<dyad-spec>/.test(text) ? text : text + "\n\nThe on-device model did not write rules for this app. Ask again with the inputs and the answers, or choose a paid model in the model picker.");
+      const rec = await inst.buildReceipt({ promptText: intent.prompt, ctxIds: [], turnIds: ids, outIds: res.outIds, paramsPatch: { repetitionPenalty: 1, maxTokens: maxNew } });
       provenance = { receipt: await sealAnswer(body, rec, hit.key), fingerprint: `${(rec.body["prov:used"] || {})["holo:model"]}` };
     }
     // T6: what the model wrote becomes the project, sealed as a version
@@ -790,7 +817,7 @@ async function chatTurn(chatId, intent) {
     if (summary && (!chat.title || chat.title === "New chat")) { const c = await get("chats", chatId); c.title = summary; await put("chats", chatId, c); }
     const tags = parseDyadTags(full);
     let changed = await applyDyadTags(appId, tags);
-    const spec = await rulesAfterTurn(appId, full);
+    const spec = await rulesAfterTurn(appId, full, tags.writes.map((w) => w.path));
     changed += spec.changed;
     updatedFiles = changed > 0;
     let commit = null;

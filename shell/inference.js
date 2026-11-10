@@ -95,11 +95,16 @@ export function siteKeyReady() {
   return site.ready;
 }
 export async function keyGet() { return (await deviceKeyGet()) || (await siteKeyReady()); }
+// Featherless is the second cloud provider. Its key is the visitor's, kept on this device in the same
+// settings record (providerSettings.featherless); the site never carries one.
+export async function featherlessKeyGet() { const s = await settingsGet(); const v = s && s.providerSettings && s.providerSettings.featherless && s.providerSettings.featherless.apiKey && s.providerSettings.featherless.apiKey.value; return v ? String(v) : ""; }
+export const providerOf = (model) => (String(model).startsWith("featherless/") ? "featherless" : "openrouter");
+export const keyFor = (model) => (providerOf(model) === "featherless" ? featherlessKeyGet() : keyGet());
 export async function keySet(value) { const s = (await settingsGet()) || {}; s.providerSettings = { ...(s.providerSettings || {}), openrouter: { ...((s.providerSettings || {}).openrouter || {}), apiKey: { value } } }; await settingsPut(s); }
 // Who answers: local (the Q engine) or paid (an OpenRouter model). Read from and written to the same
 // selectedModel the renderer's settings page and composer use.
 export const MODEL_ID = "webgpu:BitNet";
-export const paidId = (model) => model.replace(/^openrouter\//, "");
+export const paidId = (model) => model.replace(/^(openrouter|featherless)\//, "");
 export async function readWho() {
   const s = await settingsGet();
   const m = s && s.selectedModel;
@@ -241,6 +246,19 @@ async function measure(held) {
     return tokps;
   } catch { return 0; }
 }
+// The model that writes an app's rules on the device. Rules are a few hundred tokens of exact JSON, which
+// BitNet 2B gets wrong (measured 2026-11-10: 0 of 3 usable); the catalogue's Bonsai 8B is four times its
+// size in 1.16 GB. Loaded once, on the first rules turn, beside the chat ladder; BitNet if it fails.
+export function rulesModel() {
+  if (engine.rules) return Promise.resolve(engine.rules);
+  if (!engine.rulesLoading) engine.rulesLoading = (async () => {
+    const { L } = await mods();
+    const entry = L.MODELS.find((m) => m.fam === "Bonsai");
+    if (!entry) throw new Error("no rules model in the catalogue");
+    return (engine.rules = await residentModel(entry, "Loading the rules model"));
+  })().catch((error) => { engine.rulesLoading = null; console.warn("[inference] rules model", error); return heldFor(MODEL_ID); });
+  return engine.rulesLoading;
+}
 // The engine a request is answered by. The ladder's id takes the tier; the large model's own id always
 // takes the large model, so a page that names it is never answered by something else.
 export async function heldFor(id) {
@@ -288,10 +306,16 @@ export function withEngine(fn) { const run = gpuBusy.then(fn, fn); gpuBusy = run
 
 // ---- the paid route: OpenRouter with the visitor's key. The request bytes are the model's encoder.
 const OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
+const FEATHERLESS = "https://api.featherless.ai/v1/chat/completions";
 export async function paidGenerate(body, onDelta, signal) {
-  const c = await coreReady(); const key = await keyGet(); const V = await viewReady();
-  const bytes = c.run({ op: "encode-openrouter-request", model: paidId(body.model), request: body, stream: true }).bytes;
-  const r = await fetch(OPENROUTER, { method: "POST", signal, headers: { Authorization: "Bearer " + key, "content-type": "application/json", "HTTP-Referer": location.origin, "X-Title": "hologram-forge" }, body: bytes });
+  const provider = providerOf(body.model);
+  const c = await coreReady(); const key = await keyFor(body.model); const V = await viewReady();
+  let bytes = c.run({ op: "encode-openrouter-request", model: paidId(body.model), request: body, stream: true }).bytes;
+  // Featherless speaks plain OpenAI chat completions: the core's request without the three fields only
+  // OpenRouter reads (usage.include, reasoning, provider), and the standard usage option in their place.
+  if (provider === "featherless") { const j = JSON.parse(bytes); delete j.usage; delete j.reasoning; delete j.provider; if (j.stream) j.stream_options = { include_usage: true }; bytes = JSON.stringify(j); }
+  const headers = provider === "featherless" ? { Authorization: "Bearer " + key, "content-type": "application/json" } : { Authorization: "Bearer " + key, "content-type": "application/json", "HTTP-Referer": location.origin, "X-Title": "hologram-forge" };
+  const r = await fetch(provider === "featherless" ? FEATHERLESS : OPENROUTER, { method: "POST", signal, headers, body: bytes });
   if (!r.ok) {
     let msg = ""; try { msg = (await r.json()).error.message; } catch (e) {}
     const word = r.status === 401 ? V.noKeyLabel : r.status === 402 ? V.noCreditLabel : V.providerBusyLabel;
@@ -312,14 +336,14 @@ export async function paidGenerate(body, onDelta, signal) {
   }
   if (!text.trim()) throw new Error(V.providerBusyLabel);
   const usage = (last && last.usage) || {};
-  const rec = { kind: "openrouter", id: last && last.id, model: (last && last.model) || paidId(body.model), provider: last && last.provider, fingerprint: (last && last.system_fingerprint) || "", usage: { prompt: usage.prompt_tokens || 0, completion: usage.completion_tokens || 0 }, cost: String(usage.cost ?? ""), text: text.trim(), rederivable: false, ttftMs: Math.round(first || 0) };
+  const rec = { kind: provider, id: last && last.id, model: (last && last.model) || paidId(body.model), provider: last && last.provider, fingerprint: (last && last.system_fingerprint) || "", usage: { prompt: usage.prompt_tokens || 0, completion: usage.completion_tokens || 0 }, cost: String(usage.cost ?? ""), text: text.trim(), rederivable: false, ttftMs: Math.round(first || 0) };
   return { text: rec.text, rec };
 }
 
 // ---- the route: the model's table decides who answers
 export async function routeOf(hit, body) {
   const c = await coreReady();
-  return c.run({ op: "route", hit: !!hit.hit, provider: body.model.startsWith("openrouter/") ? "paid" : "local", gpuReady: !!navigator.gpu, keyPresent: !!(await keyGet()), online: navigator.onLine }).route;
+  return c.run({ op: "route", hit: !!hit.hit, provider: /^(openrouter|featherless)\//.test(body.model) ? "paid" : "local", gpuReady: !!navigator.gpu, keyPresent: !!(await keyFor(body.model)), online: navigator.onLine }).route;
 }
 export async function refusalWord(route) { const V = await viewReady(); return { NoKey: V.noKeyLabel, NoGpu: V.noGpuLabel, PaidOffline: V.paidOfflineLabel }[route]; }
 export async function modelFor(who) { const V = await viewReady(); return who.provider === "paid" ? "openrouter/" + (who.model || V.paidModels[0].id) : MODEL_ID; }
