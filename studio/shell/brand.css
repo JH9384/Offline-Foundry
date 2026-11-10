@@ -124,3 +124,6 @@
 body { font-family: var(--font-sans); }
 .font-display, h1.font-display, main > h1 { font-family: var(--font-display); letter-spacing: var(--tracking-display); font-weight: 600; }
 .mono, code, kbd, samp { font-family: var(--font-mono); font-size: 14px; }
+
+/* The Prism frame's spectrum, from frame/frame.css. */
+:root { --spectrum-red: #fb5661; --spectrum-orange: #fa792e; --spectrum-amber: #f9cf24; --spectrum-yellow: #f6e41e; --spectrum-green: #25d05e; --spectrum-cyan: #20d0f3; --spectrum-blue: #4f81f8; --spectrum-violet: #ae6ff6; --spectrum-pink: #f368c5; }

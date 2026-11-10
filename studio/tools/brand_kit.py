@@ -129,7 +129,18 @@ def brand_css():
     out += "body { font-family: var(--font-sans); }\n"
     out += ".font-display, h1.font-display, main > h1 { font-family: var(--font-display); letter-spacing: var(--tracking-display); font-weight: 600; }\n"
     out += ".mono, code, kbd, samp { font-family: var(--font-mono); font-size: " + SIZE["sm"] + "; }\n"
+    out += spectrum_block()
     return out
+
+
+def spectrum_block():
+    # The Prism frame's spectrum (its address-bar ring, which Holo Search's search bar and Forge's prompt box
+    # wear): its nine stops, read from the frame's own source in this repository (frame/frame.css, pinned from
+    # UOR-Foundation/template), so the colours are the frame's and none is typed here.
+    frame = (root.parent / "frame" / "frame.css").read_text(encoding="utf-8")
+    stops = re.findall(r"(--spectrum-[a-z]+):\s*(#[0-9a-fA-F]{6});", frame)
+    assert len(stops) == 9, "frame/frame.css should define nine spectrum stops"
+    return "\n/* The Prism frame's spectrum, from frame/frame.css. */\n:root { " + " ".join(f"{k}: {v};" for k, v in stops) + " }\n"
 
 
 def theme_css():

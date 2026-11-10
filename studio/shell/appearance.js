@@ -17,17 +17,18 @@ const root = document.documentElement;
 const FRAME_HOST = "https://uor-foundation.github.io/template/frame/";
 const PROXY = "https://prism-unsplash.trinity-03d.workers.dev/";
 const UTM = "utm_source=prism&utm_medium=referral";
-// The frame's nine built-in photos (frame/panels.mjs BACKDROPS), in its order.
+// The frame's nine built-in photos (frame/panels.mjs BACKDROPS), in its order. Their placeholder colours are
+// left out: no colour is typed in the shell (the Brand gate); a found photo brings its own from Unsplash.
 const BUILT_IN = [
-  {"id":"E0AHdsENmDg","image":"https://images.unsplash.com/photo-1464802686167-b939a6910659?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHwxfHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","color":"#0c2659","alt":"The Milky Way in blue and violet","name":"Jeremy Thomas","user":"jeremythomasphoto"},
-  {"id":"qtRF_RxCAo0","image":"https://images.unsplash.com/photo-1610296669228-602fa827fc1f?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw0fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","color":"#262626","alt":"A nebula in blue, gold and rust","name":"Aldebaran S","user":"aldebarans"},
-  {"id":"RF4p4rTM-2s","image":"https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw1fHxtaWxreSUyMHdheXxlbnwxfDB8fHwxNzk0MDU2MjUxfDA&ixlib=rb-4.1.0","color":"#262626","alt":"The Andromeda galaxy among stars","name":"Bryan Goff","user":"bryangoffphoto"},
-  {"id":"Q1p7bh3SHj8","image":"https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw1fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","color":"#0c2626","alt":"City lights across Earth at night, from orbit","name":"NASA","user":"nasa"},
-  {"id":"t7EL2iG3jMc","image":"https://images.unsplash.com/photo-1534996858221-380b92700493?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw5fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","color":"#59598c","alt":"Earth's blue horizon against space","name":"ActionVance","user":"actionvance"},
-  {"id":"9wH624ALFQA","image":"https://images.unsplash.com/photo-1515705576963-95cad62945b6?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHwxfHxtaWxreSUyMHdheXxlbnwxfDB8fHwxNzk0MDU2MjUxfDA&ixlib=rb-4.1.0","color":"#0c2640","alt":"The Milky Way rising over mountains","name":"Dns Dgn","user":"dnsdgn"},
-  {"id":"oMcTmNHclZI","image":"https://images.unsplash.com/photo-1628818144466-856f7d477125?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTV8&ixlib=rb-4.1.0","color":"#0c2626","alt":"Green and violet aurora over a starry sky","name":"Condor Wei","user":"cwcanchn"},
-  {"id":"cZgVpseeazg","image":"https://images.unsplash.com/photo-1545431766-45ff67845191?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTB8&ixlib=rb-4.1.0","color":"#26260c","alt":"A soft blur of rainbow light","name":"Sean Sinclair","user":"seanwsinclair"},
-  {"id":"0wFwSZn6I-I","image":"https://images.unsplash.com/photo-1709625862266-014ef072fd93?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTJ8&ixlib=rb-4.1.0","color":"#262626","alt":"Dark curved forms in soft light","name":"Pawel Czerwinski","user":"pawel_czerwinski"},
+  {"id":"E0AHdsENmDg","image":"https://images.unsplash.com/photo-1464802686167-b939a6910659?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHwxfHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","alt":"The Milky Way in blue and violet","name":"Jeremy Thomas","user":"jeremythomasphoto"},
+  {"id":"qtRF_RxCAo0","image":"https://images.unsplash.com/photo-1610296669228-602fa827fc1f?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw0fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","alt":"A nebula in blue, gold and rust","name":"Aldebaran S","user":"aldebarans"},
+  {"id":"RF4p4rTM-2s","image":"https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw1fHxtaWxreSUyMHdheXxlbnwxfDB8fHwxNzk0MDU2MjUxfDA&ixlib=rb-4.1.0","alt":"The Andromeda galaxy among stars","name":"Bryan Goff","user":"bryangoffphoto"},
+  {"id":"Q1p7bh3SHj8","image":"https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw1fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","alt":"City lights across Earth at night, from orbit","name":"NASA","user":"nasa"},
+  {"id":"t7EL2iG3jMc","image":"https://images.unsplash.com/photo-1534996858221-380b92700493?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHw5fHxzcGFjZXxlbnwxfDB8fHwxNzk0MDU1OTU2fDA&ixlib=rb-4.1.0","alt":"Earth's blue horizon against space","name":"ActionVance","user":"actionvance"},
+  {"id":"9wH624ALFQA","image":"https://images.unsplash.com/photo-1515705576963-95cad62945b6?ixid=M3w4OTc5NTl8MHwxfHNlYXJjaHwxfHxtaWxreSUyMHdheXxlbnwxfDB8fHwxNzk0MDU2MjUxfDA&ixlib=rb-4.1.0","alt":"The Milky Way rising over mountains","name":"Dns Dgn","user":"dnsdgn"},
+  {"id":"oMcTmNHclZI","image":"https://images.unsplash.com/photo-1628818144466-856f7d477125?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTV8&ixlib=rb-4.1.0","alt":"Green and violet aurora over a starry sky","name":"Condor Wei","user":"cwcanchn"},
+  {"id":"cZgVpseeazg","image":"https://images.unsplash.com/photo-1545431766-45ff67845191?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTB8&ixlib=rb-4.1.0","alt":"A soft blur of rainbow light","name":"Sean Sinclair","user":"seanwsinclair"},
+  {"id":"0wFwSZn6I-I","image":"https://images.unsplash.com/photo-1709625862266-014ef072fd93?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTJ8&ixlib=rb-4.1.0","alt":"Dark curved forms in soft light","name":"Pawel Czerwinski","user":"pawel_czerwinski"},
 ];
 const isBuiltIn = (photo) => BUILT_IN.some((p) => p.id === photo.id);
 const fullOf = (photo) => (isBuiltIn(photo) ? `${FRAME_HOST}backdrops/${photo.id}.jpg` : `${PROXY}image?${new URLSearchParams({ src: photo.image, w: "2400" })}`);
