@@ -135,7 +135,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -C studio -czf "$RUNNER_TEMP/offline-foundry-shell.tar.gz" shell
+          tar -C . -czf "$RUNNER_TEMP/offline-foundry-shell.tar.gz" shell
           shasum -a 256 "$RUNNER_TEMP/offline-foundry-shell.tar.gz" > "$RUNNER_TEMP/offline-foundry-shell.tar.gz.sha256"
           test -s "$RUNNER_TEMP/offline-foundry-shell.tar.gz"
 
