@@ -358,7 +358,7 @@ async function positive() {
             'createRoot(document.getElementById("root")!).render(',
             '  <section data-offline-react="yes">React rendered offline</section>',
             ');',
-          ].join('\\n'),
+          ].join('\n'),
         });
         const app = await window.__host.get('apps', appId);
         await window.__host.put('apps', appId, {...app, grants:[]});
