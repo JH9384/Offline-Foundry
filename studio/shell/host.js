@@ -7,6 +7,7 @@
 // the preview worker, and the app run machine (build in the tab, serve at the version's address).
 // The chat stream is the next slice.
 
+import { admitWithGuest } from "./composition-codec.mjs";
 import { readBoundRules, saveBoundRules } from "./rules-source.mjs";
 import { restoreSnapshot } from "./snapshot-restore.mjs";
 import { invokeHost, unwrapHost } from "./host-boundary.mjs";
@@ -662,6 +663,10 @@ async function codebaseOf(appId) {
 // can say proved only after Lean attested the current rules, and publish only proved rules. The
 // state lives at refs["prism:<appId>"].
 const kernelReady = import(new URL("kernel.js", BASE).href).then(() => self.ForgeKernel.load((p) => fetch(new URL(p, BASE))));
+handlers.set("forge:compose", async (input) => {
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== "features,policy") return { ok: false, code: "malformedComposition", error: "Composition requires policy and features" };
+  return admitWithGuest(await kernelReady, input.policy, input.features);
+});
 const PHASES = ["drafting", "checked", "proving", "proved", "published"];
 async function nextPhase(phase, event) {
   const answer = await (await kernelReady).ask(phase + " " + event);

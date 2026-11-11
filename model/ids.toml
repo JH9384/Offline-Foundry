@@ -128,3 +128,9 @@ id = "FA-09"
 level = "build"
 suite = "rules-source-binding"
 statement = "Rule status and asynchronous proof or publication completion remain bound to the current rule source"
+
+[[id]]
+id = "FA-10"
+level = "build"
+suite = "composition-host-runtime"
+statement = "The browser host composes features only through its pinned and replayed generated kernel"

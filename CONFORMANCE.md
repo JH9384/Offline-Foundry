@@ -30,6 +30,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-02` | `build` | The authoring boundary checks every generated Studio module and export root without rewriting drift |
 
+## composition-host-runtime
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-10` | `build` | The browser host composes features only through its pinned and replayed generated kernel |
+
 ## composition-protocol
 
 | ID | Level | Statement |
