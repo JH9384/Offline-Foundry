@@ -200,6 +200,74 @@ async function positive() {
     }, offlineFiles);
     if (checks.some(([,status]) => status !== 200)) throw new Error(`Offline resource failures: ${JSON.stringify(checks)}`);
     console.log(`  /foundry/ installation: ${expectedEntries}/${expectedEntries}; offline assets: ${checks.length}/${checks.length}; outbound requests: 0`);
+
+    // Functional offline proof: load the actual bundled esbuild-WASM engine,
+    // compile TypeScript twice, and execute the output inside an opaque frame.
+    // This exercises the browser compiler, not just a cached WASM fetch.
+    const compiled = await page.evaluate(async () => {
+      const compilerURL = new URL('runtime/compiler/browser.min.js', location.href).href;
+      const wasmURL = new URL('runtime/compiler/esbuild.wasm', location.href).href;
+      const es = await import(compilerURL);
+      try {
+        await es.initialize({ wasmURL });
+      } catch (e) {
+        if (!/initialize.*more than once|already initialized/i.test(String(e))) throw e;
+      }
+      const options = {
+        stdin: {
+          contents: 'const label: string = "Offline-Foundry compiled offline"; document.body.textContent = label;',
+          sourcefile: 'offline-smoke.ts',
+          resolveDir: '/',
+          loader: 'ts',
+        },
+        bundle: true, format: 'iife', platform: 'browser',
+        write: false, logLevel: 'silent',
+      };
+      const first = await es.build(options);
+      const second = await es.build(options);
+      const js = first.outputFiles.find(file => file.path.endsWith('.js'))?.text;
+      if (!js || js !== second.outputFiles.find(file => file.path.endsWith('.js'))?.text) {
+        throw new Error('Offline TypeScript compilation absent or non-repeatable');
+      }
+
+      const frame = document.createElement('iframe');
+      frame.setAttribute('sandbox', 'allow-scripts');
+      const completed = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', receive);
+          reject(new Error('Offline compiled preview did not respond'));
+        }, 15000);
+        function receive(event) {
+          if (event.source !== frame.contentWindow || event.data?.kind !== 'offline-foundry-compile') return;
+          clearTimeout(timeout);
+          window.removeEventListener('message', receive);
+          if (event.origin !== 'null') {
+            reject(new Error('Compiled preview is not opaque-origin sandboxed'));
+          } else resolve(event.data.text);
+        }
+        window.addEventListener('message', receive);
+      });
+      // A sandboxed iframe may execute scripts, but has an opaque origin and
+      // cannot access the parent page's IndexedDB or other same-origin state.
+      frame.srcdoc = '<!doctype html><body><script>' +
+        js.replace(/<\\/script/gi, '<\\\\/script') +
+        ';parent.postMessage({kind:"offline-foundry-compile",text:document.body.textContent},"*")' +
+        '<\\/script></body>';
+      document.body.append(frame);
+      try {
+        const text = await completed;
+        if (text !== 'Offline-Foundry compiled offline') {
+          throw new Error('Offline compiled output did not execute as expected: ' + text);
+        }
+      } finally {
+        frame.remove();
+      }
+      return { bytes: js.length, repeatable: true, opaquePreview: true };
+    });
+    if (errors.length) throw new Error('Browser runtime exceptions: ' + errors.join('; '));
+    if (outgoing.length) throw new Error('Unexpected outbound requests during offline compile: ' + outgoing.join('; '));
+    console.log('  Offline TypeScript compilation and sandboxed preview: PASS', JSON.stringify(compiled));
+
   } finally { await context.close(); await close(); }
 }
 async function negative(variant, expectedPath) {
