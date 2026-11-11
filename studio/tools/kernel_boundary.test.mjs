@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { createHash, webcrypto } from "node:crypto";
 import { test } from "node:test";
+import { executeWorkWithGuest } from "../shell/work-codec.mjs";
 import { admitWithGuest } from "../shell/composition-codec.mjs";
 const source = fs.readFileSync(new URL("../shell/kernel.js", import.meta.url), "utf8");
 const originalMeta = JSON.parse(fs.readFileSync(new URL("../shell/kernel/kernel.json", import.meta.url)));
@@ -66,7 +67,7 @@ test("the actual browser host delegates every structured composition case to the
   const guest = await load(), handlers = new Map();
   const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
   const start = host.indexOf('handlers.set("forge:compose"'), end = host.indexOf("const PHASES", start);
-  vm.runInNewContext(host.slice(start, end), { handlers, kernelReady: Promise.resolve(guest), admitWithGuest });
+  vm.runInNewContext(host.slice(start, end), { handlers, kernelReady: Promise.resolve(guest), admitWithGuest, executeWorkWithGuest });
   const handler = handlers.get("forge:compose"); assert.equal(typeof handler, "function");
   for (const input of [undefined, null, {}, { policy: {}, features: [], extra: true }]) assert.equal((await handler(input)).code, "malformedComposition");
   const vectors = JSON.parse(fs.readFileSync(new URL("../../verification/composition-wire-vectors.json", import.meta.url)));
@@ -76,4 +77,24 @@ test("the actual browser host delegates every structured composition case to the
     assert.equal(result.ok, vector.response === "accepted", vector.name);
     if (!result.ok) assert.equal(result.code, vector.response, vector.name);
   }
+});
+
+test("the actual guest preserves work through suspension, transfer and completion", async () => {
+  const guest = await load();
+  const vectors = JSON.parse(fs.readFileSync(new URL("../../verification/work-wire-vectors.json", import.meta.url))).vectors;
+  assert.equal(vectors.length, 30);
+  for (const vector of vectors) assert.equal(await guest.ask(vector.request), vector.response, vector.name);
+  const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
+  const line = host.split("\n").find(value => value.startsWith('handlers.set("forge:work",'));
+  assert.ok(line); const handlers = new Map();
+  vm.runInNewContext(line, { handlers, kernelReady: Promise.resolve(guest), executeWorkWithGuest });
+  const run = handlers.get("forge:work");
+  let result = await run({ kind: "initialize", owner: 7, capacity: 20, remaining: 2 });
+  assert.equal(result.ok, true);
+  for (const action of [{ kind: "reserve", amount: 10 }, { kind: "start" }, { kind: "progress", cost: 3, units: 1, checkpoint: 7 }, { kind: "pause" }, { kind: "transfer", owner: 9 }, { kind: "resume" }, { kind: "progress", cost: 7, units: 1, checkpoint: 8 }, { kind: "finish" }]) {
+    const state = result.state;
+    result = await run({ kind: "transition", state, owner: state.owner, revision: state.revision, action });
+    assert.equal(result.ok, true, action.kind);
+  }
+  assert.deepEqual(result.state, { owner: 9, revision: 8, capacity: 20, spent: 10, reserved: 0, checkpoint: 8, remaining: 0, phase: 3 });
 });
