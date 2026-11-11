@@ -34,6 +34,7 @@ const exercise = async () => {
   const initialized = await executeWorkWithGuest(guest, { kind: "initialize", owner: 7, capacity: 20, remaining: 2 });
   if (!initialized.ok || initialized.state.owner !== 7 || initialized.state.remaining !== 2) throw Error("work adapter");
   if (await guest.ask("drafting check") !== "checked") throw Error("legacy phase");
+  for (const phase of ["drafting", "checked", "proving", "proved", "published"]) if (await guest.ask(phase + " reword") !== phase) throw Error("reword phase");
   return { vectors: vectors.length, work: work.length, embedded: guest.vectors, digest: guest.digest };
 };
 const workerSource = `importScripts('/kernel.js'); (${exercise.toString()})().then(result => postMessage({result}), error => postMessage({error: String(error)}));`;

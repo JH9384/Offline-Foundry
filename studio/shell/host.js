@@ -520,7 +520,11 @@ async function refreshLive(appId) {
   const state = await rulesOf(appId);
   // The spec as written is drawn, not the checker's normalised copy: every edit path on the screen is a
   // path in this spec, so a click patches exactly what the model or the user wrote.
-  try { pushLive(appId, JSON.parse(json), state && state.spec ? state.phase : "draft"); } catch (e) {}
+  try {
+    const bound = state?.spec && state.specKappa === await kappa(enc.encode(json));
+    const trust = bound ? state.phase === "published" && state.publicationCurrent === false ? "proved" : state.phase : "draft";
+    pushLive(appId, JSON.parse(json), trust);
+  } catch (e) {}
 }
 
 // ---- the one write path. A click on the screen and a patch the agent writes arrive here alike, as
@@ -885,14 +889,15 @@ async function rulesAfterTurn(appId, text, written = [], options = {}) {
   const current = files.get("prism/spec.json"), before = await rulesOf(appId);
   if (!current) return { changed: 0, source, card: tag && tag.error ? `**Rules** · not checked\n\n- ${tag.error}\n\nAsk me to fix the rules.` : null };
   const specKappa = await kappa(enc.encode(current));
+  const proofKey = spec => live.kappaOfValue({ name: spec.name, logic: live.logicOf(spec) });
   if (before && before.specKappa === specKappa && writes.length === 0) return { changed: 0, source, card: tag ? prism.card(before) : null };
   let phase = before ? await nextPhase(before.phase, "edit") : "drafting";
   let logicKappa = null, retained = false;
   let checked;
   try { checked = prism.checkSpec(JSON.parse(current)); } catch (e) { checked = { ok: false, issues: ["The rules are not valid JSON: " + e.message] }; }
   if (checked.ok) {
-    logicKappa = live.kappaOfValue(live.logicOf(checked.spec));
-    if (before?.spec && before.logicKappa === logicKappa && live.kappaOfValue(live.logicOf(before.spec)) === logicKappa) {
+    logicKappa = proofKey(checked.spec);
+    if (before?.spec && before.logicKappa === logicKappa && proofKey(before.spec) === logicKappa) {
       const reword = await rewordPhase(before.phase);
       if (reword) { phase = reword; retained = true; }
     }
