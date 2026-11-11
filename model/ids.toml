@@ -82,6 +82,12 @@ suite = "application-authority"
 statement = "The application authority model rejects missing or competing product authorities and unchecked external boundaries"
 
 [[id]]
+id = "FA-02"
+level = "build"
+suite = "authoring-projection"
+statement = "The authoring boundary checks every generated Studio module and export root without rewriting drift"
+
+[[id]]
 id = "FA-03"
 level = "build"
 suite = "host-response-boundary"

@@ -42,7 +42,7 @@ jobs:
             ~/.elan
           key: lane-${{ hashFiles('studio/PRISMPM_REV', 'studio/lean-toolchain') }}
       - name: The authored model is what the author script writes
-        run: python3 tools/author.py && git diff --exit-code -- src/Forge.lex.tex
+        run: python3 tools/author.py --check
       - name: The lane, byte compared against the committed artifacts
         run: ./scripts/lane.sh
       - name: Byte identity corpus

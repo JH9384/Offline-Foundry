@@ -24,6 +24,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
 
+## authoring-projection
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-02` | `build` | The authoring boundary checks every generated Studio module and export root without rewriting drift |
+
 ## composition-protocol
 
 | ID | Level | Statement |
