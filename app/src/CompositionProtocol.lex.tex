@@ -347,7 +347,8 @@ definition{
   name: dispatchComposition,
   parameters: [bytes : Bytes],
   result: Bytes,
-  body: (if (16384 <? (prim length bytes : Nat)) then 0x636f6d706f736974696f6e546f6f4c61726765 else (let decoded : DecodedWords := (decodeWords bytes 0 (prim length bytes : Nat) (nil Nat)); (if (project decoded valid) then (dispatchWords (project decoded value)) else 0x6d616c666f726d6564436f6d706f736974696f6e)))
+  body: (if (16384 <? (prim length bytes : Nat)) then 0x636f6d706f736974696f6e546f6f4c61726765 else (let decoded : DecodedWords := (decodeWords bytes 0 (prim length bytes : Nat) (nil Nat)); (if (project decoded valid) then (dispatchWords (project decoded value)) else 0x6d616c666f726d6564436f6d706f736974696f6e))),
+  axioms: [Quot.sound, propext]
 }
 
 definition{
