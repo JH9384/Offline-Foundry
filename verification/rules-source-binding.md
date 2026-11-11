@@ -15,7 +15,7 @@ state there. This closes changes during hashing and competing completion races.
 Caller-owned next state and expected state are captured before asynchronous work.
 Imports retain files but discard untrusted approval/proof/publication metadata.
 
-Five Node controls run in the Rust conformance gate. They execute the actual host
+Six Node controls run in the Rust conformance gate. They execute the actual host
 approval, proof and publication functions with controlled boundaries, including
 stale publication refusal before preview promotion. Chromium executes the shipped
 adapter against real IndexedDB and checks stale reads, edits during hashing,
@@ -37,3 +37,9 @@ stale-state promotion now explicitly says remote content may already be live.
 This is an author review, not independent approval. These controls bind lifecycle
 state to source; they do not authenticate the hosted prover or source-to-build
 provenance, undo remote work, or establish complete application acceptance.
+
+Review also found late publication progress overwriting the stopped message after
+the shared abort handle was cleared. The added host-function regression failed
+with two messages instead of one before the fix. Progress now checks its captured
+controller and active-operation lifetime; an old operation cannot clear a newer
+operation's abort handle.

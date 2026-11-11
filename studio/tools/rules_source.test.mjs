@@ -39,6 +39,22 @@ test("stale publication completion does not promote the preview or claim current
   assert.match(shown.at(-1), /has not been marked published/);
   assert.equal(audit.at(-1)[2].outcome, "stale");
 });
+test("publication progress cannot overwrite the stopped operation", async () => {
+  const machine = {}, shown = [], messages = [];
+  let progress;
+  const publish = operation("publishTurn", "window.__prism", {
+    chatMachineOf: () => machine, now: () => "now", saveMessages: async (_, rows) => shown.push(rows.at(-1).content), emit() {}, publishChat() {},
+    rulesOf: async () => ({ ...rule, phase: "proved" }), get: async () => ({ githubAccessToken: { value: "token" } }),
+    buildOnGitHub: ({ step }) => { progress = step; queueMicrotask(() => machine.abort.abort()); return new Promise(() => {}); },
+    prism: {}, prismCode: async () => ({}), AbortController,
+  });
+  await publish(1, 1, messages, 1, {}, "intent");
+  assert.match(shown.at(-1), /Stopped browser requests/);
+  const before = shown.length;
+  progress("late operation", "obsolete result");
+  await Promise.resolve();
+  assert.equal(shown.length, before);
+});
 test("imports discard untrusted proof metadata and actual host reads use source binding", () => {
   const imported = host.slice(host.indexOf('handlers.set("forge:import"'), host.indexOf("// ---- versions:"));
   assert.doesNotMatch(imported, /writes\.push\([^\n]*entry\.rules/);

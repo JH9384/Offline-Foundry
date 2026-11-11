@@ -794,18 +794,19 @@ async function publishTurn(chatId, appId, messages, userId, ref, intentId) {
   if (refusal) { await show(refusal); return finish(); }
   const spec = rules.spec;
   const head = `**Publishing ${spec.title}** with the Prism SDK on GitHub Actions, as \`npx prism-code\` builds it. The repository is public, so anyone can read its rules and LexLean model.`;
-  let links = "";
+  let links = "", observing = true;
+  const abort = new AbortController(); m.abort = abort;
   const step = (word, detail, extra) => {
     if (extra && extra.runs) links = `\n\n[Build run](${extra.runs["pages.yml"]}) · [Lean gate](${extra.runs["bootstrap.yml"]})`;
-    if (!m.abort || !m.abort.signal.aborted) show(`${head}\n\n${word}: ${detail}.${links}`);
+    if (observing && !abort.signal.aborted) show(`${head}\n\n${word}: ${detail}.${links}`);
   };
-  const abort = new AbortController(); m.abort = abort;
   const stopped = new Promise((res) => abort.signal.addEventListener("abort", () => res("stopped")));
   const t0 = Date.now();
   const build = buildOnGitHub({ token, spec, axioms: rules.axioms || {}, attestation: rules.proof && rules.proof.attestation_id, templateCommit: prism.templateCommit, open: async (bytes) => (await prismCode()).loadArchive(bytes), step, signal: abort.signal })
     .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
   const result = await Promise.race([build, stopped]);
-  m.abort = null;
+  observing = false;
+  if (m.abort === abort) m.abort = null;
   if (result === "stopped") { await show(`${head}\n\nStopped browser requests. Work already submitted to GitHub may continue; say publish again to pick it up.${links}`); return finish(); }
   const row = (outcome, resource) => put("audit", Date.now() + ":publish:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.application.publish", resource, outcome });
   if (!result.ok) {
