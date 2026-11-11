@@ -35,12 +35,12 @@ const types = {
 const localLLM = createLocalLLMBridge(process.env.FOUNDRY_LOCAL_LLM_URL);
 const server = createServer(async (req,res) => {
   try {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (await localLLM(req,res,url,port)) return;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, {'allow':'GET, HEAD'}).end();
       return;
     }
-    const url = new URL(req.url, 'http://127.0.0.1');
-    if (await localLLM(req,res,url,port)) return;
     if (url.pathname !== '/foundry' && !url.pathname.startsWith('/foundry/')) {
       res.writeHead(404).end('not found');
       return;
