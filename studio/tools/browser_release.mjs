@@ -315,6 +315,71 @@ async function positive() {
     if (outgoing.length) throw new Error('Unexpected outbound request during offline project persistence');
     console.log('  Offline project create/edit/version/reload: PASS', JSON.stringify(restored));
 
+    // Full supported offline starter workflow: create -> build -> interact ->
+    // change a source component -> save -> rebuild -> open the new preview.
+    const starterBuild = await page.evaluate(async ({appId}) => {
+      const app = await window.__host.get('apps', appId);
+      await window.__host.put('apps', appId, {...app, grants:[]});
+      const ipc = window.electron.ipcRenderer;
+      const files = (await ipc.invoke('get-app',appId)).files;
+      if (!files.includes('src/OfflineStarter.tsx') ||
+          !files.includes('src/main.extended.tsx')) {
+        throw new Error('Default offline starter or preserved extended entrypoint absent');
+      }
+      const original = await ipc.invoke('read-app-file', {
+        appId, filePath:'src/OfflineStarter.tsx',
+      });
+      if (!original.includes('Offline-Foundry Starter')) {
+        throw new Error('Created app did not include local-first starter');
+      }
+      return window.__preview(appId);
+    }, project);
+    const starterPage = await context.newPage();
+    try {
+      const starterErrors = [];
+      starterPage.on('pageerror', error => starterErrors.push(String(error)));
+      await starterPage.goto(starterBuild.appUrl,{waitUntil:'load',timeout:30000});
+      await starterPage.waitForFunction(() =>
+        document.querySelector('h1')?.textContent === 'Offline-Foundry Starter',
+        null,{timeout:20000});
+      await starterPage.locator('#offline-note').fill('Edited while disconnected');
+      await starterPage.waitForFunction(() =>
+        document.querySelector('[data-testid="offline-note-preview"]')?.textContent ===
+          'Edited while disconnected',null,{timeout:10000});
+
+      const rebuilt = await page.evaluate(async ({appId}) => {
+        const ipc = window.electron.ipcRenderer;
+        const filePath = 'src/OfflineStarter.tsx';
+        const before = await ipc.invoke('app:get-current-commit-hash',{appId});
+        const original = await ipc.invoke('read-app-file',{appId,filePath});
+        const changed = original.replace(
+          'Offline-Foundry Starter','Offline-Foundry Edited Starter');
+        if (changed === original) throw new Error('Starter edit marker not found');
+        await ipc.invoke('edit-app-file',{appId,filePath,content:changed});
+        const after = await ipc.invoke('app:get-current-commit-hash',{appId});
+        if (!after || after === before) throw new Error('Starter edit not versioned');
+        return {after,...await window.__preview(appId)};
+      }, project);
+      if (rebuilt.appUrl === starterBuild.appUrl) {
+        throw new Error('Edited starter reused previous preview identity');
+      }
+      await starterPage.goto(rebuilt.appUrl,{waitUntil:'load',timeout:30000});
+      await starterPage.waitForFunction(() =>
+        document.querySelector('h1')?.textContent === 'Offline-Foundry Edited Starter',
+        null,{timeout:20000});
+      if (starterErrors.length) {
+        throw new Error('Offline starter runtime error: ' + starterErrors.join('; '));
+      }
+      if (outgoing.length) {
+        throw new Error('Starter workflow used external network: ' + outgoing.join('; '));
+      }
+      console.log('  Default starter create/interact/edit/build/reopen offline: PASS',
+        JSON.stringify({before:starterBuild.appUrl,after:rebuilt.appUrl}));
+    } finally {
+      await starterPage.close();
+    }
+
+
     // Exercise the REAL host preview builder, not the standalone esbuild probe.
     // Use an entirely local entrypoint so any outbound fetch is a regression.
     const actual = await page.evaluate(async ({appId}) => {
