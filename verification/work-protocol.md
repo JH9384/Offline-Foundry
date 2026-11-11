@@ -1,0 +1,25 @@
+# Generated work protocol
+
+Authority: `WorkOwnership`, `WorkProtocol` and the `ForgeKernel.dispatch` export.
+FA-17 encodes work operations as lowercase hex of little-endian uint32 words
+following the ASCII `work ` header. Initialization carries four words; transitions
+carry fifteen, including the complete prior state, caller owner, expected revision,
+action code and three arguments. Unused arguments must be zero. The payload is
+bounded to 120 bytes. Success returns `ok ` followed by eight encoded state words;
+refusals are exact modeled error names. Revision 4294967295 refuses transition
+before the protocol's scalar range can overflow. Guest response capacity is 128
+bytes; the composition request/allocation limits remain intact.
+
+`studio/shell/work-codec.mjs` only checks wire shape and scalar representability.
+It does not implement admission or state transitions and returns a runtime failure
+if guest execution fails. All semantics remain in the generated Prism guest.
+This is a pure state transition interface: authentication, durable compare-and-swap
+and actual effects require their own qualified adapters.
+
+The registered scenario and failing Rust test preceded implementation. Seven Node
+controls bind every action, malformed input/output, typed refusals, guest-only
+delegation and all 30 independent corpus vectors to the embedded acceptance list.
+The locked SDK must execute those vectors in the generated guest. Three targeted
+Lean controls cover caller ownership, exact progress accounting and counter
+exhaustion. Diagnostic and full-SDK results, mutation evidence, signed artifact
+installation and browser qualification are recorded at the feature PR revisions.

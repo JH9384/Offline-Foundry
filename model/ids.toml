@@ -170,3 +170,9 @@ id = "FA-16"
 level = "build"
 suite = "provider-key-validation"
 statement = "Provider credential validation rejects unsupported providers and requires a bounded authenticated response before success"
+
+[[id]]
+id = "FA-17"
+level = "build"
+suite = "work-protocol"
+statement = "The generated guest executes bounded work ownership requests and returns exact state or typed refusal"

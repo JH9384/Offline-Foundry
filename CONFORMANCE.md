@@ -128,6 +128,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-13` | `build` | The Prism work model reserves capacity before execution and preserves spending and checkpoints across suspension with owner and revision checks |
 
+## work-protocol
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-17` | `build` | The generated guest executes bounded work ownership requests and returns exact state or typed refusal |
+
 ## Cited authorities
 
 Never re-derived, vendored, or gated on.
