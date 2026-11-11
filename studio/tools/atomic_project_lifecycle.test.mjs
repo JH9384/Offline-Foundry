@@ -29,4 +29,5 @@ test("host lifecycle uses coherent adapters without a second snapshot seal", () 
   for (const name of ["renameStoredProject", "restoreStoredProject", "deleteStoredProject"]) assert.ok(host.includes(name + "(await dbReady,"));
   assert.ok(host.includes("await restore(appId, previousVersionId, true)"));
   assert.ok(!host.includes("async function seal("));
+  assert.ok(fs.readFileSync(new URL("./shell_parse.mjs", import.meta.url), "utf8").includes('"project-lifecycle.mjs": "mjs"'));
 });

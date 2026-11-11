@@ -45,3 +45,18 @@ ownership, cross-device identity and whole-product qualification are separate.
 Full immutable SDK/Studio acceptance and the combined signed guest remain pending
 at this feature's initial draft revision. Diagnostic host verification is not a
 substitute for those gates.
+
+## Integrated guest and CI correction
+
+The combined parent guest is installed. All 143 Node controls and the full local
+Rust workspace passed after merging it; page/worker replay and lifecycle and
+generation browser controls passed again. Twelve-module diagnostic verification
+passed with attestation
+`d30f727e5dea64af12ac8a28b7ea83e31ea78f799ca636330f6d63d3330c65bc`.
+
+Studio run 43035754353 passed the lane, contract and all storage controls, then
+refused the new module because its explicit module parse goal was missing.
+The earlier local parser log had the same failure, so the initial PR statement
+that parser checks passed was incorrect. `project-lifecycle.mjs` is now explicitly
+registered and the six-control gate binds that entry. Parser and contract gates
+are rerun below this correction; full feature CI must pass at the corrected head.
