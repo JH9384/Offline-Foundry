@@ -15,7 +15,7 @@ wire representation and decodes known responses from a caller-supplied guest.
 
 ## Evidence
 
-Registration, scenario and failing test preceded implementation. Twenty guest
+Registration, scenario and failing test preceded implementation. Twenty-four guest
 acceptance vectors are independently recorded in `composition-wire-vectors.json`
 and pinned to the actual application model by the executable codec suite. The
 complete SDK `prismpm verify` gate replays those vectors in the compiled guest;
@@ -55,3 +55,26 @@ wrong versions, incompatible producer schemas, both conflict directions, grants,
 targets, evidence declarations, duplicate/zero identity and cumulative memory.
 Their structured declarations are included beside independently encoded bytes
 so the browser codec can be compared without deciding the expected outcome.
+
+## Runtime resource qualification
+
+Revision a6124ef passed complete locked-SDK run 42997750124 and remote build
+42997997725. Its exact archive fingerprint was
+264f47f41bb2d614ba5a9a29577afc722f00d585aeb10f9cab953784909068f0.
+Independent reader replay passed all 73 embedded vectors and all 20 original
+wire cases. A separate 16,384-byte payload test then trapped: the generated
+non-tail decoder cloned the entire byte buffer per word, exceeding the guest's
+fixed 32-page memory ceiling. That successful CI revision is therefore not
+sufficient protocol acceptance.
+
+The decoder now uses a tail accumulator, and list parsers carry numeric cursors
+instead of repeatedly copying unconsumed word lists. The wire representation
+and limits are unchanged. Four added compiled vectors exercise the maximum
+payload, 32 features, six dense features with 64-entry lists, and maximum
+dependency/input lists. The downloaded-artifact replay tool also retains the
+maximum-payload test. The new revision must pass these controls in the locked
+SDK and independent runtime before acceptance.
+
+Earlier code-generation failures were resolved by separating uint8 conversion
+into its own function and removing colliding exported dispatch/byteAt symbols.
+No compiler limits, heap limits, SDK sources or acceptance gates were weakened.
