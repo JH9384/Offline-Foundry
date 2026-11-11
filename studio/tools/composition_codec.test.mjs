@@ -44,7 +44,7 @@ test("invalid guest responses and runtime failures refuse", async () => {
 test("the actual guest model carries the full wire corpus and routes through semantic admission", () => {
   const kernel = fs.readFileSync(new URL("../../app/src/ForgeKernel.lex.tex", import.meta.url), "utf8");
   const protocol = fs.readFileSync(new URL("../../app/src/CompositionProtocol.lex.tex", import.meta.url), "utf8");
-  assert.equal(vectors.length, 20);
+  assert.equal(vectors.length, 24);
   assert.match(kernel, /CompositionProtocol::dispatchComposition/);
   assert.match(protocol, /FeatureComposition::admitComposition/);
   assert.match(kernel, /requestMaximum := \(16392 : UInt32\)/);
