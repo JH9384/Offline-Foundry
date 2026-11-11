@@ -351,7 +351,7 @@ definition{
   name: dispatch,
   parameters: [value : Bytes],
   result: Bytes,
-  body: (if (prim equal (sliceOf value 0 8) 0x636f6d706f736520 : Bool) then (CompositionProtocol::dispatch (sliceOf value 8 (prim subtract (Foundation.Bytes::byteLength value) 8 : Nat))) else (if (64 <? (Foundation.Bytes::byteLength value)) then 0x696e76616c6964 else (let head : Nat := (fieldEnd value 0 (Foundation.Bytes::byteLength value)); (if (prim equal (sliceOf value 0 head) 0x67617465 : Bool) then (if (head <? (Foundation.Bytes::byteLength value)) then (match (decodeGate1 value (head + 1))
+  body: (if (prim equal (sliceOf value 0 8) 0x636f6d706f736520 : Bool) then (CompositionProtocol::dispatchComposition (sliceOf value 8 (prim subtract (Foundation.Bytes::byteLength value) 8 : Nat))) else (if (64 <? (Foundation.Bytes::byteLength value)) then 0x696e76616c6964 else (let head : Nat := (fieldEnd value 0 (Foundation.Bytes::byteLength value)); (if (prim equal (sliceOf value 0 head) 0x67617465 : Bool) then (if (head <? (Foundation.Bytes::byteLength value)) then (match (decodeGate1 value (head + 1))
     | Option.none => 0x696e76616c6964
     | Option.some gate => (encodeGate (gateAllows gate))) else 0x696e76616c6964) else (match (decodeField1 value 0)
     | Option.none => 0x696e76616c6964

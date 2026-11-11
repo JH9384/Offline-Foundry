@@ -247,7 +247,7 @@ definition{
   name: byteAsNat,
   parameters: [bytes : Bytes, offset : Nat],
   result: (Option Nat),
-  body: (match (Foundation.Bytes::byteAt bytes offset)
+  body: (match (prim index bytes offset : (Option UInt8))
     | Option.none => (ctor Option.none [Nat])
     | Option.some value => (ctor Option.some [Nat] (prim to_nat value : Nat))),
   axioms: [Quot.sound, propext]
@@ -317,7 +317,7 @@ definition{
 }
 
 definition{
-  name: dispatch,
+  name: dispatchComposition,
   parameters: [bytes : Bytes],
   result: Bytes,
   body: (if (16384 <? (Foundation.Bytes::byteLength bytes)) then 0x636f6d706f736974696f6e546f6f4c61726765 else (match (decodeWords bytes 0 (Foundation.Bytes::byteLength bytes))
