@@ -6,7 +6,7 @@ import { chromium } from "../vendor/dyad/node_modules/playwright-core/index.mjs"
 const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
 const apply = host.slice(host.indexOf("async function applyDyadTags("), host.indexOf("window.__chat ="));
 const rules = host.slice(host.indexOf("async function rulesAfterTurn("), host.indexOf("// Lean proves"));
-const hostModule = `export function hostAdapters(env) { const { coreReady, dbReady, core, kappa, applyStoredProjectPatch, assertGenerationActive, captureProjectSource, prism, rulesOf, saveRules, nextPhase, now, enc } = env; ${apply}\n${rules}\nreturn { applyDyadTags, rulesAfterTurn }; }`;
+const hostModule = `export function hostAdapters(env) { const { coreReady, dbReady, core, kappa, applyStoredProjectPatch, assertGenerationActive, captureProjectSource, prism, live, rulesOf, saveRules, nextPhase, now, enc } = env; ${apply}\n${rules}\nreturn { applyDyadTags, rulesAfterTurn }; }`;
 const sources = new Map([["/host-adapters.mjs", hostModule], ["/blake3.mjs", fs.readFileSync(new URL("../../try/vendor/prism-code/src/blake3.mjs", import.meta.url))]]);
 for (const name of ["generation-patch.mjs", "project-edit.mjs", "project-creation.mjs", "storage-request.mjs", "rules-source.mjs"]) sources.set("/" + name, fs.readFileSync(new URL("../shell/" + name, import.meta.url)));
 const server = http.createServer((request, response) => { const source = sources.get(request.url); response.setHeader("content-type", source ? "text/javascript" : "text/html"); response.end(source || "<!doctype html><title>Generation patch acceptance</title>"); });
@@ -38,7 +38,7 @@ try {
     check((await get("versions", first.app.id)).length === 2, "batch did not create one version");
     const firstBody = await get("objects", applied.oid); check(kappa(firstBody) === applied.oid, "snapshot identity wrong");
     const second = await seed(), source = await captureProjectSource(db, second.app.id);
-    const adapters = hostAdapters({ coreReady: Promise.resolve(), dbReady: Promise.resolve(db), core, kappa, applyStoredProjectPatch, assertGenerationActive, captureProjectSource, rulesOf: async () => null, saveRules: async () => true, nextPhase: async () => "checked", now: () => new Date().toISOString(), enc: new TextEncoder(), prism: { parseSpecTag: () => ({ spec: { example: true } }), checkSpec: () => ({ ok: true, module: "checked module", spec: {}, issues: [], vectors: 1 }), screenSource: () => "screen", card: () => "checked" } });
+    const adapters = hostAdapters({ coreReady: Promise.resolve(), dbReady: Promise.resolve(db), core, kappa, applyStoredProjectPatch, assertGenerationActive, captureProjectSource, live: { logicOf: spec => spec, kappaOfValue: spec => JSON.stringify(spec) }, rulesOf: async () => null, saveRules: async () => true, nextPhase: async () => "checked", now: () => new Date().toISOString(), enc: new TextEncoder(), prism: { parseSpecTag: () => ({ spec: { example: true } }), checkSpec: () => ({ ok: true, module: "checked module", spec: {}, issues: [], vectors: 1 }), screenSource: () => "screen", card: () => "checked" } });
     const empty = await adapters.applyDyadTags(second.app.id, tags({}), { source });
     await put("files", `${second.app.id}:b`, "intervening"); const beforeStale = await snapshot();
     let refused = false; try { await adapters.rulesAfterTurn(second.app.id, "spec", [], { source: empty.source }); } catch (e) { refused = e.code === "projectEditConflict"; }

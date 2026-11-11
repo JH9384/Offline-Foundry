@@ -212,3 +212,22 @@ id = "FA-23"
 level = "build"
 suite = "atomic-generation-patch"
 statement = "Generated file batches commit against captured project source and cancellation prevents uncommitted project writes"
+
+[[id]]
+id = "FK-10"
+level = "build"
+suite = "forge_kernel"
+statement = "The app always answers proved when event is reword and phase is proved"
+
+
+[[id]]
+id = "FK-11"
+level = "build"
+suite = "forge_kernel"
+statement = "The app always answers published when event is reword and phase is published"
+
+[[id]]
+id = "FA-24"
+level = "build"
+suite = "current-main-integration"
+statement = "Current live editing and reword flows retain source-bound commits and the complete compiled kernel protocols"

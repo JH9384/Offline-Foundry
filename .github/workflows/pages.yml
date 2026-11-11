@@ -203,12 +203,16 @@ jobs:
           node-version: "24"
       - name: Every shell script parses the way the browser parses it
         run: node tools/shell_parse.mjs
+      - name: The build screen opens Dark, keeps its own choice, and leaves the home look alone
+        run: node tools/build_look.mjs
       - name: The vendored renderer, built beside the shell as the homepage (no Electron, no src/pro)
         run: cd vendor/dyad && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --engine-strict=false --force --no-audit --no-fund --loglevel=error && npx vite build --config vite.shell.config.mts --base /foundry/ --outDir dist --emptyOutDir && python3 ../../scripts/stamp_shell.py
       - name: The host answers the renderer's own contracts (the renderer's node_modules are installed by now)
         run: node tools/contract_shapes.mjs --check
       - name: The renderer preserves typed host refusals and recovers
         run: node tools/renderer_boundary.mjs
+      - name: Every screen calls the kit's shadcn/ui components as Radix takes them (the build above refuses Base UI or a Dyad copy in the bundle)
+        run: cd vendor/dyad && node hologram.typecheck.mjs
       - name: The served site names nothing outside this repository
         run: node tools/self_contained.mjs shell
       - name: Keep Forge's site, deployed at the root

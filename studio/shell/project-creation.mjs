@@ -93,7 +93,7 @@ export async function createStoredProject(db, prepared, defaults = {}) {
           for (const [path, text] of data.files) t.objectStore("files").add(text, `${id}:${path}`);
           for (const [key, bytes] of data.objects) t.objectStore("objects").put(bytes, key);
           t.objectStore("refs").add(data.oid, `${id}:main`);
-          t.objectStore("versions").add([{ oid: data.oid, message: "Init Hologram app", timestamp: Math.floor(Date.parse(at) / 1000), dbTimestamp: null, isFavorite: false, note: null }], id);
+          t.objectStore("versions").add([{ oid: data.oid, message: "Init Prism app", timestamp: Math.floor(Date.parse(at) / 1000), dbTimestamp: null, isFavorite: false, note: null }], id);
           chats.add({ id: chatId, appId: id, title: data.name, createdAt: at, messages: [], initialCommitHash: data.oid, dbTimestamp: null, chatMode: data.initialChatMode, modelSelection: null, referencedApps: [] }, chatId);
           answer = { app, chatId, oid: data.oid };
         } catch { refuse(); }

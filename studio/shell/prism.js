@@ -22,8 +22,11 @@ export const SPEC_RULES = `# Proved rules
 When the app decides an answer from a few inputs (a price tier, an eligibility, a grade, a risk level), state its rules as a Prism spec, so Lean can prove them, and make the screen use them.
 - Before the files, write one <dyad-spec> block of JSON: name (kebab-case), title, purpose (one sentence), fields (1 to 8, each {"name","kind":"number"|"choice","min","max","values","means"}), outcomes (lower-case words), rules (in order, the first that matches decides; each {"when":[{"field","op","value"}],"then","why"}), otherwise, otherwiseWhy, properties (what must never or always happen; each {"kind":"never"|"always","when","then","why"}), examples ([{"request":"<field values separated by spaces>","response"}]), limits (a list of sentences).
 - op is "is" or "is not" for a choice field, and "<", "<=", ">", ">=", "=" or "!=" for a number field, against a whole number or {"field":"<other number field>"}. Numbers are whole and not negative.
-- Forge writes src/lib/prism.ts from the spec. Import { decide, FIELDS, OUTCOMES } from "@/lib/prism" and show decide({ <field>: <value>, ... }) as the answer; it returns an outcome word, or "invalid". Never re-implement the rules in the screen, and never write src/lib/prism.ts or prism/spec.json yourself.
-- To change the rules, write a whole new <dyad-spec> block. When the app decides nothing (a landing page, a gallery), write no spec.
+- Forge draws the app's screen from the spec, live, as you write it. Write no files for an app with a spec: no page, no component, never src/lib/prism.ts or prism/spec.json.
+- Write the keys in this order, so the screen assembles top down as you write: name, title, purpose, view, fields, outcomes, meanings (optional, {"<outcome>": "what it means for the user"}), rules, otherwise, otherwiseWhy, properties, examples, limits.
+- view (optional) sets the screen's words and order: {"blocks":[...]}, each block one of {"kind":"heading","text"}, {"kind":"text","text"}, {"kind":"input","field","label"}, {"kind":"answer","label"}, {"kind":"guarantees"}, {"kind":"rules"}, {"kind":"examples"}. Without it the screen shows the title, purpose, one input per field, the answer, the guarantees, the rules and the examples.
+- To change one part of the spec (a word, an answer, one rule), write a patch instead of the whole spec: <dyad-spec-patch>[{"op":"set","path":["rules",2,"then"],"value":"none"}]</dyad-spec-patch>. Ops are set, insert (into a list, at an index) and remove; a path names keys and list indices in the spec as you wrote it. When the user points at something on the screen, its paths are given with the request.
+- To change the rules or the screen wholesale, write a whole new <dyad-spec> block. When the app decides nothing (a landing page, a gallery), write no spec and write its files.
 Example: <dyad-spec>{"name":"parking-fee","title":"Parking fee tier","purpose":"Decide the fee tier from hours parked and vehicle type.","fields":[{"name":"hours","kind":"number","min":0,"max":24,"means":"hours parked"},{"name":"vehicle","kind":"choice","values":["car","motorcycle","truck"],"means":"vehicle type"}],"outcomes":["free","standard","premium"],"rules":[{"when":[{"field":"hours","op":"=","value":0}],"then":"free","why":"nothing was parked"},{"when":[{"field":"vehicle","op":"is","value":"truck"}],"then":"premium","why":"a truck takes two bays"}],"otherwise":"standard","otherwiseWhy":"a car or motorcycle pays the standard rate","properties":[{"kind":"never","when":[{"field":"hours","op":"=","value":0}],"then":"premium","why":"no one pays for zero hours"}],"examples":[{"request":"0 truck","response":"free"},{"request":"3 car","response":"standard"}]}</dyad-spec>`;
 
 // ---- the device. The on-device model holds about 3,000 tokens and writes at most 900, so it is asked
@@ -44,7 +47,7 @@ export const withoutThinking = (text) => (text || "").replace(/<think>[\s\S]*?(<
 // The screen Forge writes when the rules check and no page uses them yet: a form with one input per
 // field, answered by decide(). It reads everything from the rules module, so it never goes stale.
 export function screenSource() {
-  return `// Written by Hologram Forge: a form for the app's rules. The answer comes from decide(), the rules Lean proves.
+  return `// Written by Prism AI Foundry: a form for the app's rules. The answer comes from decide(), the rules Lean proves.
 import { useState } from "react";
 import { decide, FIELDS, SPEC } from "@/lib/prism";
 
@@ -182,8 +185,12 @@ function prismDecide(spec, values) {
   return prismAnswer(spec, spec.fields.map((f) => String(values && values[f.name] !== undefined && values[f.name] !== null ? values[f.name] : "")).join(" "));
 }
 
+// The same two functions, as the live frame runs them (shell/live/frame.js): one interpreter wherever an
+// answer is shown.
+export const INTERPRETER = prismAnswer.toString() + "\n" + prismDecide.toString() + "\n";
+
 function moduleSource(spec, vectors) {
-  return `// Generated by Hologram Forge from prism/spec.json. Do not edit: change the rules in the chat.
+  return `// Generated by Prism AI Foundry from prism/spec.json. Do not edit: change the rules in the chat.
 // Lean proves the guarantees about these rules. This module answers with the same rules; Forge
 // replayed all ${vectors} acceptance vectors through it before writing it.
 export const SPEC = ${JSON.stringify(spec, null, 2)};
@@ -430,7 +437,7 @@ const PHASE_WORD = { drafting: "not checked", checked: "checked, not yet proved"
 export function card(state) {
   const spec = state.spec;
   if (!spec) return `**Rules** · not checked\n\n${state.issues.map((i) => "- " + i).join("\n")}\n\nAsk me to fix the rules.`;
-  const lines = [`**Rules: ${spec.title}** · ${PHASE_WORD[state.phase] || state.phase}`, "", spec.purpose, ""];
+  const lines = [`**Rules: ${spec.title}** · ${state.phase === "published" && state.publicationCurrent === false ? "proved by Lean; wording changed since publication" : PHASE_WORD[state.phase] || state.phase}`, "", spec.purpose, ""];
   if (spec.properties.length) {
     lines.push(state.phase === "proved" || state.phase === "published" ? "Guarantees, proved by Lean for every request:" : "Guarantees Lean will prove for every request:");
     spec.properties.forEach((p, i) => lines.push(`${i + 1}. ${said(p)}${p.why ? ` *${p.why}*` : ""}`));

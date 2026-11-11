@@ -66,6 +66,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-07` | `build` | The generated guest decodes bounded composition requests and returns the model admission result |
 
+## current-main-integration
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-24` | `build` | Current live editing and reword flows retain source-bound commits and the complete compiled kernel protocols |
+
 ## event-admission
 
 | ID | Level | Statement |
@@ -97,6 +103,8 @@ model does not sanction.
 | `FK-07` | `build` | The gate never admits a resource its grant record denies |
 | `FK-08` | `build` | The gate never admits a preview or a published app without a grant |
 | `FK-09` | `build` | The gate never lets a preview fetch without a grant |
+| `FK-10` | `build` | The app always answers proved when event is reword and phase is proved |
+| `FK-11` | `build` | The app always answers published when event is reword and phase is published |
 
 ## host-input-boundary
 

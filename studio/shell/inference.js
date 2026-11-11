@@ -309,7 +309,18 @@ export function withEngine(fn) { const run = gpuBusy.then(fn, fn); gpuBusy = run
 // ---- the paid route: OpenRouter with the visitor's key. The request bytes are the model's encoder.
 // A reasoning model (GLM 5.3 Flash) streams its reasoning in `delta.reasoning` for minutes before the
 // answer starts; onReasoning receives it so the chat can show the work instead of an empty message.
+const GLM_LOCK = "forge-featherless-glm";
 export async function paidGenerate(body, onDelta, signal, onReasoning) {
+  // One GLM request per browser: this browser's tabs and turns queue for it in order (Web Locks), rather
+  // than racing each other for the shared plan's one slot.
+  if (providerOf(body.model) !== "featherless" || !(navigator.locks && navigator.locks.request)) return paidGenerateOnce(body, onDelta, signal, onReasoning);
+  const run = () => paidGenerateOnce(body, onDelta, signal, onReasoning);
+  const first = await navigator.locks.request(GLM_LOCK, { ifAvailable: true }, async (lock) => (lock ? { done: await run() } : null));
+  if (first) return first.done;
+  if (onReasoning) onReasoning("Waiting for this browser's other GLM 5.3 Flash request to finish…");
+  return navigator.locks.request(GLM_LOCK, signal ? { signal } : {}, run);
+}
+async function paidGenerateOnce(body, onDelta, signal, onReasoning) {
   const provider = providerOf(body.model);
   const c = await coreReady(); const key = await keyFor(body.model); const V = await viewReady();
   let bytes = c.run({ op: "encode-openrouter-request", model: paidId(body.model), request: body, stream: true }).bytes;

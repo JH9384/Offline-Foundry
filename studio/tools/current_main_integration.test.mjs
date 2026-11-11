@@ -1,0 +1,88 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import { webcrypto } from "node:crypto";
+import { test } from "node:test";
+import * as prism from "../shell/prism.js";
+import * as live from "../shell/live/project.mjs";
+import { applyOps, createEditor } from "../shell/live/edit.mjs";
+import { assertGenerationActive } from "../shell/generation-patch.mjs";
+const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
+const initial = JSON.parse(fs.readFileSync(new URL("./fixtures/live/rsvp.json", import.meta.url)));
+const key = spec => live.kappaOfValue(live.logicOf(prism.checkSpec(spec).spec));
+function fn(name, end, env) {
+  const start = host.indexOf(`async function ${name}(`);
+  assert.ok(start >= 0 && host.indexOf(end, start) > start);
+  return vm.runInNewContext(host.slice(start, host.indexOf(end, start)) + `\n${name}`, env);
+}
+async function revise(spec, before) {
+  let saved, batch;
+  const source = { files: [["prism/spec.json", JSON.stringify(initial)], ["src/pages/Index.tsx", "import '@/lib/prism'"]] };
+  const run = fn("rulesAfterTurn", "// Lean proves", {
+    assertGenerationActive, coreReady: Promise.resolve(), core: {}, dbReady: Promise.resolve({}),
+    captureProjectSource: async () => source, prism, live, rulesOf: async () => before,
+    enc: new TextEncoder(), kappa: async bytes => live.kappaOfValue([...bytes]),
+    nextPhase: async (phase, event) => event === "reword" ? phase : event === "check" ? "checked" : "drafting",
+    applyStoredProjectPatch: async (_, id, patch, options) => { batch = { patch, options }; return { changed: patch.writes.length, source: { ...source, reference: "new" } }; },
+    saveRules: async (_, state) => { saved = state; return true; }, now: () => "now",
+  });
+  const result = await run(1, `<dyad-spec>${JSON.stringify(spec)}</dyad-spec>`);
+  return { saved, batch, result, source };
+}
+const proved = () => ({ phase: "proved", spec: prism.checkSpec(initial).spec, specKappa: "prior", logicKappa: key(initial), proof: { id: "proof" } });
+test("checked wording changes retain a matching proof but not a current publication claim", async () => {
+  const before = { ...proved(), phase: "published", publishedAs: "https://old.example", publicationCurrent: true };
+  const spec = { ...initial, title: "New wording" };
+  const { saved, batch, source, result } = await revise(spec, before);
+  assert.equal(saved.phase, "published"); assert.equal(saved.proof, before.proof);
+  assert.equal(saved.publicationCurrent, false); assert.match(prism.card(saved), /wording changed since publication/);
+  assert.equal(batch.options.source, source); assert.equal(result.source.reference, "new");
+  assert.ok(batch.patch.writes.some(w => w.path === "prism/spec.json"));
+  assert.ok(batch.patch.writes.some(w => w.path === "src/lib/prism.ts"));
+});
+test("changed logic drops proof and returns to checked", async () => {
+  const spec = structuredClone(initial); spec.rules[0].then = "none"; spec.properties = []; spec.examples = [];
+  assert.equal(prism.checkSpec(spec).ok, true);
+  const { saved } = await revise(spec, proved());
+  assert.equal(saved.phase, "checked"); assert.equal(saved.proof, null); assert.notEqual(saved.logicKappa, key(initial));
+});
+test("cached identity cannot lend a proof from a different checked spec", async () => {
+  const before = proved(); before.spec = { ...before.spec, otherwise: "none" };
+  const { saved } = await revise({ ...initial, title: "Reword" }, before);
+  assert.equal(saved.phase, "checked"); assert.equal(saved.proof, null);
+});
+test("proof completion follows matching logic and refuses a competing commit", async () => {
+  for (const accepted of [false, true]) {
+    const state = { ...proved(), phase: "proving" }, latest = { ...state, specKappa: "reworded" }; let reads = 0, refreshed = 0, audits = 0;
+    const prove = fn("proveRules", '// "approve"', {
+      rulesOf: async () => ++reads === 1 ? state : latest,
+      prism: { prove: async () => ({ ok: true, record: state.proof }) }, nextPhase: async () => "proved",
+      saveRules: async (_, value, expected) => { assert.equal(expected, latest); assert.equal(value.specKappa, "reworded"); return accepted; },
+      put: async (_, __, value) => { assert.equal(value.resource, state.logicKappa); audits++; }, refreshLive: async () => refreshed++, now: () => "now",
+    });
+    assert.equal((await prove(1, state.logicKappa))?.ok ?? false, accepted);
+    assert.equal(refreshed, Number(accepted)); assert.equal(audits, Number(accepted));
+  }
+});
+test("live persistence failure discards optimistic history and reloads committed state", async () => {
+  const source = { files: [["prism/spec.json", JSON.stringify(initial)]] }, editors = new Map([[1, createEditor(initial, () => ({ ok: true }))]]);
+  let refreshed = 0, refused = 0;
+  const patch = fn("patchSpec", "// What the user points", {
+    structuredClone, liveEditors: editors, liveBusy: new Map(), pushLive() {}, applyOps, inOrder: (_, job) => job(),
+    assertGenerationActive, captureProjectSource: async () => source, dbReady: Promise.resolve(),
+    editorOf: async (_, captured) => { assert.equal(captured, source); return editors.get(1); }, rulesOf: async () => proved(),
+    saveSpec: async (_, spec, options) => { assert.equal(spec.title, "Changed"); assert.equal(options.source, source); throw Object.assign(Error("projectEditConflict"), { code: "projectEditConflict" }); },
+    refreshLive: async () => refreshed++, refuse: () => refused++,
+  });
+  await assert.rejects(patch(1, [{ op: "set", path: ["title"], value: "Changed" }]), e => e.code === "projectEditConflict");
+  assert.equal(editors.has(1), false); assert.equal(refreshed, 1); assert.equal(refused, 1);
+});
+test("the signed installed guest supports reword alongside composition and work", async () => {
+  const self = {};
+  vm.runInNewContext(fs.readFileSync(new URL("../shell/kernel.js", import.meta.url), "utf8"), { self, crypto: webcrypto, WebAssembly, TextEncoder, TextDecoder, Uint8Array, atob });
+  const guest = await self.ForgeKernel.load(async path => new Response(fs.readFileSync(new URL("../shell/" + path, import.meta.url))));
+  assert.ok(guest.vectors >= 114);
+  for (const phase of ["drafting", "checked", "proving", "proved", "published"]) assert.equal(await guest.ask(phase + " reword"), phase);
+  assert.match(await guest.ask("compose "), /^error /);
+  assert.match(await guest.ask("work "), /^error /);
+});
