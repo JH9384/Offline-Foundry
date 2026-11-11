@@ -88,6 +88,16 @@ shutil.copy2(
     runtime / "compiler" / "LICENSE.md"
 )
 
+# Compile a self-contained React/ReactDOM JSX runtime for offline previews.
+# Generated code remains inside the delivery's hashed asset inventory.
+import subprocess
+subprocess.run(
+    ["node", str(root / "scripts" / "bundle_offline_react.mjs")],
+    cwd=root, check=True,
+)
+if not (runtime / "packages" / "react-bundle.js").is_file():
+    raise SystemExit("Missing bundled local React preview runtime")
+
 print("Staged local Monaco and esbuild browser runtimes")
 
 # The renderer is now part of an independently hashed delivery closure.
