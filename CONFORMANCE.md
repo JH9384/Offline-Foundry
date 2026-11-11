@@ -54,6 +54,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-02` | `build` | The authoring boundary checks every generated Studio module and export root without rewriting drift |
 
+## bounded-build-modules
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-27` | `build` | Portable builds fetch only bounded approved-origin modules and retain exact module-byte receipts |
+
 ## capability-availability
 
 | ID | Level | Statement |

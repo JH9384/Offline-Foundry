@@ -1,3 +1,4 @@
+import { withBuildModules } from "./build-modules.mjs";
 import { captureBuildSource, assertBuildSourceCurrent, requiresRulePublication } from "./build-source.mjs";
 import { applyStoredProjectPatch, assertGenerationActive } from "./generation-patch.mjs";
 import { editStoredProject, captureProjectSource } from "./project-edit.mjs";
@@ -1284,7 +1285,7 @@ async function buildPortable(appId, captured) {
     if (bare === "react-dom") return `https://esm.sh/react-dom${v}${sub}?target=es2022&external=react`;
     return `https://esm.sh/${bare}${v}${sub}?target=es2022&external=react,react-dom`;
   };
-  const fetched = new Map();
+  return withBuildModules(async remote => {
   const tw = await (await fetch(new URL("scaffold/tailwind.config.ts", BASE))).text();
   const m = tw.match(/theme:\s*(\{[\s\S]*\n  \}),\n  plugins/);
   const tailwindConfig = m ? "{darkMode:['class'],theme:" + m[1] + "}" : "{}";
@@ -1308,8 +1309,7 @@ async function buildPortable(appId, captured) {
       return { path: urlOf(args.path), namespace: "http" };
     });
     b.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
-      let text = fetched.get(args.path);
-      if (text == null) { const r = await fetch(args.path); if (!r.ok) throw new Error("fetch " + args.path + ": " + r.status); text = await r.text(); fetched.set(args.path, text); }
+      const text = await remote.fetchText(args.path);
       return { contents: text, loader: /\.css(\?|$)/.test(args.path) ? "css" : "js" };
     });
     b.onLoad({ filter: /.*/, namespace: "project" }, (args) => {
@@ -1339,7 +1339,8 @@ async function buildPortable(appId, captured) {
   const tailwindCss = await compileTailwind(compilePage);
   const html = head + `<\/script>\n<style>${tailwindCss}</style>\n` + body;
   await assertBuildSourceCurrent(await dbReady, appId, source);
-  return { html, sourceReference: source.reference, modules: fetched.size, jsBytes: js.length, cssBytes: css.length, tailwindBytes: tailwindCss.length, ms: Math.round(performance.now() - t0) };
+  return { html, sourceReference: source.reference, modules: remote.count, jsBytes: js.length, cssBytes: css.length, tailwindBytes: tailwindCss.length, ms: Math.round(performance.now() - t0) };
+  });
 }
 // Runs inside the compile frame. The frame is a preview address, so the worker serves it in a CSP
 // sandbox with an opaque origin and the host cannot read its document: the frame reports instead,
@@ -1420,7 +1421,7 @@ handlers.set("holo:publish", async ({ appId }) => {
     return { decision: "Chat", word: "This app has rules, so it is built with the Prism SDK: say publish in the chat.", closure, built, attestation };
   }
   const page = await buildPortable(appId, captured);
-  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }]);
+  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }, { path: "build/modules.json", bytes: enc.encode(JSON.stringify(page.moduleClosure, null, 2) + "\n") }, ...page.moduleFiles]);
   const guest = new Uint8Array(await (await fetch(new URL("core.wasm", BASE), { cache: "no-store" })).arrayBuffer());
   const model = core.run({ op: "publish-preimage", application: app.name, version, closure, attestation }).bytes;
   const modelBytes = enc.encode(model);

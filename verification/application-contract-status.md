@@ -74,10 +74,13 @@ not substituted for this gate.
 | Atomic project creation | #50 | 43025790830, passed |
 | Atomic explicit edits | #51 | 43027167718, passed |
 | Atomic generation batches | #52 | 43030478856, passed |
+| Current main/live reword integration | #54 | 43035670738, passed |
+| Atomic project lifecycle | #55 | 43036503589, passed |
+| Snapshot-bound builds | #56 | 43037443366, passed |
 
 ## Review disposition
 
-PRs #22–32, #34, #35, #37–39, #41, #42, #45 and #48–52 passed their recorded full gates and are ready for review. Author completeness reviews are not independent approval. This branch retains FA-01 through FA-23 and adds FA-24 current-main integration; its full feature gate is recorded separately at its revision.
+PRs #22–32, #34, #35, #37–39, #41, #42, #45 and #48–52 and #54–56 passed their recorded full gates and are ready for review. Author completeness reviews are not independent approval. This branch retains FA-01 through FA-26 and adds FA-27 bounded portable module loading; its full feature gate is recorded separately at its revision.
 No PR merge into main, deployment, factory migration, or whole-application
 completion is claimed.
 

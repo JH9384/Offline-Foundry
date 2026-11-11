@@ -243,3 +243,9 @@ id = "FA-26"
 level = "build"
 suite = "snapshot-bound-builds"
 statement = "Preview and portable publication consume one verified snapshot and cannot bypass rule publication through an absent cache"
+
+[[id]]
+id = "FA-27"
+level = "build"
+suite = "bounded-build-modules"
+statement = "Portable builds fetch only bounded approved-origin modules and retain exact module-byte receipts"

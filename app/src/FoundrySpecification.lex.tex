@@ -561,5 +561,30 @@ definition{
   result: String,
   body: "Preview and portable publication capture project name, main reference, files and direct dependency metadata in one transaction. They independently validate the snapshot and every file object using the existing restoration identity and generated-core admission boundary, then require exact name and file-byte agreement with captured source and exact dependency agreement with the snapshot declaration. Build adapters consume that captured source rather than rereading each file or metadata. Before promoting a current preview or installing a portable archive they compare current source against the capture; a change refuses with buildSourceChanged. Identity, basis and storage failures retain existing snapshot and project error types; disagreement uses buildSourceMismatch. A captured snapshot containing prism/spec.json always takes the Prism rule publication route, irrespective of whether cached rule state exists or is valid, so invalidation cannot bypass proof publication. The portable receipt names the captured project and reference. This qualifies source coherence and publication routing, not transitive package integrity, browser compiler preservation, atomic coordination between CacheStorage and IndexedDB, or complete live release acceptance."
 }
+
+inductive{
+  name: BuildModuleError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: buildModuleOriginRefused, fields: []},
+    {name: buildModuleResponseInvalid, fields: []},
+    {name: buildModuleUnavailable, fields: []},
+    {name: buildModuleTooLarge, fields: []},
+    {name: buildModuleLimitExceeded, fields: []},
+    {name: buildModuleTimedOut, fields: []},
+    {name: buildModuleCancelled, fields: []},
+    {name: buildModuleNetworkFailed, fields: []},
+    {name: buildModuleEncodingInvalid, fields: []},
+    {name: buildModuleIdentityFailed, fields: []}
+  ]
+}
+
+definition{
+  name: buildModuleBoundary,
+  parameters: [],
+  result: String,
+  body: "Portable browser builds retrieve external module text only from https://esm.sh with no URL credentials or fragment and at most 8192 URL characters. Every request is GET with redirects refused, credentials omitted and cache disabled. Only status 200 and JavaScript or CSS media types are accepted. One deadline of at most 120 seconds covers the module operation and callback completion, including stalled headers and bodies. At most 512 distinct URLs, 8 MiB per module and 64 MiB total are admitted. UTF8 decoding is fatal and byte roundtrip exact, including BOM. Each completed module retains its requested URL, media type, exact bytes, whole-file SHA256 and an archive path derived from that digest. Repeated requests share one in-flight operation. The portable view carries a sorted foundry/build-module-closure/1 receipt and those exact module sources. Errors and cancellation abort outstanding fetches and prevent return of a successful closure; errors have fixed public messages and never expose provider bodies. These are retrieved-byte receipts, not prior authenticity guarantees, a transitive NPM lock, compiler/toolchain closure, remote package availability, proof of browser compiler preservation or termination of already running physical work."
+}
 \end{semanticmodule}
 \end{lexlean}
