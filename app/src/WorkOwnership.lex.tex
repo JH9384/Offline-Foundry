@@ -361,7 +361,7 @@ definition{
   name: boundary,
   parameters: [],
   result: String,
-  body: "This pure library models one owned work item. Capacity, reservation and spending are semantic units, not physical measurements. Progress records a caller-supplied monotonically advancing checkpoint and decreases outstanding units; it does not verify achieved external effects. Suspension retains reservations, spending, checkpoint and owner. Completion releases unused reservation. Callers must authenticate owner identifiers, persist transitions atomically and bind checkpoints to actual achieved state before using this model to authorize external effects. Error results leave the input state unchanged. The installed browser guest does not yet expose these library operations."
+  body: "This pure library models one owned work item. Capacity, reservation and spending are semantic units, not physical measurements. Progress records a caller-supplied monotonically advancing checkpoint and decreases outstanding units; it does not verify achieved external effects. Suspension retains reservations, spending, checkpoint and owner. Completion releases unused reservation. Callers must authenticate owner identifiers, persist transitions atomically and bind checkpoints to actual achieved state before using this model to authorize external effects. Error results leave the input state unchanged. Browser adapters expose these pure operations only through a qualified generated guest; authentication and durable persistence remain separate."
 }
 \end{semanticmodule}
 \end{lexlean}

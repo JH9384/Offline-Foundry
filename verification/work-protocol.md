@@ -23,3 +23,9 @@ The locked SDK must execute those vectors in the generated guest. Three targeted
 Lean controls cover caller ownership, exact progress accounting and counter
 exhaustion. Diagnostic and full-SDK results, mutation evidence, signed artifact
 installation and browser qualification are recorded at the feature PR revisions.
+
+The local diagnostic compiler verified all ten modules, including the three wire
+proofs. Replacing the caller-owner word with the stored owner makes the Lean
+kernel reject `wireRejectsWrongOwner`; the defect was restored. The browser guest
+integration test rejects the previous composition-only archive, so it cannot
+silently pass until the new work-capable artifact is installed and replayed.
