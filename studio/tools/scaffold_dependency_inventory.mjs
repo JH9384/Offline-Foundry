@@ -47,7 +47,7 @@ async function scan(folder) {
       }
     }
     // Dynamic imports are deliberate dependencies and must also be accounted for.
-    for (const match of source.matchAll(/\\bimport\\s*\\(\\s*['"]([^'"]+)['"]\\s*\\)/g)) {
+    for (const match of source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
       collect(match[1], relative);
     }
   }
