@@ -58,6 +58,7 @@ jobs:
         run: |
           node tools/contract_shapes.mjs --check
           node tools/renderer_boundary.mjs
+          node tools/renderer_inputs.mjs
       - name: Verify snapshot rollback in browser storage
         run: |
           node tools/snapshot_restore_browser.mjs

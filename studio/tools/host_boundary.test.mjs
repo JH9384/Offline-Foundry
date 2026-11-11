@@ -77,7 +77,7 @@ test("the shipped host dispatch uses the real boundary and both entrypoints pres
   assert.ok(begin >= 0 && end > begin);
   const handlers = new Map();
   const seen = new Map();
-  const dispatch = vm.runInNewContext(source.slice(begin, end) + "\ndispatch", { handlers, seen, invokeHost, window: { __contracts: { [channel]: arraySchema } } });
+  const dispatch = vm.runInNewContext(source.slice(begin, end) + "\ndispatch", { handlers, seen, invokeHost, window: { __contracts: { [channel]: arraySchema }, __inputContracts: { [channel]: { safeParse: data => ({ success: true, data }) } } } });
   refused(await dispatch(channel, []), "unsupportedChannel");
   handlers.set(channel, () => ({}));
   refused(await dispatch(channel, []), "invalidResponse");

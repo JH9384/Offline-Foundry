@@ -350,5 +350,23 @@ definition{
   result: String,
   body: "The cloud inference adapter sends only the model-encoded request to the declared OpenRouter or Featherless chat-completion endpoint with the selected credential. It refuses missing credentials and requests above 2 MiB before network work. One 600-second deadline covers headers, error bodies, concurrency retries and the entire stream. Cancellation aborts local work and prevents late progress callbacks; already submitted remote inference may continue and incur charges. Featherless concurrency responses may retry at most 60 times, five seconds apart, within that same deadline. Error response bodies are bounded to 64 KiB and never exposed. Successful responses must be UTF8 event streams with structurally valid single-choice records, nonnegative usage, string deltas, an allowed stop or length finish and a final DONE frame. Truncated, malformed, unknown-finish, oversized or provider-error streams never become successful answers. Total stream bytes are at most 8 MiB; lines and data frames are at most 65536 UTF16 units. Callback, transport, cancellation, deadline, credential, billing, rate, provider and representation failures use InferenceEffectError with no credential or provider exception payload. The adapter releases listeners and timers, aborts outstanding fetch work and cancels held readers on every exit. The existing generated route and request encoder retain semantic ownership; this boundary does not establish general intent interpretation, model truthfulness, complete effect permission governance or live provider availability."
 }
+
+inductive{
+  name: HostInputError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidInput, fields: []},
+    {name: inputContractUnavailable, fields: []},
+    {name: inputValidatorFailed, fields: []}
+  ]
+}
+
+definition{
+  name: hostInputBoundary,
+  parameters: [],
+  result: String,
+  body: "Commands with imported renderer contracts must validate input before invoking any handler. The owned renderer bridge publishes the actual imported input and output schemas separately. An imported command carries at most one argument; omitted input is undefined. The adapter clones input before validation so caller mutation cannot change pending effects, rejects nontransferable values, and passes the schema's parsed value including declared defaults and transformations to the handler. Missing input validators for contracted outputs and throwing or malformed validators refuse without effects. Invalid arguments use invalidInput and the imported validation error category; missing or failed validators use inputContractUnavailable or inputValidatorFailed and internal. Refusals include the channel but never arguments, schema diagnostics or exception contents. Output validation still runs independently and never replaces successful handler output. Absent handlers remain unsupportedChannel. Legacy channels without imported input or output schemas retain their declared legacy behavior; their input is not claimed validated. This boundary checks representation, not permission, entity ownership, transaction isolation or full journey completeness."
+}
 \end{semanticmodule}
 \end{lexlean}

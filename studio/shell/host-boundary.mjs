@@ -8,9 +8,30 @@ const refusal = (code, channel, kind, message) => ({
   error: { name: "DyadError", kind, code, message: `${message}: ${channel}` },
 });
 
-export async function invokeHost(channel, args, handler, schema) {
+export async function invokeHost(channel, args, handler, schema, inputContract = null) {
   if (typeof handler !== "function") {
     return refusal("unsupportedChannel", channel, "not_found", "This capability is unavailable in the browser");
+  }
+  if (inputContract !== null) {
+    if (!inputContract.schema || typeof inputContract.schema.safeParse !== "function") {
+      return refusal("inputContractUnavailable", channel, "internal", "The browser input contract is unavailable");
+    }
+    if (!Array.isArray(args) || args.length > 1) {
+      return refusal("invalidInput", channel, "validation", "The command arguments do not match their contract");
+    }
+    let input;
+    try { input = structuredClone(args[0]); }
+    catch { return refusal("invalidInput", channel, "validation", "The command cannot be transferred"); }
+    let parsed;
+    try { parsed = inputContract.schema.safeParse(input); }
+    catch { return refusal("inputValidatorFailed", channel, "internal", "The browser input validator failed"); }
+    if (parsed?.success !== true) {
+      return refusal("invalidInput", channel, "validation", "The command arguments do not match their contract");
+    }
+    if (!Object.hasOwn(parsed, "data")) {
+      return refusal("inputValidatorFailed", channel, "internal", "The browser input validator returned no value");
+    }
+    args = [parsed.data];
   }
   let value;
   try {

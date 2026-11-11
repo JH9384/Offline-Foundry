@@ -1010,7 +1010,9 @@ handlers.set("chat:cancel", (chatId) => { const m = chatMachineOf(chatId); if (m
 // ---- the typed host boundary (FoundrySpecification.hostResponseBoundary)
 function dispatch(channel, args) {
   seen.set(channel, (seen.get(channel) || 0) + 1);
-  return invokeHost(channel, args, handlers.get(channel), window.__contracts && window.__contracts[channel]);
+  const output = window.__contracts && window.__contracts[channel];
+  const input = window.__inputContracts && window.__inputContracts[channel];
+  return invokeHost(channel, args, handlers.get(channel), output, output || input ? { schema: input } : null);
 }
 // Every stored file's bytes are also an object at their own address, so a restore can find them.
 const originalPut = put;
