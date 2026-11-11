@@ -45,6 +45,13 @@ test("invalid guest responses and runtime failures refuse", async () => {
   assert.equal((await admitWithGuest({ dispatch() { throw Error("private"); } }, policy, [feature])).code, "compositionRuntimeFailed");
 });
 
+// A balanced byte-expression avoids a single giant Lean array literal. The
+// independent fixture still pins every byte of the assembled runtime request.
+function requestTerm(hex) {
+  if (hex.length <= 8192) return "0x" + hex;
+  const cut = Math.floor(hex.length / 4) * 2;
+  return `(prim append ${requestTerm(hex.slice(0, cut))} ${requestTerm(hex.slice(cut))} : Bytes)`;
+}
 test("the actual guest model carries the full wire corpus and routes through semantic admission", () => {
   const kernel = fs.readFileSync(new URL("../../app/src/ForgeKernel.lex.tex", import.meta.url), "utf8");
   const protocol = fs.readFileSync(new URL("../../app/src/CompositionProtocol.lex.tex", import.meta.url), "utf8");
@@ -54,6 +61,6 @@ test("the actual guest model carries the full wire corpus and routes through sem
   assert.match(kernel, /requestMaximum := \(32776 : UInt32\)/);
   for (const vector of vectors) {
     const expected = Buffer.from(vector.response).toString("hex");
-    assert.ok(kernel.includes(`request := 0x${vector.request}, response := 0x${expected}`), `missing runtime vector ${vector.name}`);
+    assert.ok(kernel.includes(`request := ${requestTerm(vector.request)}, response := 0x${expected}`), `missing runtime vector ${vector.name}`);
   }
 });

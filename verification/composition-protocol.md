@@ -92,3 +92,9 @@ including the header. The allocation-boundary fixture is updated accordingly.
 Uppercase and nonhexadecimal input have explicit negative vectors, bringing the
 composition corpus to 26. The codec asserts printable canonical representation
 for all structured fixtures. Browser acceptance remains mandatory.
+
+The enlarged ASCII stress fixtures exceeded Lean's elaboration depth when each
+request was emitted as one large array literal. Their model expressions now
+append balanced chunks of at most 4096 bytes. Independent fixture bytes and the
+compiled requests are unchanged; the source-binding check pins the complete
+assembled expression. No recursion limit or stress case was removed.
