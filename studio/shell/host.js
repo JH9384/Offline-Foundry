@@ -39,9 +39,8 @@ const keys = (store) => tx(store, "readonly", (s) => s.getAllKeys());
 
 // ---- settings
 const DEFAULT_SETTINGS = {
-  // A new visitor starts on GLM 5.3 Flash in the cloud (the site's shared Featherless key answers); BitNet 2B
-  // on the device is one click away in the model picker.
-  selectedModel: { name: "zai-org/GLM-5.3-Flash", provider: "featherless" }, providerSettings: {}, telemetryConsent: "opted_out", telemetryUserId: "web",
+  // Sovereign default: browser GPU model. An external loopback model is a deliberate choice.
+  selectedModel: { name: MODEL_ID, provider: "local" }, providerSettings: {}, telemetryConsent: "opted_out", telemetryUserId: "web",
   hasRunBefore: true, experiments: {}, enableProLazyEditsMode: false, enableProSmartFilesContextMode: false, selectedChatMode: "build",
   enableAppBlueprint: false, enableTestingForNewApps: false, enableAutoUpdate: false, releaseChannel: "stable", isRunning: false,
   enableSandboxScriptExecution: false, enableMcpToolSearch: false, enableCodeExplorer: false, runTypeScriptForWholeProject: false,
@@ -117,12 +116,33 @@ const LOCAL_MODELS = [{ apiName: MODEL_ID, displayName: "BitNet 2B", description
 // visitor's, entered on the provider's settings page and kept on this device; the site carries none.
 const FEATHERLESS = { id: "featherless", name: "Featherless", hasFreeTier: false, websiteUrl: "https://featherless.ai/account/api-keys", gatewayPrefix: "featherless/", type: "cloud" };
 const FEATHERLESS_MODELS = [{ apiName: "zai-org/GLM-5.3-Flash", displayName: "GLM 5.3 Flash", description: "Z.ai's GLM 5.3 Flash on Featherless", contextWindow: 262144 }];
+// An explicitly configured local endpoint is the source of truth; no fabricated model names.
+const LOCAL_API = { id: "local-api", name: "Mac Studio local server (vLLM / Ollama)", type: "custom", hasFreeTier: true, envVarName: "FOUNDRY_LOCAL_LLM" };
+async function localApiCatalog() {
+  try {
+    const response = await fetch(new URL("__local-llm/models", BASE), { cache: "no-store" });
+    if (!response.ok) return [];
+    const body = await response.json();
+    return Array.isArray(body.data) ? body.data.filter(m => m && typeof m.id === "string").map(m => ({
+      apiName: m.id, displayName: m.id,
+      description: m.contextWindow ? "Served by the configured loopback endpoint" : "Served by loopback endpoint; context limit not reported (UI uses conservative 4096-token guard)",
+      contextWindow: m.contextWindow || 4096,
+    })) : [];
+  } catch { return []; }
+}
 // Two models are offered: GLM 5.3 Flash in the cloud (Featherless) and BitNet 2B on the device. OpenRouter is
 // withdrawn from the picker and Settings for now; its models stay defined here, and the warm-up that answers
 // while the device model loads is unchanged.
-handlers.set("get-language-model-providers", () => [FEATHERLESS, LOCAL]);
-handlers.set("get-language-models", ({ providerId }) => (providerId === "openrouter" ? OPENROUTER_MODELS : providerId === "featherless" ? FEATHERLESS_MODELS : providerId === "local" ? LOCAL_MODELS : []));
-handlers.set("get-language-models-by-providers", () => ({ featherless: FEATHERLESS_MODELS, local: LOCAL_MODELS }));
+handlers.set("get-language-model-providers", async () => (await localApiCatalog()).length
+  ? [LOCAL_API, LOCAL, FEATHERLESS] : [LOCAL, FEATHERLESS]);
+handlers.set("get-language-models", async ({ providerId }) =>
+  providerId === "local-api" ? localApiCatalog() :
+  providerId === "openrouter" ? OPENROUTER_MODELS :
+  providerId === "featherless" ? FEATHERLESS_MODELS :
+  providerId === "local" ? LOCAL_MODELS : []);
+handlers.set("get-language-models-by-providers", async () => ({
+  "local-api": await localApiCatalog(), local: LOCAL_MODELS, featherless: FEATHERLESS_MODELS,
+}));
 handlers.set("validate-provider-api-key", async ({ provider, apiKey }) => {
   if (provider !== "openrouter") return { ok: true };
   const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { authorization: "Bearer " + apiKey } });
@@ -366,7 +386,7 @@ handlers.set("chat:count-tokens", async ({ chatId, input }) => {
   const chat = chatId != null ? await get("chats", chatId) : null;
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
   const chosen = (chat && chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  const models = chosen.provider === "openrouter" ? OPENROUTER_MODELS : chosen.provider === "featherless" ? FEATHERLESS_MODELS : LOCAL_MODELS;
+  const models = chosen.provider === "local-api" ? await localApiCatalog() : chosen.provider === "openrouter" ? OPENROUTER_MODELS : chosen.provider === "featherless" ? FEATHERLESS_MODELS : LOCAL_MODELS;
   const contextWindow = (models.find((m) => m.apiName === chosen.name) || models[0] || { contextWindow: 4096 }).contextWindow;
   const tokens = (text) => Math.ceil(String(text || "").length / 4);
   const codebaseTokens = chat && chat.appId != null ? tokens(await codebaseOf(chat.appId)) : 0;
@@ -862,9 +882,11 @@ async function chatTurn(chatId, intent) {
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
   const V = await viewReady();
   const chosen = (chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  // Only Featherless is offered as a cloud model now; a selection left on OpenRouter answers on the device.
+  // The local API uses only model IDs actually supplied by /v1/models. It never falls back
+  // silently to Featherless or an unrelated browser model.
+  const localBridge = chosen.provider === "local-api" && chosen.name;
   const paid = chosen.provider === "featherless" && chosen.name;
-  const model = paid ? chosen.provider + "/" + chosen.name.replace(/^(openrouter|featherless)\//, "") : MODEL_ID;
+  const model = localBridge ? chosen.name : paid ? chosen.provider + "/" + chosen.name.replace(/^(openrouter|featherless)\//, "") : MODEL_ID;
   // T2: the user message, accepted
   const messages = await messagesOf(chatId);
   const userId = messages.length ? Math.max(...messages.map((x) => x.id)) + 1 : 1;
@@ -902,10 +924,10 @@ async function chatTurn(chatId, intent) {
     // Featherless's GLM reasons for some 14,000 tokens before it writes, inside the same budget, so it gets
     // the most Featherless allows (32,768); 16,384 left a page cut off mid file.
     const body = { model, messages: request, max_tokens: !paid ? 2048 : chosen.provider === "featherless" ? 32768 : 16384, temperature: "0.7" };
-    const hit = await lookup(body);
-    const route = await routeOf(hit, body);
+    const hit = localBridge ? { hit: false } : await lookup(body);
+    const route = localBridge ? "LocalBridge" : await routeOf(hit, body);
     // The View's no-key word names OpenRouter; a Featherless model is told about its own key.
-    const word = route === "NoKey" && model.startsWith("featherless/") ? "Add your Featherless key in Settings, under Featherless, to use " + paidId(model) : await refusalWord(route);
+    const word = localBridge ? null : route === "NoKey" && model.startsWith("featherless/") ? "Add your Featherless key in Settings, under Featherless, to use " + paidId(model) : await refusalWord(route);
     if (word) throw new Error(word);
     let lastSave = 0;
     const onText = async (t) => {
@@ -920,7 +942,21 @@ async function chatTurn(chatId, intent) {
     // site's) answers through OpenRouter meanwhile, and the local model starts loading for the next turn.
     const warm = route === "Local" && !engine.instance && core.run({ op: "warmup", localReady: !!engine.instance, keyPresent: !!(await inference.keyGet()), online: navigator.onLine }).warmup;
     if (warm && navigator.gpu) gpuReady().catch(() => {});
-    if (route === "Serve") {
+    if (route === "LocalBridge") {
+      const response = await fetch(new URL("__local-llm/chat", BASE), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, messages: request, max_tokens: 8192, stream: false }),
+        cache: "no-store", signal: abort.signal,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Local model endpoint unavailable");
+      if (result.model !== model || typeof result.content !== "string")
+        throw new Error("Local model reply did not match selected model");
+      await onText(result.content);
+      // We do not claim a cryptographic generation receipt: this provider has not
+      // supplied a trace/attestation to link the external engine to a sealed result.
+      provenance = result.finish_reason === "length" ? { cut: true } : null;
+    } else if (route === "Serve") {
       await onText(hit.text);
       provenance = { receipt: hit.receipt, served: true, fingerprint: hit.fingerprint };
     } else if (warm) {
