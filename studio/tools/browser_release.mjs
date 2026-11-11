@@ -447,6 +447,29 @@ async function positive() {
             throw new Error('Monaco editor attempted outbound requests: ' + outgoing.join('; '));
           }
           console.log('  Local Monaco project edit/version/reload offline: PASS', JSON.stringify({appId:monacoTest.appId,filePath:monacoTest.filePath,language:monacoTest.language}));
+
+          // An unbundled package must fail at compile time, never resolve to a CDN.
+          const refused = await editorPage.evaluate(async appId => {
+            const ipc = window.electron.ipcRenderer;
+            await ipc.invoke('edit-app-file', {
+              appId,
+              filePath:'src/main.tsx',
+              content:'import { widget } from "not-yet-bundled-offline-package";\nconsole.log(widget);',
+            });
+            try {
+              await window.__preview(appId);
+              throw new Error('FAIL: preview accepted an unbundled dependency');
+            } catch (error) {
+              const message = String(error?.message ?? error);
+              if (!message.includes('Offline dependency not bundled: not-yet-bundled-offline-package')) {
+                throw new Error('Unexpected dependency failure: ' + message);
+              }
+              return message;
+            }
+          }, project.appId);
+          if (outgoing.length) throw new Error('Dependency refusal attempted external network');
+          console.log('  Missing offline dependency refused explicitly: PASS', refused.slice(0,160));
+
         } finally {
           await editorPage.close();
         }
