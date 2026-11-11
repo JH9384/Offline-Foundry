@@ -20,7 +20,7 @@ test("declared unavailable queries cannot install fabricated success handlers", 
 });
 test("actual dispatch preserves unsupported failure for every excluded query", async () => {
   const begin = host.indexOf("function dispatch(channel, args) {");
-  const end = host.indexOf("// Every stored file", begin);
+  const end = host.indexOf("\n}\n", begin) + 3;
   assert.ok(begin > 0 && end > begin);
   const output = { safeParse() { assert.fail("unsupported response cannot validate"); } };
   const input = { safeParse() { assert.fail("unsupported input cannot validate"); } };

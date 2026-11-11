@@ -484,5 +484,24 @@ definition{
   result: String,
   body: "New browser projects prepare all file objects and the initial snapshot before storage writes. The generated core remains the authority for snapshot preimage bytes; the existing BLAKE3 implementation derives object identities. Inputs are copied before asynchronous hashing. Names are nonempty and at most 255 UTF16 units; portable relative file paths exclude empty, dot and parent segments, backslash, colon and control characters. At most 1000 exact UTF8 files, 16 MiB per file, 64 MiB total and a 1 MiB snapshot are accepted. Scaffold loading requires a unique valid manifest and every named file including AI_RULES.md, with redirects refused, credentials omitted, fatal UTF8 decoding, a 64 KiB manifest and one 30-second header/body deadline; failures never cache a partial scaffold. A single IndexedDB write transaction allocates app and chat IDs from the current store keys and commits the app, files, file objects, snapshot object, main reference, initial version and initial chat together. Concurrent creations serialize allocation within that transaction. Chat-only creation also allocates in its transaction and requires an existing app. Import uses insert-only app/chat writes, so a stale allocated ID refuses the transaction instead of replacing an existing record. Completion is acknowledged only after commit; abort leaves previous data unchanged. Scaffold, preparation and storage errors are fixed-message ProjectCreationError values, mapped to handlerFailed by IPC. This establishes local creation atomicity and complete requested scaffold retrieval, not authenticated scaffold provenance, global project identity, atomic later edits or imports beyond collision refusal, storage durability beyond IndexedDB, or complete application generation."
 }
+
+inductive{
+  name: ProjectEditError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidProjectEdit, fields: []},
+    {name: projectEditConflict, fields: []},
+    {name: projectEditStorageFailed, fields: []},
+    {name: projectEditStateInvalid, fields: []}
+  ]
+}
+
+definition{
+  name: projectEditBoundary,
+  parameters: [],
+  result: String,
+  body: "The browser file-edit command copies its input and captures the app name, complete file set and main reference from one read transaction. It prepares exact file objects and generated snapshot bytes outside storage transactions, with the captured main reference as parent and the same preparation bounds as creation. A single write transaction compares the app name, reference and complete file contents to the capture; a rename, changed, added or removed file or changed reference refuses as projectEditConflict. It then writes the edited file, all prepared objects, snapshot reference, new version and app update atomically. Editing prism/spec.json also deletes cached rule status in that same transaction; other edits do not change the rule-source-specific claim. Existing version metadata is read within the write transaction and preserved. Failed writes abort all queued changes. Invalid input, conflict, invalid stored state and storage failure use fixed-message ProjectEditError values, while preparation retains ProjectCreationError.projectPreparationFailed; IPC maps these to handlerFailed. A conflict is not silently retried. The comparison binds bytes and reference at commit, not a history of intervening changes that returned to identical state. This boundary covers the explicit edit-app-file command, not streamed generation, deletion, renaming or every other project mutation, nor whole-application proof validity or durable storage beyond IndexedDB."
+}
 \end{semanticmodule}
 \end{lexlean}

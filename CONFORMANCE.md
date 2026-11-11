@@ -30,6 +30,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-21` | `build` | Project creation commits its files, objects, initial version and chat atomically with transaction-local identifiers |
 
+## atomic-project-edit
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-22` | `build` | File edits atomically commit a source-bound snapshot or refuse concurrent project changes without partial writes |
+
 ## authoring-projection
 
 | ID | Level | Statement |

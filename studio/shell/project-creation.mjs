@@ -37,7 +37,7 @@ export async function loadProjectScaffold(base, { fetchFn = globalThis.fetch, ti
   } catch { throw failure("projectScaffoldFailed"); }
   finally { clearTimeout(timer); controller.abort(); }
 }
-export async function prepareNewProject(input, { core, derive }) {
+async function prepareProject(input, { core, derive }, parent) {
   try {
     const { name, files, initialChatMode } = structuredClone(input);
     if (typeof name !== "string" || !name.trim() || name.length > 255 || !files || typeof files !== "object" || Array.isArray(files)) throw Error();
@@ -54,12 +54,17 @@ export async function prepareNewProject(input, { core, derive }) {
       const key = await derive(bytes); if (!address(key)) throw Error();
       entries.push({ path, kappa: key, bytes: bytes.length }); objects.push([key, bytes]);
     }
-    const preimage = core.run({ op: "preimage", project: { label: name, entries }, parent: "" }).bytes;
+    const preimage = core.run({ op: "preimage", project: { label: name, entries }, parent }).bytes;
     if (typeof preimage !== "string") throw Error();
     const body = encoder.encode(preimage); if (body.length > MiB) throw Error();
     const oid = await derive(body); if (!address(oid)) throw Error(); objects.push([oid, body]);
     return { name, files: rows, objects, oid, initialChatMode: initialChatMode || "build" };
   } catch { throw failure("projectPreparationFailed"); }
+}
+export async function prepareNewProject(input, boundary) { return prepareProject(input, boundary, ""); }
+export async function prepareExistingProject(input, boundary, parent) {
+  if (!address(parent)) throw failure("projectPreparationFailed");
+  return prepareProject(input, boundary, parent);
 }
 const nextIdentifier = keys => {
   let maximum = 0;

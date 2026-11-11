@@ -1,3 +1,4 @@
+import { editStoredProject } from "./project-edit.mjs";
 import { loadProjectScaffold, prepareNewProject, createStoredProject, createStoredChat } from "./project-creation.mjs";
 import { storageRequest } from "./storage-request.mjs";
 import { executeWorkWithGuest } from "./work-codec.mjs";
@@ -177,7 +178,12 @@ handlers.set("create-app", async ({ name, initialChatMode }) => {
   return { app: withDates(created.app), chatId: created.chatId };
 });
 handlers.set("read-app-file", async ({ appId, filePath }) => { const c = await get("files", appId + ":" + filePath); if (c === undefined) throw new Error("no file " + filePath); return c; });
-handlers.set("edit-app-file", async ({ appId, filePath, content }) => { await put("files", appId + ":" + filePath, content); await seal(appId, "Edit " + filePath); return { success: true, warning: null }; });
+handlers.set("edit-app-file", async (input) => {
+  await coreReady;
+  const oid = await editStoredProject(await dbReady, input, { core, derive: kappa });
+  emit("version-created", { appId: input.appId, oid });
+  return { success: true, warning: null };
+});
 handlers.set("delete-app", async ({ appId }) => { for (const p of await filesOf(appId)) await del("files", appId + ":" + p); await del("apps", appId); await del("versions", appId); await del("refs", appId + ":main"); for (const c of await all("chats")) if (c.appId === appId) await del("chats", c.id); });
 handlers.set("rename-app", async ({ appId, appName }) => { const a = await get("apps", appId); a.name = appName; a.path = appName; a.updatedAt = new Date().toISOString(); await put("apps", appId, a); return { app: withDates(a) }; });
 // A search matches a project by name, by the title of one of its chats, or by a line in one of their
@@ -981,11 +987,7 @@ function dispatch(channel, args) {
   const input = window.__inputContracts && window.__inputContracts[channel];
   return invokeHost(channel, args, handlers.get(channel), output, output || input ? { schema: input } : null);
 }
-// Every stored file's bytes are also an object at their own address, so a restore can find them.
-const originalPut = put;
-handlers.set("__seal-files", null); handlers.delete("__seal-files");
-const rawEdit = handlers.get("edit-app-file");
-handlers.set("edit-app-file", async (input) => { await originalPut("objects", await kappa(enc.encode(input.content)), enc.encode(input.content)); return rawEdit(input); });
+
 
 
 

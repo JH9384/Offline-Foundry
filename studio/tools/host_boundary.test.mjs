@@ -73,7 +73,7 @@ test("the shipped host dispatch uses the real boundary and both entrypoints pres
   assert.match(source, /invoke: \(channel, \.\.\.args\) => dispatch\(channel, args\)\.then\(unwrapHost\)/);
   assert.doesNotMatch(source, /emptyAnswer|const EMPTY/);
   const begin = source.indexOf("function dispatch(channel, args) {");
-  const end = source.indexOf("// Every stored file", begin);
+  const end = source.indexOf("\n}\n", begin) + 3;
   assert.ok(begin >= 0 && end > begin);
   const handlers = new Map();
   const seen = new Map();

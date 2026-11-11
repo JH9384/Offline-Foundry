@@ -47,7 +47,7 @@ test("output validation still runs after admitted input", async () => {
 });
 test("the shipped host routes imported commands through input validation", async () => {
   const source = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
-  const start = source.indexOf("function dispatch(channel, args) {"), end = source.indexOf("// Every stored file", start);
+  const start = source.indexOf("function dispatch(channel, args) {"), end = source.indexOf("\n}\n", start) + 3;
   assert.ok(start >= 0 && end > start);
   let effects = 0;
   const window = { __contracts: { [channel]: output }, __inputContracts: { [channel]: { safeParse: () => ({ success: false }) } } };
