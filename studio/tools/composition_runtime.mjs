@@ -26,7 +26,7 @@ for (const vector of vectors) {
 }
 console.log(JSON.stringify({ stage: "corpus", vectors: vectors.length, acceptance: acceptance.total }));
 // Exercise the deepest permitted byte-decoder path, not only small examples.
-const maximum = new Uint8Array(16392);
+const maximum = new Uint8Array(32776).fill(48);
 maximum.set(new TextEncoder().encode("compose "));
 assert.equal(new TextDecoder().decode(await guest.dispatch(maximum)), "malformedComposition");
 console.log(JSON.stringify({ archiveFingerprint: guest.identities.archiveFingerprint, acceptance: { total: acceptance.total, passed: acceptance.passed }, wireVectors: vectors.length, maximumPayload: "refused" }));

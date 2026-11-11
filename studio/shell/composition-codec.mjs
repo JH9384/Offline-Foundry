@@ -26,12 +26,12 @@ export function encodeComposition(policy, features) {
     list(feature.needs, reference => { shape(reference, ["key", "version"]); scalar(reference.key); scalar(reference.version); });
     list(feature.inputs, input => { shape(input, ["producer", "schema"]); shape(input.producer, ["key", "version"]); scalar(input.producer.key); scalar(input.producer.version); scalar(input.schema); });
   }, 32);
-  if (words.length * 4 > 16384) throw fault("compositionTooLarge", "Composition payload exceeds 16384 bytes");
-  const bytes = new Uint8Array(8 + words.length * 4);
-  bytes.set(new TextEncoder().encode("compose "));
+  if (words.length * 4 > 16384) throw fault("compositionTooLarge", "Composition payload exceeds 32768 hexadecimal characters");
+  const bytes = new Uint8Array(words.length * 4);
   const view = new DataView(bytes.buffer);
-  words.forEach((word, i) => view.setUint32(8 + i * 4, word, true));
-  return bytes;
+  words.forEach((word, i) => view.setUint32(i * 4, word, true));
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  return new TextEncoder().encode("compose " + hex);
 }
 
 const refusals = new Set(["emptyComposition", "invalidDeclaration", "duplicateFeature", "missingDependency", "incompatibleInput", "featureConflict", "permissionDenied", "unsupportedTarget", "missingEvidence", "budgetExceeded", "malformedComposition", "compositionTooLarge"]);

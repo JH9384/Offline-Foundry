@@ -10,7 +10,11 @@ test("codec matches independent generated-guest acceptance vector bytes", () => 
   assert.equal(hex(encodeComposition(policy, [feature])), vectors.find(v => v.name === "single").request);
   assert.equal(hex(encodeComposition(policy, [])), vectors.find(v => v.name === "empty").request);
   assert.equal(hex(encodeComposition({ ...policy, cpu: 1 }, [feature])), vectors.find(v => v.name === "cpu").request);
-  for (const vector of vectors.filter(v => v.policy)) assert.equal(hex(encodeComposition(vector.policy, vector.features)), vector.request, vector.name);
+  for (const vector of vectors.filter(v => v.policy)) {
+    const request = encodeComposition(vector.policy, vector.features);
+    assert.equal(hex(request), vector.request, vector.name);
+    assert.match(new TextDecoder().decode(request), /^compose [0-9a-f]*$/);
+  }
 });
 test("scalar encoding refuses coercion, fractions, negatives and overflow", () => {
   for (const cpu of [undefined, null, "1", -1, 1.5, Infinity, NaN, 2 ** 32]) assert.throws(() => encodeComposition({ ...policy, cpu }, [feature]), { code: "malformedComposition" });
@@ -44,10 +48,10 @@ test("invalid guest responses and runtime failures refuse", async () => {
 test("the actual guest model carries the full wire corpus and routes through semantic admission", () => {
   const kernel = fs.readFileSync(new URL("../../app/src/ForgeKernel.lex.tex", import.meta.url), "utf8");
   const protocol = fs.readFileSync(new URL("../../app/src/CompositionProtocol.lex.tex", import.meta.url), "utf8");
-  assert.equal(vectors.length, 24);
+  assert.equal(vectors.length, 26);
   assert.match(kernel, /CompositionProtocol::dispatchComposition/);
   assert.match(protocol, /FeatureComposition::admitComposition/);
-  assert.match(kernel, /requestMaximum := \(16392 : UInt32\)/);
+  assert.match(kernel, /requestMaximum := \(32776 : UInt32\)/);
   for (const vector of vectors) {
     const expected = Buffer.from(vector.response).toString("hex");
     assert.ok(kernel.includes(`request := 0x${vector.request}, response := 0x${expected}`), `missing runtime vector ${vector.name}`);
