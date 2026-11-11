@@ -221,5 +221,24 @@ definition{
   result: String,
   body: "Browser publication requests and response-body reads have a 30000 millisecond default deadline and an explicit cancellation signal. Cancellation prevents subsequent requests, interrupts browser polling and attempts to abort in-flight network work. It does not roll back committed remote work or cancel GitHub jobs. The UI states this distinction. Invalid deadlines, timeout, cancellation, network failure, HTTP refusal and malformed successful JSON produce typed errors. HTTP status remains available for documented recovery; response bodies and credentials are not copied into error messages. Live artifact retrieval uses the same bounded request adapter and cannot swallow cancellation. Cancellation before or after local acceptance replay prevents reporting publication success. This boundary does not establish permission admission, complete provider schema validation, durable resume accounting or remote cancellation."
 }
+
+inductive{
+  name: PublicationIdentityError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidArchiveIdentity, fields: []},
+    {name: archiveIdentityMismatch, fields: []},
+    {name: invalidAcceptance, fields: []},
+    {name: acceptanceFailed, fields: []}
+  ]
+}
+
+definition{
+  name: publicationIdentityBoundary,
+  parameters: [],
+  result: String,
+  body: "Publication compares the page build identity and the imported Prism reader's recomputed archive fingerprint by full equality. Both fields contain exactly 64 lowercase hexadecimal characters, as emitted by the current template. Prefixes, suffixes, missing values, coercions and alternate algorithms are refused. The resulting typed identity has kind archiveFingerprint, algorithm blake3, profile holo-v4-body and version 1: BLAKE3 of the Hologram v4 bytes preceding the 32-byte footer, not a hash of the entire archive. Runtime acceptance must have a positive safe-integer total, a nonnegative safe-integer passed count no greater than total, and a failed array whose length accounts for every remaining vector. Every vector must pass. Malformed identity, mismatch, inconsistent or empty acceptance, and failed acceptance are distinct errors. This binds page and retrieved artifact; it does not authenticate publisher provenance or bind the artifact to a source commit. Those remain independent release obligations."
+}
 \end{semanticmodule}
 \end{lexlean}

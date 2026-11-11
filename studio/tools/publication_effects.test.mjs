@@ -5,7 +5,7 @@ import { requestBody, publicationDelay } from "../shell/publication-effects.mjs"
 // Load the actual browser module as ESM under both Node 22 and Node 24, retaining
 // its real dependency URL. No mock implementation of the GitHub adapter is used.
 const url = new URL("../shell/github-build.js", import.meta.url);
-const source = fs.readFileSync(url, "utf8").replace('"./publication-effects.mjs"', JSON.stringify(new URL("../shell/publication-effects.mjs", import.meta.url).href));
+const source = fs.readFileSync(url, "utf8").replace('"./publication-effects.mjs"', JSON.stringify(new URL("../shell/publication-effects.mjs", import.meta.url).href)).replace('"./publication-identity.mjs"', JSON.stringify(new URL("../shell/publication-identity.mjs", import.meta.url).href));
 const { gitHub, buildOnGitHub } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 const response = (body, status = 200) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
 const fails = (promise, code) => assert.rejects(promise, { code });

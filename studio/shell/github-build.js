@@ -1,3 +1,4 @@
+import { sameArchiveIdentity, admitPublication } from "./publication-identity.mjs";
 import { requestBody, publicationDelay, checkCancellation, effectError } from "./publication-effects.mjs";
 // Build an app with the Prism SDK on GitHub Actions, from the tab: what prism-code's buildFromTemplate does
 // with gh and git (journey/engine.mjs, journey/github.mjs), done through api.github.com, which answers web
@@ -106,7 +107,7 @@ async function fetchLive(live, open, { fetch = globalThis.fetch, sleep, signal, 
         const app = await open(bytes);
         const named = json.attestations && json.attestations.build && json.attestations.build.id;
         last = { bytes, page: json, app, named };
-        if (named && app.identities && String(named).endsWith(app.identities.archiveFingerprint)) return last;
+        if (sameArchiveIdentity(named, app.identities?.archiveFingerprint)) return last;
       }
     } catch (error) { if (error?.code === "cancelled") throw error; }
     await sleep(5000);
@@ -137,9 +138,10 @@ export async function buildOnGitHub({ token, spec, axioms = {}, attestation = nu
   const fingerprint = app.identities && app.identities.archiveFingerprint;
   // The pages workflow writes the fingerprint of the holo it built into app.json, as attestations.build.id.
   const pageSays = fetched.named;
+  const admitted = admitPublication(pageSays, fingerprint, acceptance);
   return {
-    ok: acceptance.failed.length === 0 && String(pageSays || "").endsWith(fingerprint),
+    ...admitted,
     repository, live, sha: commit.sha, runs, seconds: Math.round((Date.now() - t0) / 1000),
-    holo: fetched.bytes, fingerprint, vectors: { passed: acceptance.passed, total: acceptance.total }, pageFingerprint: pageSays || null,
+    holo: fetched.bytes, fingerprint, pageFingerprint: pageSays || null,
   };
 }

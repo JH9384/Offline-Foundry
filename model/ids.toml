@@ -92,3 +92,9 @@ id = "FA-04"
 level = "build"
 suite = "publication-cancellation"
 statement = "Cancelling publication prevents subsequent browser requests and bounded requests return typed failures"
+
+[[id]]
+id = "FA-05"
+level = "build"
+suite = "publication-identity"
+statement = "Publication requires exact canonical archive identity and complete nonempty runtime acceptance"

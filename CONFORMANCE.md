@@ -50,6 +50,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-04` | `build` | Cancelling publication prevents subsequent browser requests and bounded requests return typed failures |
 
+## publication-identity
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-05` | `build` | Publication requires exact canonical archive identity and complete nonempty runtime acceptance |
+
 ## Cited authorities
 
 Never re-derived, vendored, or gated on.
