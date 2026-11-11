@@ -43,9 +43,13 @@ test("a correctly hashed module still needs the pure core ABI and matching vecto
 test("public requests are typed, bounded and isolated from caller mutation", async () => {
   const guest = await load();
   await assert.rejects(guest.dispatch("drafting check"), code("invalidKernelRequest"));
+  await assert.rejects(guest.dispatch(Object.create(Uint8Array.prototype)), code("invalidKernelRequest"));
+  await assert.rejects(guest.dispatch(new Proxy(new Uint8Array(), {})), code("invalidKernelRequest"));
   await assert.rejects(guest.ask({ toString: () => "drafting check" }), code("invalidKernelRequest"));
   await assert.rejects(guest.dispatch(new Uint8Array(originalMeta.limits.request + 1)), code("kernelRequestTooLarge"));
-  const bytes = new TextEncoder().encode("drafting check"), pending = guest.dispatch(bytes); bytes.fill(0);
+  const bytes = new TextEncoder().encode("drafting check");
+  bytes.slice = () => { throw Error("caller-owned method must not run"); };
+  const pending = guest.dispatch(bytes); bytes.fill(0);
   assert.equal(new TextDecoder().decode(await pending), "checked");
 });
 test("execution and output limits remain enforced after successful loading", async () => {

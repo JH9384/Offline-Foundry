@@ -6,6 +6,7 @@
   const fail = code => Object.assign(new Error(`Kernel refused: ${code}`), { code });
   const toHex = buffer => Array.from(new Uint8Array(buffer), b => b.toString(16).padStart(2, "0")).join("");
   const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const byteLength = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), "byteLength").get;
   const bounded = (value, maximum) => Number.isSafeInteger(value) && value > 0 && value <= maximum;
   const fromBase64 = text => {
     if (typeof text !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)) throw fail("invalidKernelMetadata");
@@ -71,8 +72,13 @@
     }
     const dispatch = async request => {
       if (!(request instanceof Uint8Array)) throw fail("invalidKernelRequest");
-      if (request.length > limits.request) throw fail("kernelRequestTooLarge");
-      return run(module, request.slice(), limits.response);
+      let length, copy;
+      try { length = byteLength.call(request); }
+      catch { throw fail("invalidKernelRequest"); }
+      if (length > limits.request) throw fail("kernelRequestTooLarge");
+      try { copy = new Uint8Array(length); Uint8Array.prototype.set.call(copy, request); }
+      catch { throw fail("invalidKernelRequest"); }
+      return run(module, copy, limits.response);
     };
     return Object.freeze({
       digest: meta.digest, vectors: vectors.length, dispatch,
