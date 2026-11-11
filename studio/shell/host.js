@@ -7,6 +7,7 @@
 // the preview worker, and the app run machine (build in the tab, serve at the version's address).
 // The chat stream is the next slice.
 
+import { restoreSnapshot } from "./snapshot-restore.mjs";
 import { invokeHost, unwrapHost } from "./host-boundary.mjs";
 import { buildSystemPrompt } from "./prompts.js";
 import * as inference from "./inference.js";
@@ -321,18 +322,15 @@ handlers.set("set-version-favorite", async ({ appId, oid, isFavorite }) => { con
 handlers.set("set-version-note", async ({ appId, oid, note }) => { const v = (await get("versions", appId)) || []; for (const x of v) if (x.oid === oid) x.note = note; await put("versions", appId, v); });
 async function restore(appId, oid) {
   await coreReady;
-  const body = await get("objects", oid);
-  if (!body) throw new Error("no object at " + oid);
-  const derived = await kappa(body);
-  const { decision } = core.run({ op: "restore", derived, expected: oid });
-  await put("audit", Date.now() + ":" + oid, { ts: Date.now(), operation: "snapshot.restore", resource: oid, outcome: decision });
-  if (decision !== "Accept") throw new Error("refused: bytes at " + oid.slice(0, 22) + " re-derive to " + derived.slice(0, 22));
-  // The preimage names entries by address; the file bytes are looked up by their own addresses.
-  const state = JSON.parse(dec.decode(body));
-  for (const p of await filesOf(appId)) await del("files", appId + ":" + p);
-  for (const [path, k] of state.entries) { const bytes = await get("objects", k); if (bytes) await put("files", appId + ":" + path, dec.decode(bytes)); }
-  await put("refs", appId + ":main", oid);
-  return oid;
+  return restoreSnapshot(await dbReady, appId, oid, {
+    readObject: key => get("objects", key),
+    derive: kappa,
+    admit: async (derived, expected) => {
+      const { decision } = core.run({ op: "restore", derived, expected });
+      await put("audit", Date.now() + ":" + oid, { ts: Date.now(), operation: "snapshot.restore", resource: oid, outcome: decision });
+      return decision === "Accept";
+    },
+  });
 }
 handlers.set("checkout-version", async ({ appId, versionId }) => { await restore(appId, versionId); });
 handlers.set("revert-version", async ({ appId, previousVersionId }) => { await restore(appId, previousVersionId); await seal(appId, "Revert to " + previousVersionId.slice(0, 22)); return { successMessage: "Reverted" }; });

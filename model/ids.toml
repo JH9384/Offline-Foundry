@@ -110,3 +110,9 @@ id = "FA-07"
 level = "build"
 suite = "composition-protocol"
 statement = "The generated guest decodes bounded composition requests and returns the model admission result"
+
+[[id]]
+id = "FA-08"
+level = "build"
+suite = "snapshot-restore"
+statement = "Snapshot restoration validates every referenced object before atomically replacing files and the main reference"

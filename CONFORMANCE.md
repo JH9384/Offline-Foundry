@@ -68,6 +68,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-05` | `build` | Publication requires exact canonical archive identity and complete nonempty runtime acceptance |
 
+## snapshot-restore
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-08` | `build` | Snapshot restoration validates every referenced object before atomically replacing files and the main reference |
+
 ## Cited authorities
 
 Never re-derived, vendored, or gated on.
