@@ -276,6 +276,46 @@ async function positive() {
     if (outgoing.length) throw new Error('Unexpected outbound requests during offline compile: ' + outgoing.join('; '));
     console.log('  Offline TypeScript compilation and sandboxed preview: PASS', JSON.stringify(compiled));
 
+    // Real browser-host workflow: create a scaffold project, edit a source
+    // file, and verify that version identity changes in IndexedDB.
+    const project = await page.evaluate(async () => {
+      const ipc = window.electron?.ipcRenderer;
+      if (!ipc) throw new Error('Browser project IPC unavailable');
+      const created = await ipc.invoke('create-app', {
+        name: 'Offline acceptance project', initialChatMode: 'build',
+      });
+      const appId = created?.app?.id;
+      if (!appId) throw new Error('Offline project creation returned no app ID');
+      const app = await ipc.invoke('get-app', appId);
+      const filePath = app?.files?.find(path => path === 'src/main.tsx') ??
+        app?.files?.find(path => /\\.(tsx|ts|jsx|js)$/.test(path));
+      if (!filePath) throw new Error('Created project contains no editable source file');
+      const original = await ipc.invoke('read-app-file', { appId, filePath });
+      const oldHead = await ipc.invoke('app:get-current-commit-hash', { appId });
+      const marker = '// OFFLINE_FOUNDRY_ACCEPTANCE_EDIT';
+      const edited = original + '\\n' + marker + '\\n';
+      await ipc.invoke('edit-app-file', { appId, filePath, content: edited });
+      const newHead = await ipc.invoke('app:get-current-commit-hash', { appId });
+      const confirmed = await ipc.invoke('read-app-file', { appId, filePath });
+      if (confirmed !== edited || !oldHead || !newHead || oldHead === newHead) {
+        throw new Error('Offline edit or version seal did not persist');
+      }
+      return { appId, filePath, edited, newHead };
+    });
+    await page.reload({ waitUntil:'load', timeout:30000 });
+    await page.waitForFunction(() => !!window.electron?.ipcRenderer && !!window.__host, null, {timeout:30000});
+    const restored = await page.evaluate(async ({appId,filePath,edited,newHead}) => {
+      const ipc = window.electron.ipcRenderer;
+      const app = await ipc.invoke('get-app', appId);
+      const content = await ipc.invoke('read-app-file', {appId,filePath});
+      const head = await ipc.invoke('app:get-current-commit-hash', {appId});
+      return {ok: !!app && content === edited && head === newHead, appId, filePath};
+    }, project);
+    if (!restored.ok) throw new Error('Offline project did not survive browser reload');
+    if (outgoing.length) throw new Error('Unexpected outbound request during offline project persistence');
+    console.log('  Offline project create/edit/version/reload: PASS', JSON.stringify(restored));
+
+
   } finally { await context.close(); await close(); }
 }
 async function negative(variant, expectedPath) {
