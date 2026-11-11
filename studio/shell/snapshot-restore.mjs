@@ -78,6 +78,7 @@ export async function restoreSnapshot(db, appId, oid, boundary) {
           } else {
             for (const [path, text] of prepared.files) store.put(text, prefix + path);
             transaction.objectStore("refs").put(prepared.oid, prefix + "main");
+            transaction.objectStore("refs").delete(`prism:${appId}`);
           }
         } catch { transaction.abort(); }
       };

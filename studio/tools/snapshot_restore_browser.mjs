@@ -35,6 +35,8 @@ try {
       t.objectStore("files").put("original", "1:old.txt");
       t.objectStore("files").put("other", "2:keep.txt");
       t.objectStore("refs").put("original-ref", "1:main");
+      t.objectStore("refs").put({ phase: "proved" }, "prism:1");
+      t.objectStore("refs").put({ phase: "proved" }, "prism:2");
       t.oncomplete = resolve; t.onabort = () => reject(t.error);
     });
     const read = (store, key) => new Promise((resolve, reject) => {
@@ -49,6 +51,7 @@ try {
       check(await read("files", "1:old.txt") === "original", "original files lost");
       check(await read("files", "1:src/new.txt") === undefined, "partial insertion survived");
       check(await read("refs", "1:main") === "original-ref", "reference advanced on failure");
+      check((await read("refs", "prism:1"))?.phase === "proved", "proof cache lost on failure");
       check(await read("files", "2:keep.txt") === "other", "other project changed");
     };
     await seed(); objects.delete(fileId);
@@ -75,6 +78,8 @@ try {
     check(await read("files", "1:old.txt") === undefined, "old file retained");
     check(await read("files", "1:src/new.txt") === "\uFEFFexact 😀\r\n", "text bytes changed");
     check(await read("refs", "1:main") === oid, "reference not committed");
+    check(await read("refs", "prism:1") === undefined, "stale proof cache survived restore");
+    check((await read("refs", "prism:2"))?.phase === "proved", "other project proof changed");
     check(await read("files", "2:keep.txt") === "other", "other project changed");
     const empty = enc.encode(JSON.stringify({ entries: [], name: "empty", parent: oid }));
     const emptyId = kappa(empty); objects.set(emptyId, empty);
