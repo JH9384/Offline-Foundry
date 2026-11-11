@@ -41,6 +41,61 @@ for p in dst.rglob("*"):
             p.write_text(new, encoding="utf-8", newline="\n")
 app = dst / "src" / "App.tsx"
 app.write_text(app.read_text(encoding="utf-8").replace("<BrowserRouter>", "<BrowserRouter basename={import.meta.env.BASE_URL}>", 1), encoding="utf-8", newline="\n")
+# Offline-first starter is the default runnable project. Keep the complete
+# upstream scaffold sources for users who deliberately enable more packages.
+# The extended entrypoint is preserved, never silently discarded.
+main = dst / "src" / "main.tsx"
+(dst / "src" / "main.extended.tsx").write_text(
+    main.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
+)
+main.write_text(
+    'import { createRoot } from "react-dom/client";\n'
+    'import OfflineStarter from "./OfflineStarter";\n'
+    'import "./offline-starter.css";\n'
+    'createRoot(document.getElementById("root")!).render(<OfflineStarter />);\n',
+    encoding="utf-8", newline="\n"
+)
+(dst / "src" / "OfflineStarter.tsx").write_text(
+    '''import { useState } from "react";
+
+export default function OfflineStarter() {
+  const [note, setNote] = useState("Your project is ready to edit.");
+  return (
+    <main className="offline-starter">
+      <div className="offline-panel">
+        <span className="offline-tag">LOCAL-FIRST / OFFLINE</span>
+        <h1>Offline-Foundry Starter</h1>
+        <p>This project builds and previews without external package servers.</p>
+        <label htmlFor="offline-note">Try changing this note, or edit src/OfflineStarter.tsx</label>
+        <input id="offline-note" value={note} onChange={event => setNote(event.target.value)} />
+        <p data-testid="offline-note-preview">{note}</p>
+        <small>Project files are stored in this browser. Export backups before clearing site data.</small>
+      </div>
+    </main>
+  );
+}
+''',
+    encoding="utf-8", newline="\n"
+)
+(dst / "src" / "offline-starter.css").write_text(
+    ''':root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f1f5f9; color: #17223b; }
+.offline-starter { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
+.offline-panel { width: min(100%, 660px); background: white; border: 1px solid #dbe3ef;
+  border-radius: 18px; padding: 2.5rem; box-shadow: 0 16px 60px #17223b15; }
+.offline-tag { font-size: .75rem; font-weight: 700; letter-spacing: .14em; color: #2361a7; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 1rem 0; }
+p { line-height: 1.6; }
+label { display: block; margin-top: 2rem; font-weight: 600; }
+input { width: 100%; margin: .75rem 0; padding: .85rem 1rem;
+  border: 1px solid #9aaec7; border-radius: 8px; font: inherit; }
+small { display: block; color: #52617a; margin-top: 2rem; }
+''',
+    encoding="utf-8", newline="\n"
+)
+print("Staged runnable local-first React starter; preserved original entrypoint")
+
 files = sorted(str(p.relative_to(dst)).replace("\\", "/") for p in (dst / "src").rglob("*") if p.is_file())
 (dst / "files.json").write_text(json.dumps(files), encoding="utf-8", newline="\n")
 print(f"staged {len(files)} scaffold files")
