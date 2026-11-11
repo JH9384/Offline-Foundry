@@ -190,7 +190,7 @@ handlers.set("create-app", async ({ name, initialChatMode }) => {
   const app = { id, name, path: name, createdAt: now, updatedAt: now, ...nulls };
   await put("apps", id, app);
   for (const [p, src] of Object.entries(await loadScaffold())) await put("files", id + ":" + p, src);
-  const oid = await seal(id, "Init Hologram app");
+  const oid = await seal(id, "Init Prism app");
   const chatId = await nextId("chats");
   await put("chats", chatId, { id: chatId, appId: id, title: name, createdAt: now, messages: [], initialCommitHash: oid, dbTimestamp: null, chatMode: initialChatMode || "build", modelSelection: null, referencedApps: [] });
   return { app: withDates(app), chatId };
