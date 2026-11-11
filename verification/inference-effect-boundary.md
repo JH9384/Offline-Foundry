@@ -44,3 +44,12 @@ out and a second request is cancelled after headers. The server observes both
 connections close. CI runs this browser check with the locked renderer's
 Playwright dependency. Callback promises are awaited, so asynchronous consumer
 errors are typed and stream production respects consumer progress.
+
+
+Studio run 43009776758 passed the real browser connection tests but correctly
+failed the shell inventory: the new inference-effects.mjs had no parsing goal.
+Its module goal is now explicitly registered, and the full shell parser passes.
+The earlier local log contained that same refusal; it was incorrectly summarized
+as passing because a following shell command masked its exit status. This receipt
+supersedes that statement. Runtime tests were unaffected; full feature CI must
+rerun with the corrected inventory.
