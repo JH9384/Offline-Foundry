@@ -15,6 +15,9 @@
 #   ./scripts/plant.sh hole      # drop a handler a screen reads on mount: the Contract gate must refuse
 #   ./scripts/plant.sh live      # make a node's kappa ignore its content: the Live gate must refuse
 #   ./scripts/plant.sh shadcn    # change one class in a vendored shadcn component: the components gate must refuse
+#   ./scripts/plant.sh kitfile   # add a component of our own to the vendored registry: the components gate must refuse
+#   ./scripts/plant.sh rolled    # a screen imports Base UI itself: the renderer's build must refuse the bundle
+#   ./scripts/plant.sh rewrite   # a screen calls a ui component in a way the Radix rewrite cannot convert: the typecheck must refuse
 # `hole` runs the Contract gate, which bundles the vendored contracts with the renderer's own esbuild,
 # so run it where those dependencies were installed for this platform -- otherwise esbuild refuses to
 # start and the gate looks like it fired when it never ran.
@@ -108,7 +111,25 @@ EOF
     sed -i 's/rounded-md text-sm font-medium/rounded-full text-sm font-medium/' vendor/shadcn-ui/registry/new-york-v4/ui/button.tsx
     expect_fail node tools/live_components.mjs --check
     cp /tmp/plant-button.tsx vendor/shadcn-ui/registry/new-york-v4/ui/button.tsx ;;
-  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn" >&2; exit 2 ;;
+  kitfile)
+    # A component written here and dropped beside the kit's: it would read as shadcn/ui and not be.
+    printf 'export function Fancy() { return null }
+' > vendor/shadcn-ui/registry/new-york-v4/ui/fancy.tsx
+    expect_fail node tools/live_components.mjs --check
+    rm -f vendor/shadcn-ui/registry/new-york-v4/ui/fancy.tsx ;;
+  rolled)
+    # A screen that reaches for a primitive library itself instead of the kit's component.
+    cp vendor/dyad/src/pages/home.tsx /tmp/plant-home.tsx
+    sed -i '1i import { Tooltip as Rolled } from "@base-ui/react/tooltip"; console.log(Rolled);' vendor/dyad/src/pages/home.tsx
+    expect_fail bash -c 'cd vendor/dyad && MSYS_NO_PATHCONV=1 npx vite build --config vite.shell.config.mts --base /foundry/ --outDir /tmp/plant-dist --emptyOutDir'
+    cp /tmp/plant-home.tsx vendor/dyad/src/pages/home.tsx ;;
+  rewrite)
+    # A Base UI render prop given a call, not an element: Radix's asChild cannot take it.
+    cp vendor/dyad/src/components/chat/AttachmentsList.tsx /tmp/plant-attachments.tsx
+    sed -i 's#<TooltipTrigger render={<div className="flex" />}>#<TooltipTrigger render={wrap()}>#' vendor/dyad/src/components/chat/AttachmentsList.tsx
+    expect_fail bash -c 'cd vendor/dyad && node hologram.typecheck.mjs'
+    cp /tmp/plant-attachments.tsx vendor/dyad/src/components/chat/AttachmentsList.tsx ;;
+  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|kitfile|rolled|rewrite" >&2; exit 2 ;;
 esac
 restore
 echo "restored"
