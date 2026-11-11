@@ -411,7 +411,7 @@ async function positive() {
               automaticLayout: false,
             });
             try {
-              editor.setPosition({lineNumber:1,column:19});
+              editor.setPosition({lineNumber:1,column:18});
               editor.trigger('offline-acceptance', 'type', {text:' + 2'});
               const value = editor.getValue();
               if (value !== 'const result = 40 + 2;') {
