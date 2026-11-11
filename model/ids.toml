@@ -146,3 +146,9 @@ id = "FA-12"
 level = "build"
 suite = "host-input-boundary"
 statement = "Imported renderer input contracts validate browser commands before any handler effect"
+
+[[id]]
+id = "FA-13"
+level = "build"
+suite = "work-ownership"
+statement = "The Prism work model reserves capacity before execution and preserves spending and checkpoints across suspension with owner and revision checks"

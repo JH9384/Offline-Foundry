@@ -104,6 +104,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-08` | `build` | Snapshot restoration validates every referenced object before atomically replacing files and the main reference |
 
+## work-ownership
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-13` | `build` | The Prism work model reserves capacity before execution and preserves spending and checkpoints across suspension with owner and revision checks |
+
 ## Cited authorities
 
 Never re-derived, vendored, or gated on.
