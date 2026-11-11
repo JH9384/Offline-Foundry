@@ -249,10 +249,9 @@ async function positive() {
       });
       // A sandboxed iframe may execute scripts, but has an opaque origin and
       // cannot access the parent page's IndexedDB or other same-origin state.
-      frame.srcdoc = '<!doctype html><body><script>' +
-        js.replace(/<\\/script/gi, '<\\\\/script') +
+      frame.srcdoc = '<!doctype html><body><script>' + js +
         ';parent.postMessage({kind:"offline-foundry-compile",text:document.body.textContent},"*")' +
-        '<\\/script></body>';
+        '</script></body>';
       document.body.append(frame);
       try {
         const text = await completed;
