@@ -176,7 +176,7 @@ fn openapi() -> String {
 /// precaches it beside this list), `warmup.json` (the site's included key, written at deploy time,
 /// never hashed into the closure), the renderer build under `assets/` and the staged `scaffold/` and
 /// `404.html` (written after the lane by the Pages workflow and content hashed by Vite already), and
-/// model weights, which live in the device store the engine keeps.
+/// model weights, which live in the device store the engine keeps. The browser runtime belongs to\n/// the independent delivery closure alongside the assets and scaffold, not the formal shell closure.
 fn manifest(shell: &Path) -> String {
     fn walk(dir: &Path, root: &Path, out: &mut Vec<PathBuf>) {
         let mut entries: Vec<_> = std::fs::read_dir(dir).expect("shell dir").flatten().collect();
@@ -185,7 +185,7 @@ fn manifest(shell: &Path) -> String {
             let path = entry.path();
             if path.is_dir() {
                 let name = path.file_name().unwrap().to_string_lossy().to_string();
-                if path.parent() == Some(root) && (name == "app" || name == "assets" || name == "scaffold") {
+                if path.parent() == Some(root) && (name == "app" || name == "assets" || name == "scaffold" || name == "runtime") {
                     continue;
                 }
                 walk(&path, root, out);
