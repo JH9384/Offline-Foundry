@@ -80,17 +80,17 @@ export default function OfflineStarter() {
 (dst / "src" / "offline-starter.css").write_text(
     ''':root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
 * { box-sizing: border-box; }
-body { margin: 0; background: #f1f5f9; color: #17223b; }
+body { margin: 0; background: Canvas; color: CanvasText; }
 .offline-starter { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
-.offline-panel { width: min(100%, 660px); background: white; border: 1px solid #dbe3ef;
-  border-radius: 18px; padding: 2.5rem; box-shadow: 0 16px 60px #17223b15; }
-.offline-tag { font-size: .75rem; font-weight: 700; letter-spacing: .14em; color: #2361a7; }
+.offline-panel { width: min(100%, 660px); background: white; border: 1px solid ButtonBorder;
+  border-radius: 18px; padding: 2.5rem; box-shadow: 0 16px 60px color-mix(in srgb, CanvasText 8%, transparent); }
+.offline-tag { font-size: .75rem; font-weight: 700; letter-spacing: .14em; color: LinkText; }
 h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 1rem 0; }
 p { line-height: 1.6; }
 label { display: block; margin-top: 2rem; font-weight: 600; }
 input { width: 100%; margin: .75rem 0; padding: .85rem 1rem;
-  border: 1px solid #9aaec7; border-radius: 8px; font: inherit; }
-small { display: block; color: #52617a; margin-top: 2rem; }
+  border: 1px solid ButtonBorder; border-radius: 8px; font: inherit; }
+small { display: block; color: GrayText; margin-top: 2rem; }
 ''',
     encoding="utf-8", newline="\n"
 )
