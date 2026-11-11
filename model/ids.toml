@@ -122,3 +122,9 @@ id = "FA-08"
 level = "build"
 suite = "snapshot-restore"
 statement = "Snapshot restoration validates every referenced object before atomically replacing files and the main reference"
+
+[[id]]
+id = "FA-09"
+level = "build"
+suite = "rules-source-binding"
+statement = "Rule status and asynchronous proof or publication completion remain bound to the current rule source"

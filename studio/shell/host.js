@@ -7,6 +7,7 @@
 // the preview worker, and the app run machine (build in the tab, serve at the version's address).
 // The chat stream is the next slice.
 
+import { readBoundRules, saveBoundRules } from "./rules-source.mjs";
 import { restoreSnapshot } from "./snapshot-restore.mjs";
 import { invokeHost, unwrapHost } from "./host-boundary.mjs";
 import { buildSystemPrompt } from "./prompts.js";
@@ -243,7 +244,7 @@ handlers.set("appCollections:list", () => []);
 // before stay there; its moved page writes them to a file (hologram-forge/export/1) and Import App on the
 // home page hands that file here. Ids are renumbered past the ones in use, so nothing here is replaced;
 // a name already taken gets " (moved)". The file carries apps, their files, chats, versions, rules state
-// and the objects those versions name; it never carries settings (keys), the audit, seals, grants or
+// and the objects those versions name; cached rule/proof status is ignored and must be rechecked. It never carries settings (keys), the audit, seals, grants or
 // installed holos, and anything else in it is ignored. An object is kept only when its bytes derive to
 // its address. Everything is written in one transaction: a failure leaves the store as it was.
 const EXPORT_SCHEMA = "hologram-forge/export/1";
@@ -269,7 +270,6 @@ handlers.set("forge:import", async (input) => {
     for (const [path, text] of files) { writes.push(["files", id + ":" + path, text]); const bytes = enc.encode(text); objects.set(await kappa(bytes), bytes); }
     if (Array.isArray(entry.versions)) writes.push(["versions", id, entry.versions]);
     if (typeof entry.main === "string" && entry.main) writes.push(["refs", id + ":main", entry.main]);
-    if (entry.rules && typeof entry.rules === "object") writes.push(["refs", "prism:" + id, entry.rules]);
     const chats = [];
     for (const c of Array.isArray(entry.chats) ? entry.chats : []) {
       if (!c || typeof c !== "object") continue;
@@ -668,8 +668,8 @@ async function nextPhase(phase, event) {
   if (!PHASES.includes(answer)) throw new Error("the kernel answered " + answer + " to " + phase + " " + event);
   return answer;
 }
-const rulesOf = (appId) => get("refs", "prism:" + appId);
-const saveRules = (appId, state) => put("refs", "prism:" + appId, state);
+const rulesOf = async (appId) => readBoundRules(await dbReady, appId, kappa);
+const saveRules = async (appId, state, expected) => saveBoundRules(await dbReady, appId, state, kappa, expected);
 // After a turn: the spec the model wrote (if any) becomes prism/spec.json; new rules drop the proof
 // (the kernel's edit), are checked (its check), and on a pass the app's rule module is written.
 // Returns the files changed and the card that replaces the spec in the chat.
@@ -701,7 +701,7 @@ async function rulesAfterTurn(appId, text, written = []) {
   }
   const notes = [...(tag && tag.repaired ? ["Forge repaired the JSON syntax the model wrote. Read the rules before you approve them."] : []), ...(checked.notes || [])];
   const state = { phase, specKappa, spec: checked.spec || null, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: null, updated: now() };
-  await saveRules(appId, state);
+  if (!await saveRules(appId, state)) return { changed, card: "The rules changed while being checked. Check the current rules again." };
   return { changed, card: prism.card(state) };
 }
 // Lean proves the rules on the hosted verifier; the kernel moves the phase on its attestation or its
@@ -709,12 +709,13 @@ async function rulesAfterTurn(appId, text, written = []) {
 // prover's result, or null when the rules changed under it.
 async function proveRules(appId, specKappa, onWait) {
   const state = await rulesOf(appId);
+  if (!state || state.specKappa !== specKappa || state.phase !== "proving") return null;
   const result = await prism.prove(state.spec, { onWait }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
   const latest = await rulesOf(appId);
   if (!latest || latest.specKappa !== specKappa || latest.phase !== "proving") return null;
   const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
   // The axiom sets Lean settled on are kept: the model the SDK builds must be the model Lean proved.
-  await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, axioms: result.ok ? result.axioms || {} : null, proofError: result.ok ? null : result.error, updated: now() });
+  if (!await saveRules(appId, { ...latest, phase, proof: result.ok ? result.record : null, axioms: result.ok ? result.axioms || {} : null, proofError: result.ok ? null : result.error, updated: now() }, latest)) return null;
   await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.rules.prove", resource: specKappa, outcome: result.ok ? "proved" : "refused" });
   return result;
 }
@@ -727,7 +728,7 @@ async function approveRules(appId) {
   if (state.phase === "proved" || state.phase === "published") return { text: "These rules are already proved by Lean." };
   if (state.phase !== "checked") return { text: "The rules are not checked yet, so there is nothing to approve. Ask me to fix them." };
   const phase = await nextPhase("checked", "approve");
-  await saveRules(appId, { ...state, phase, approved: now() });
+  if (!await saveRules(appId, { ...state, phase, approved: now() }, state)) return { text: "The rules changed before approval was recorded. Check the current rules again." };
   return { text: prism.provingMessage(state.spec), spec: state.spec, prove: (onWait) => proveRules(appId, state.specKappa, onWait) };
 }
 // The approve turn stays open while Lean works, as a build turn stays open while the model writes:
@@ -810,11 +811,16 @@ async function publishTurn(chatId, appId, messages, userId, ref, intentId) {
   if (!result.ok) {
     await row("refused", (result.repository || "") + (result.sha ? "@" + result.sha : ""));
     const why = result.error || (result.vectors ? `${result.vectors.total - result.vectors.passed} of ${result.vectors.total} acceptance vectors failed in the built guest, or the live page names another holo` : "the build did not pass");
-    await show(`${head}\n\nNothing was published: ${why}.${links}`);
+    await show(`${head}\n\nPublication verification failed: ${why}. Remote content may already be live; this does not undo the GitHub build.${links}`);
     return finish();
   }
   const next = await nextPhase(rules.phase, "publish");
-  await saveRules(appId, { ...rules, phase: next === "published" ? next : rules.phase, publishedAs: result.live, build: { repository: result.repository, sha: result.sha, fingerprint: result.fingerprint, vectors: result.vectors, runs: Object.fromEntries(Object.entries(result.runs).map(([w, r]) => [w, r.html_url])), at: now() }, updated: now() });
+  const current = await saveRules(appId, { ...rules, phase: next === "published" ? next : rules.phase, publishedAs: result.live, build: { repository: result.repository, sha: result.sha, fingerprint: result.fingerprint, vectors: result.vectors, runs: Object.fromEntries(Object.entries(result.runs).map(([w, r]) => [w, r.html_url])), at: now() }, updated: now() }, rules);
+  if (!current) {
+    await row("stale", result.live);
+    await show(`${head}\n\nThe build completed for earlier rules and may already be live at ${result.live}. The current project has not been marked published. Check and approve the current rules before publishing them.${links}`);
+    return finish();
+  }
   await row("granted", result.live);
   // The preview shows what was published: the live app, from GitHub Pages.
   const run = machineOf(appId);

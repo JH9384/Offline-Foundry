@@ -59,7 +59,9 @@ jobs:
           node tools/contract_shapes.mjs --check
           node tools/renderer_boundary.mjs
       - name: Verify snapshot rollback in browser storage
-        run: node tools/snapshot_restore_browser.mjs
+        run: |
+          node tools/snapshot_restore_browser.mjs
+          node tools/rules_source_browser.mjs
       - name: Every shell script parses the way the browser parses it
         run: node tools/shell_parse.mjs
       - name: The kernel in the shell is the holo KERNEL_REV pins, and every vector replays

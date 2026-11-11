@@ -74,6 +74,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-05` | `build` | Publication requires exact canonical archive identity and complete nonempty runtime acceptance |
 
+## rules-source-binding
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-09` | `build` | Rule status and asynchronous proof or publication completion remain bound to the current rule source |
+
 ## snapshot-restore
 
 | ID | Level | Statement |

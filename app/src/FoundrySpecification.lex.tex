@@ -282,5 +282,23 @@ definition{
   result: String,
   body: "The authoring front end deterministically constructs every canonical Studio module and its ordered export roots. Check mode compares all expected bytes without creating, repairing or rewriting output, reports every missingProjection, unreadableProjection or divergedProjection by path, and fails if any comparison fails. Canonical sources remain what LexLean consumes. Source conformance executes the actual checker against independent mutations of each module, export roots, newline encoding and authoring declarations; a changed declaration requires explicit regeneration before acceptance."
 }
+
+inductive{
+  name: RulesBindingError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidRulesState, fields: []},
+    {name: rulesIdentityFailed, fields: []},
+    {name: rulesStorageFailed, fields: []}
+  ]
+}
+
+definition{
+  name: rulesSourceBoundary,
+  parameters: [],
+  result: String,
+  body: "Cached rule status is usable only when its canonical blake3 specKappa equals the independently recomputed identity of the project's current prism/spec.json bytes and its phase is declared by the kernel. Reads capture file and state together. Writes first check source identity and then compare the exact source again inside the same IndexedDB transaction that writes status. Asynchronous approval, proof and publication also compare their expected prior status in that transaction, so intervening edits, restores or competing completions cannot promote stale state. A stale completion returns false and never changes the current preview or claims current publication. Imported files may be reconstructed, but imported cached approval, proof and publication state is discarded; they require fresh checking and approval. Invalid state, identity engine failure and storage failure are typed and contain no source, credential or exception payloads. The IPC boundary maps these exceptions to handlerFailed. Remote publication may already be live when current-state promotion or local verification fails; the UI states this explicitly. These checks bind lifecycle state to current source; they do not verify the hosted prover, authenticate build provenance or undo remote effects."
+}
 \end{semanticmodule}
 \end{lexlean}

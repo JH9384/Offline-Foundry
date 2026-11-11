@@ -1,0 +1,63 @@
+// FoundrySpecification.rulesSourceBoundary: identity plus an atomic status update.
+const phases = new Set(["drafting", "checked", "proving", "proved", "published"]);
+const address = value => typeof value === "string" && /^blake3:[0-9a-f]{64}$/.test(value);
+const valid = state => state && typeof state === "object" && !Array.isArray(state) && address(state.specKappa) && phases.has(state.phase);
+const fail = code => Object.assign(new Error(`Rule state refused: ${code}`), { code });
+const encoder = new TextEncoder();
+
+function capture(db, appId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const t = db.transaction(["files", "refs"], "readonly");
+      const source = t.objectStore("files").get(`${appId}:prism/spec.json`);
+      const state = t.objectStore("refs").get(`prism:${appId}`);
+      t.oncomplete = () => resolve({ source: source.result, state: state.result });
+      t.onerror = t.onabort = () => reject(fail("rulesStorageFailed"));
+    } catch { reject(fail("rulesStorageFailed")); }
+  });
+}
+
+async function matches(source, state, derive) {
+  if (typeof source !== "string" || !valid(state)) return false;
+  try { return await derive(encoder.encode(source)) === state.specKappa; }
+  catch { throw fail("rulesIdentityFailed"); }
+}
+
+export async function readBoundRules(db, appId, derive) {
+  const captured = await capture(db, appId);
+  return await matches(captured.source, captured.state, derive) ? captured.state : null;
+}
+
+export async function saveBoundRules(db, appId, state, derive, expected) {
+  // Freeze both caller-owned records before any asynchronous work.
+  let next, prior;
+  try { next = structuredClone(state); if (!valid(next)) throw fail("invalidRulesState"); prior = expected === undefined ? undefined : JSON.stringify(expected); }
+  catch { throw fail("invalidRulesState"); }
+  const captured = await capture(db, appId);
+  if (!await matches(captured.source, next, derive)) return false;
+  // The exact raw source comparison closes the race while hashing outside IndexedDB.
+  return new Promise((resolve, reject) => {
+    let t, written = false;
+    const refuse = () => reject(fail("rulesStorageFailed"));
+    try {
+      t = db.transaction(["files", "refs"], "readwrite");
+      t.oncomplete = () => resolve(written);
+      t.onerror = t.onabort = refuse;
+      const source = t.objectStore("files").get(`${appId}:prism/spec.json`);
+      const current = t.objectStore("refs").get(`prism:${appId}`);
+      let finished = 0;
+      const ready = () => {
+        if (++finished !== 2) return;
+        try {
+          if (source.result !== captured.source || (prior !== undefined && JSON.stringify(current.result) !== prior)) return;
+          t.objectStore("refs").put(next, `prism:${appId}`);
+          written = true;
+        } catch { t.abort(); }
+      };
+      source.onsuccess = current.onsuccess = ready;
+    } catch {
+      if (t) { try { t.abort(); } catch {} }
+      refuse();
+    }
+  });
+}
