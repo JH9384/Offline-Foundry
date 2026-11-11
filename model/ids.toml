@@ -134,3 +134,9 @@ id = "FA-10"
 level = "build"
 suite = "composition-host-runtime"
 statement = "The browser host composes features only through its pinned and replayed generated kernel"
+
+[[id]]
+id = "FA-11"
+level = "build"
+suite = "inference-effect-boundary"
+statement = "Cloud inference bounds requests and streamed responses and refuses cancellation, malformed data and provider failures explicitly"

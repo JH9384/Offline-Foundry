@@ -68,6 +68,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-03` | `build` | The browser host refuses unsupported channels and invalid contracted responses with typed errors |
 
+## inference-effect-boundary
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-11` | `build` | Cloud inference bounds requests and streamed responses and refuses cancellation, malformed data and provider failures explicitly |
+
 ## publication-cancellation
 
 | ID | Level | Statement |

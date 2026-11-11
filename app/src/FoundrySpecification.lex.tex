@@ -324,5 +324,31 @@ definition{
   result: String,
   body: "The browser forge:compose handler serializes declarations through CompositionProtocol and invokes the same pinned generated kernel used for phase and effect decisions. It never implements semantic admission itself. Kernel loading requires a canonical archive label and guest SHA256, the exact kernel/guest.wasm path and byte length, a pure core-wasm export set, coherent positive limits, and nonempty acceptance. All committed vectors replay before a request is exposed. Metadata limits are 4096 vectors, 16 MiB guest bytes, 1 MiB request/response/allocation bounds, and 64 MiB total decoded vector bytes. Caller requests must be Uint8Array, are copied before asynchronous execution and cannot exceed the declared request limit. Text ask encodes only strings through the same checked dispatch. Each request uses a fresh instance. Runtime, loading, identity, metadata, export, acceptance and bounds failures are typed without exception payloads. The host IPC maps loader exceptions to handlerFailed; guest execution failures during composition become compositionRuntimeFailed. Vector replay may exercise the declared allocation bound, which is separate from the public request bound. Runtime loading checks the guest against committed metadata; the repository kernel gate binds both to KERNEL_REV and the archive. This does not authenticate an arbitrary network origin or establish registry, routing, UI generation or application release completeness."
 }
+
+inductive{
+  name: InferenceEffectError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidInferenceRequest, fields: []},
+    {name: inferenceCancelled, fields: []},
+    {name: inferenceTimedOut, fields: []},
+    {name: inferenceNetworkFailed, fields: []},
+    {name: inferenceUnauthorized, fields: []},
+    {name: inferencePaymentRequired, fields: []},
+    {name: inferenceRateLimited, fields: []},
+    {name: inferenceProviderFailed, fields: []},
+    {name: malformedInferenceResponse, fields: []},
+    {name: inferenceResponseTooLarge, fields: []},
+    {name: inferenceConsumerFailed, fields: []}
+  ]
+}
+
+definition{
+  name: inferenceEffectsBoundary,
+  parameters: [],
+  result: String,
+  body: "The cloud inference adapter sends only the model-encoded request to the declared OpenRouter or Featherless chat-completion endpoint with the selected credential. It refuses missing credentials and requests above 2 MiB before network work. One 600-second deadline covers headers, error bodies, concurrency retries and the entire stream. Cancellation aborts local work and prevents late progress callbacks; already submitted remote inference may continue and incur charges. Featherless concurrency responses may retry at most 60 times, five seconds apart, within that same deadline. Error response bodies are bounded to 64 KiB and never exposed. Successful responses must be UTF8 event streams with structurally valid single-choice records, nonnegative usage, string deltas, an allowed stop or length finish and a final DONE frame. Truncated, malformed, unknown-finish, oversized or provider-error streams never become successful answers. Total stream bytes are at most 8 MiB; lines and data frames are at most 65536 UTF16 units. Callback, transport, cancellation, deadline, credential, billing, rate, provider and representation failures use InferenceEffectError with no credential or provider exception payload. The adapter releases listeners and timers, aborts outstanding fetch work and cancels held readers on every exit. The existing generated route and request encoder retain semantic ownership; this boundary does not establish general intent interpretation, model truthfulness, complete effect permission governance or live provider availability."
+}
 \end{semanticmodule}
 \end{lexlean}
