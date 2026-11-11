@@ -55,6 +55,59 @@ renderer and assembly steps first; never bypass the release gate.
    browser data, moving machines or changing the browser origin. Browser IndexedDB and
    service-worker caches are scoped to the origin.
 
+## Mac Studio local model binding (explicit opt-in)
+
+The browser's model picker is not an OMP CLI connection or an automatic inventory
+of machines. The optional local adapter discovers model IDs **actually served**
+by a single loopback OpenAI-compatible endpoint (vLLM, MLX/vLLM compatibility
+server, or Ollama's OpenAI-compatible API). Nothing is queried from the internet.
+
+First confirm your local model server is listening on the expected port:
+
+```bash
+curl --fail http://127.0.0.1:8000/v1/models
+```
+
+Then launch the already independently verified shell on the same Mac,
+from `studio/`:
+
+```bash
+FOUNDRY_LOCAL_LLM_URL=http://127.0.0.1:8000/v1 node tools/serve_offline.mjs 4173
+```
+
+For Ollama's OpenAI compatibility endpoint, use
+`FOUNDRY_LOCAL_LLM_URL=http://127.0.0.1:11434/v1` instead, and check that
+`/v1/models` reports the desired models.
+
+In the model picker, choose **Mac Studio local server (vLLM / Ollama)** and then
+select the **exact** model ID reported by the endpoint. The app sends text
+chat-completion requests to `/foundry/__local-llm/chat` on its own loopback
+origin. The server forwards only text messages and selected model ID to the
+configured local service. It does **not** take URLs from project files or
+model prompts, does not forward saved provider keys, refuses undeclared model IDs,
+and does not implicitly fall back to a cloud provider.
+
+The adapter is opt-in and fails closed if not configured or if model discovery
+fails. By default the in-browser BitNet model is selected for new users.
+Existing model preferences remain user-controlled; switch them explicitly.
+The fallback 4096-token context figure is a conservative **UI guard only**
+when the local server does not advertise its actual limit.
+
+**Limitations:** This initial connector supports synchronous, text-only
+`/v1/chat/completions` responses. It is not an OMP MCP binding, not an LLM
+tool-calling agent, not proof-backed generation provenance, and does not bind
+`version_preview` or `image_generation` distributed-machine capabilities.
+Those renderer requests must remain unimplemented until matching machines,
+contracts, safety boundaries and end-to-end acceptance tests exist.
+No prompt or project edit is automatically submitted to LexLean or PrismPM;
+the separate formal release gates remain authoritative.
+
+The browser is a secure context on localhost. Cross-origin isolation
+(`SharedArrayBuffer` and related capabilities) is **not** enabled by this
+adapter; it must be considered separately, because isolation changes resource
+loading and the browser security model. Sandboxed previews intentionally cannot
+read parent-origin cookies and project storage.
+
 ## Offline boundaries
 
 - Preview imports are **fail-closed**: unsupported bare packages raise
