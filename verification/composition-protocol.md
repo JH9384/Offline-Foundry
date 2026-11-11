@@ -15,7 +15,7 @@ wire representation and decodes known responses from a caller-supplied guest.
 
 ## Evidence
 
-Registration, scenario and failing test preceded implementation. Seven guest
+Registration, scenario and failing test preceded implementation. Eight guest
 acceptance vectors are independently recorded in `composition-wire-vectors.json`
 and pinned to the actual application model by the executable codec suite. The
 complete SDK `prismpm verify` gate replays those vectors in the compiled guest;
@@ -43,3 +43,9 @@ self-review, not independent approval. A caller must supply the appropriate
 verified guest; this adapter does not fetch or authenticate it. Registry/UI
 integration, intent routing and whole-product release acceptance remain separate
 specification obligations.
+
+The first SDK attempt rejected the application declaration because the changed
+input-allocation bound lacked an exact-boundary vector (PP2009). The bound is
+16,400 bytes and the corpus now includes a 16,400-byte request that must return
+compositionTooLarge. This field limits guest input allocation, not overall heap
+use; it is distinct from the composition contracts' declared resource budgets.
