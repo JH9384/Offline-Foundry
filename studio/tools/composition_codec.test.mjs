@@ -71,5 +71,5 @@ test("the actual guest model carries the full wire corpus and routes through sem
     const expected = Buffer.from(vector.response).toString("hex");
     assert.ok(kernel.includes(`request := ${requestTerm(vector.request)}, response := 0x${expected}`), `missing runtime vector ${vector.name}`);
   }
-  for (const [name, hex] of fixtureChunks) assert.ok(fixtures.includes(`definition{\n  name: ${name},\n  parameters: [],\n  result: Bytes,\n  body: 0x${hex}\n}`), `fixture alias changed: ${name}`);
+  for (const [name, hex] of fixtureChunks) assert.ok(fixtures.replace(/\s+/g, "").includes(`definition{name:${name},parameters:[],result:Bytes,body:0x${hex}}`), `fixture alias changed: ${name}`);
 });
