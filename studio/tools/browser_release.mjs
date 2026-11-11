@@ -375,6 +375,61 @@ async function positive() {
         if (reactErrors.length) throw new Error('React preview exception: ' + reactErrors.join('; '));
         if (outgoing.length) throw new Error('React preview tried outbound network: ' + outgoing.join('; '));
         console.log('  Bundled React JSX offline preview: PASS');
+
+        // Browser editor acceptance: load Monaco's actual locally staged AMD
+        // distribution offline, instantiate an editor, and type into its model.
+        const editorPage = await context.newPage();
+        try {
+          await editorPage.goto(`${origin}${prefix}index.html`, {
+            waitUntil: 'load', timeout: 30000,
+          });
+          await editorPage.addScriptTag({
+            url: `${origin}${prefix}runtime/monaco/vs/loader.js`,
+          });
+          const monacoTest = await editorPage.evaluate(async base => {
+            if (typeof window.require?.config !== 'function') {
+              throw new Error('Locally staged Monaco AMD loader missing');
+            }
+            window.require.config({paths:{vs:base}});
+            await new Promise((resolve,reject) => {
+              const timeout = setTimeout(() => reject(new Error('Monaco editor did not load')), 30000);
+              window.require(['vs/editor/editor.main'], () => {
+                clearTimeout(timeout); resolve();
+              }, error => {
+                clearTimeout(timeout); reject(error);
+              });
+            });
+            if (typeof window.monaco?.editor?.create !== 'function') {
+              throw new Error('Monaco editor API not loaded');
+            }
+            const container = document.createElement('div');
+            container.style.cssText = 'position:fixed;left:0;top:0;width:600px;height:320px;z-index:1000';
+            document.body.append(container);
+            const editor = window.monaco.editor.create(container, {
+              value: 'const result = 40;',
+              language: 'typescript',
+              automaticLayout: false,
+            });
+            try {
+              editor.setPosition({lineNumber:1,column:19});
+              editor.trigger('offline-acceptance', 'type', {text:' + 2'});
+              const value = editor.getValue();
+              if (value !== 'const result = 40 + 2;') {
+                throw new Error('Monaco edit did not update the model: ' + value);
+              }
+              return {model:value, language:editor.getModel().getLanguageId()};
+            } finally {
+              editor.dispose(); container.remove();
+            }
+          }, `${origin}${prefix}runtime/monaco/vs`);
+          if (outgoing.length) {
+            throw new Error('Monaco editor attempted outbound requests: ' + outgoing.join('; '));
+          }
+          console.log('  Local Monaco TypeScript editing offline: PASS', JSON.stringify(monacoTest));
+        } finally {
+          await editorPage.close();
+        }
+
       } finally {
         await reactPage.close();
       }
