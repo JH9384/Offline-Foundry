@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createLocalLLMBridge } from './local_llm_gateway.mjs';
 
 const shell = resolve(dirname(fileURLToPath(import.meta.url)), '../shell');
 const root = await realpath(shell);
@@ -31,6 +32,7 @@ const types = {
   '.woff2':'font/woff2', '.ttf':'font/ttf', '.ico':'image/x-icon',
   '.txt':'text/plain; charset=utf-8', '.map':'application/json; charset=utf-8',
 };
+const localLLM = createLocalLLMBridge(process.env.FOUNDRY_LOCAL_LLM_URL);
 const server = createServer(async (req,res) => {
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -38,6 +40,7 @@ const server = createServer(async (req,res) => {
       return;
     }
     const url = new URL(req.url, 'http://127.0.0.1');
+    if (await localLLM(req,res,url,port)) return;
     if (url.pathname !== '/foundry' && !url.pathname.startsWith('/foundry/')) {
       res.writeHead(404).end('not found');
       return;
@@ -88,4 +91,5 @@ const server = createServer(async (req,res) => {
 server.listen(port,'127.0.0.1',() => {
   console.log('Offline-Foundry loopback shell: http://127.0.0.1:' + port + '/foundry/');
   console.log('Local browser origin only. Production publication remains DEFER.');
+  console.log(process.env.FOUNDRY_LOCAL_LLM_URL ? 'Local model adapter: configured (loopback only)' : 'Local model adapter: DEFER (set FOUNDRY_LOCAL_LLM_URL explicitly)');
 });
