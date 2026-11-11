@@ -110,6 +110,9 @@ jobs:
       - name: Test invalid release rejection
         run: python3 tools/release_gate_negative.py
 
+      - name: Check local-only operator server syntax
+        run: node --check tools/serve_offline.mjs
+
       - name: Verify browser script syntax
         run: node tools/shell_parse.mjs
 
