@@ -1,6 +1,9 @@
 name: Forge Independent Verification
 
 on:
+  push:
+    branches:
+      - verification/sovereign-browser-release
   pull_request:
   workflow_dispatch:
 
