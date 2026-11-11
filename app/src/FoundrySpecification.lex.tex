@@ -200,5 +200,26 @@ definition{
   result: String,
   body: "The browser IPC adapter refuses absent handlers with unsupportedChannel, handler exceptions with handlerFailed, invalid contracted output with invalidResponse and validator exceptions with validatorFailed. A schema accepting an empty value never authorizes synthesizing success. Valid handler output is preserved exactly; schema parsing is validation and cannot replace it. Both envelope and direct invocation retain typed error codes. Unsupported errors map to the imported not_found category; other boundary failures map to internal. Error messages name the channel without including request, response or exception data. Legacy handlers without imported output schemas retain their output, but this is not schema coverage or application acceptance. The external adapter inventory studio/model/host-read-scope.json classifies discovered renderer reads as required or unavailable. Required reads must retain handlers, unavailable reads must remain explicit refusals, and new or stale entries fail scope validation. This inventory declares the current adapter scope, not complete feature coverage. Renderer error-state recovery requires separate runtime journey evidence."
 }
+
+inductive{
+  name: PublicationEffectError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: cancelled, fields: []},
+    {name: timedOut, fields: []},
+    {name: invalidDeadline, fields: []},
+    {name: networkFailed, fields: []},
+    {name: httpRejected, fields: []},
+    {name: malformedResponse, fields: []}
+  ]
+}
+
+definition{
+  name: publicationEffectsBoundary,
+  parameters: [],
+  result: String,
+  body: "Browser publication requests and response-body reads have a 30000 millisecond default deadline and an explicit cancellation signal. Cancellation prevents subsequent requests, interrupts browser polling and attempts to abort in-flight network work. It does not roll back committed remote work or cancel GitHub jobs. The UI states this distinction. Invalid deadlines, timeout, cancellation, network failure, HTTP refusal and malformed successful JSON produce typed errors. HTTP status remains available for documented recovery; response bodies and credentials are not copied into error messages. Live artifact retrieval uses the same bounded request adapter and cannot swallow cancellation. Cancellation before or after local acceptance replay prevents reporting publication success. This boundary does not establish permission admission, complete provider schema validation, durable resume accounting or remote cancellation."
+}
 \end{semanticmodule}
 \end{lexlean}

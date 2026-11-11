@@ -86,3 +86,9 @@ id = "FA-03"
 level = "build"
 suite = "host-response-boundary"
 statement = "The browser host refuses unsupported channels and invalid contracted responses with typed errors"
+
+[[id]]
+id = "FA-04"
+level = "build"
+suite = "publication-cancellation"
+statement = "Cancelling publication prevents subsequent browser requests and bounded requests return typed failures"

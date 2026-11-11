@@ -44,6 +44,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-03` | `build` | The browser host refuses unsupported channels and invalid contracted responses with typed errors |
 
+## publication-cancellation
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-04` | `build` | Cancelling publication prevents subsequent browser requests and bounded requests return typed failures |
+
 ## Cited authorities
 
 Never re-derived, vendored, or gated on.
