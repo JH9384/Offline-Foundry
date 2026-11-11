@@ -97,16 +97,38 @@ definition{
 }
 
 definition{
+  name: readNibble,
+  parameters: [bytes : Bytes, offset : Nat],
+  result: (Option Nat),
+  body: (match (byteAsNat bytes offset)
+    | Option.none => (ctor Option.none [Nat])
+    | Option.some value => (if ((48 <=? value) && (value <=? 57)) then (ctor Option.some [Nat] (prim subtract value 48 : Nat)) else (if ((97 <=? value) && (value <=? 102)) then (ctor Option.some [Nat] ((prim subtract value 97 : Nat) + 10)) else (ctor Option.none [Nat])))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: readHexByte,
+  parameters: [bytes : Bytes, offset : Nat],
+  result: (Option Nat),
+  body: (match (readNibble bytes offset)
+    | Option.none => (ctor Option.none [Nat])
+    | Option.some high => (match (readNibble bytes (offset + 1))
+      | Option.none => (ctor Option.none [Nat])
+      | Option.some low => (ctor Option.some [Nat] ((prim multiply high 16 : Nat) + low)))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
   name: readWord,
   parameters: [bytes : Bytes, offset : Nat],
   result: (Option Nat),
-  body: (match (byteAsNat bytes (offset + 0))
+  body: (match (readHexByte bytes (offset + 0))
     | Option.none => (ctor Option.none [Nat])
-    | Option.some b0 => (match (byteAsNat bytes (offset + 1))
+    | Option.some b0 => (match (readHexByte bytes (offset + 2))
       | Option.none => (ctor Option.none [Nat])
-      | Option.some b1 => (match (byteAsNat bytes (offset + 2))
+      | Option.some b1 => (match (readHexByte bytes (offset + 4))
         | Option.none => (ctor Option.none [Nat])
-        | Option.some b2 => (match (byteAsNat bytes (offset + 3))
+        | Option.some b2 => (match (readHexByte bytes (offset + 6))
           | Option.none => (ctor Option.none [Nat])
           | Option.some b3 => (ctor Option.some [Nat] (b0 + ((prim multiply b1 256 : Nat) + ((prim multiply b2 65536 : Nat) + (prim multiply b3 16777216 : Nat))))))))),
   axioms: [Quot.sound, propext]
@@ -120,7 +142,7 @@ definition{
     | Nat.zero => (record DecodedWords {value := acc, valid := (offset =? (prim length bytes : Nat))})
     | Nat.succ less => (if (offset =? (prim length bytes : Nat)) then (record DecodedWords {value := acc, valid := true}) else (match (readWord bytes offset)
       | Option.none => (record DecodedWords {value := acc, valid := false})
-      | Option.some head => (decodeWords bytes (offset + 4) less (prim append acc (cons head (nil Nat)) : (List Nat)))))),
+      | Option.some head => (decodeWords bytes (offset + 8) less (prim append acc (cons head (nil Nat)) : (List Nat)))))),
   axioms: [Quot.sound, propext],
   recursive_argument: fuel
 }
@@ -347,7 +369,7 @@ definition{
   name: dispatchComposition,
   parameters: [bytes : Bytes],
   result: Bytes,
-  body: (if (16384 <? (prim length bytes : Nat)) then 0x636f6d706f736974696f6e546f6f4c61726765 else (let decoded : DecodedWords := (decodeWords bytes 0 (prim length bytes : Nat) (nil Nat)); (if (project decoded valid) then (dispatchWords (project decoded value)) else 0x6d616c666f726d6564436f6d706f736974696f6e))),
+  body: (if (32768 <? (prim length bytes : Nat)) then 0x636f6d706f736974696f6e546f6f4c61726765 else (let decoded : DecodedWords := (decodeWords bytes 0 (prim length bytes : Nat) (nil Nat)); (if (project decoded valid) then (dispatchWords (project decoded value)) else 0x6d616c666f726d6564436f6d706f736974696f6e))),
   axioms: [Quot.sound, propext]
 }
 
@@ -355,7 +377,7 @@ definition{
   name: boundary,
   parameters: [],
   result: String,
-  body: "Composition wire v1 is compose followed by one ASCII space and little-endian unsigned 32-bit words. Policy is CPU, memory, grants list, targets list, evidence list. Each list begins with its item count. Then comes the feature count and features: key, version, CPU, memory; vocabulary, outputs, state, events, errors, effects, conflicts, targets, accessibility and quality ID lists; dependency key/version pairs; input producer-key/version/schema triples. Maximum payload is 16384 bytes, 32 features, 64 entries per list. Truncation, excess counts and trailing words return malformedComposition; oversized payload returns compositionTooLarge. No semantics are decided by the browser codec. Admission errors and accepted are the generated model result. The wire bounds are not runtime resource budgets."
+  body: "Composition wire v1 is compose followed by one ASCII space and lowercase hexadecimal octets of little-endian unsigned 32-bit words. Each word is eight ASCII characters so the text view preserves every request byte. Uppercase and nonhexadecimal characters refuse. Policy is CPU, memory, grants list, targets list, evidence list. Each list begins with its item count. Then comes the feature count and features: key, version, CPU, memory; vocabulary, outputs, state, events, errors, effects, conflicts, targets, accessibility and quality ID lists; dependency key/version pairs; input producer-key/version/schema triples. Maximum payload is 32768 ASCII bytes representing at most 16384 decoded bytes, 32 features, 64 entries per list. Truncation, excess counts and trailing words return malformedComposition; oversized payload returns compositionTooLarge. No semantics are decided by the browser codec. Admission errors and accepted are the generated model result. The wire bounds are not runtime resource budgets."
 }
 
 inductive{
