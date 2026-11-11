@@ -247,7 +247,7 @@ definition{
   name: byteAsNat,
   parameters: [bytes : Bytes, offset : Nat],
   result: (Option Nat),
-  body: (match (Foundation.Bytes::byteAt bytes offset)
+  body: (match (prim index bytes offset : (Option UInt8))
     | Option.none => (ctor Option.none [Nat])
     | Option.some value => (ctor Option.some [Nat] (prim to_nat value : Nat))),
   axioms: [Quot.sound, propext]
