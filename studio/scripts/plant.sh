@@ -17,6 +17,7 @@
 #   ./scripts/plant.sh shadcn    # change one class in a vendored shadcn component: the components gate must refuse
 #   ./scripts/plant.sh table     # invert a condition mask in the decision table: the Table gate must refuse
 #   ./scripts/plant.sh edit      # keep a patch that does not check: the Edit gate must refuse
+#   ./scripts/plant.sh look      # let the build screen fall back to the home look: the Build look check must refuse
 # `hole` runs the Contract gate, which bundles the vendored contracts with the renderer's own esbuild,
 # so run it where those dependencies were installed for this platform -- otherwise esbuild refuses to
 # start and the gate looks like it fired when it never ran.
@@ -26,7 +27,7 @@ cd "$ROOT"
 LX="${FORGE_LANE_WORK:-$HOME/.cache/hologram-forge-lane}/PrismPM/target/release/lexlean"
 export PATH="$HOME/.cargo/bin:$HOME/.elan/bin:$PATH"
 
-restore() { git reset -q -- shell/index.html 2>/dev/null; git checkout -q -- tools/author.py tools/model_workspace.py model/corpus.json model/publish.json model/objects/publish/hello.holo core/src/holo/archive.rs shell/index.html src/Forge.lex.tex src/Workspace.lex.tex lexlean.lock shell/brand.css shell/appearance.css shell/host.js vendor/hologram-brand-kit/tokens/hologram-tokens.json 2>/dev/null; python3 tools/author.py >/dev/null; "$LX" lock >/dev/null 2>&1 || true; }
+restore() { git reset -q -- shell/index.html 2>/dev/null; git checkout -q -- tools/author.py tools/model_workspace.py model/corpus.json model/publish.json model/objects/publish/hello.holo core/src/holo/archive.rs shell/index.html src/Forge.lex.tex src/Workspace.lex.tex lexlean.lock shell/brand.css shell/appearance.css shell/appearance.js shell/host.js vendor/hologram-brand-kit/tokens/hologram-tokens.json 2>/dev/null; python3 tools/author.py >/dev/null; "$LX" lock >/dev/null 2>&1 || true; }
 expect_fail() { if "$@" >/tmp/plant.log 2>&1; then echo "GATE DID NOT FIRE: $*"; tail -5 /tmp/plant.log; restore; exit 1; else echo "gate fired as it must: $*"; grep -m1 -E "error|violat|differ|drift|FAILED|panicked" /tmp/plant.log || tail -2 /tmp/plant.log; fi; }
 
 case "${1:-}" in
@@ -122,7 +123,13 @@ EOF
     sed -i 's/      if (!verdict.ok) return/      if (false) return/' shell/live/edit.mjs
     expect_fail node tools/live_edit.mjs --check
     cp /tmp/plant-edit.mjs shell/live/edit.mjs ;;
-  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|table|edit" >&2; exit 2 ;;
+  look)
+    # The build screen, with no look chosen there, borrowing the home look (Immersive, or Light) instead of
+    # opening Dark: the default the user asked for, quietly gone, and every screen still draws.
+    perl -pi -e 's/readJson\(BUILD_KEY\) \|\| \{ palette: "dark", immersive: false \}/readJson(BUILD_KEY) || home/' shell/appearance.js
+    grep -q 'readJson(BUILD_KEY) || home;' shell/appearance.js || { echo "anchor not found"; exit 1; }
+    expect_fail node tools/build_look.mjs ;;
+  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|table|edit|look" >&2; exit 2 ;;
 esac
 restore
 echo "restored"
