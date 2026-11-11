@@ -911,7 +911,7 @@ async function chatTurn(chatId, intent) {
       const warmHit = await lookup(warmBody);
       if (warmHit.hit) { await onText(warmHit.text); provenance = { receipt: warmHit.receipt, served: true, fingerprint: warmHit.fingerprint, warm: true }; }
       else {
-        const { text, rec } = await paidGenerate(warmBody, (t) => { onText(t); }, abort.signal);
+        const { text, rec } = await paidGenerate(warmBody, (t) => onText(t), abort.signal);
         await onText(text);
         provenance = { receipt: await sealPaid(warmBody, rec, warmHit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost, warm: true };
       }
@@ -919,7 +919,7 @@ async function chatTurn(chatId, intent) {
       // Until the answer starts, the model's reasoning shows in Dyad's open Thinking block; the answer
       // replaces it, so the saved message, the history and the rules read only what the model answered.
       const thinking = (r) => onText("<think>" + r.replace(/<(\/?)(dyad|think)/g, "＜$1$2"));
-      const { text, rec } = await paidGenerate(body, (t) => { onText(t); }, abort.signal, thinking);
+      const { text, rec } = await paidGenerate(body, (t) => onText(t), abort.signal, thinking);
       await onText(text);
       // An answer cut at the token limit is not sealed, so the same request is never served it again.
       provenance = rec.finish === "length" ? { cut: true } : { receipt: await sealPaid(body, rec, hit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost };

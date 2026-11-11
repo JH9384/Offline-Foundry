@@ -28,3 +28,19 @@ already submitted may continue and incur charges. This feature does not complete
 permission/disclosure governance, offline local-model qualification, or general
 intent routing. Complete acceptance still requires the locked SDK and Studio
 checks on the feature revision.
+
+## Mutation and browser evidence
+
+Removing the deadline race left an abort-ignoring transport unresolved and hit
+the mutation harness's five-second process limit. Silently skipping malformed
+JSON initially survived because the original negative fixture had no subsequent
+valid answer. The strengthened fixture inserts malformed JSON before an otherwise
+complete valid answer; that mutation now fails the full eight-test suite.
+Removing the DONE requirement also fails that suite. All mutations were restored.
+
+A real Chromium session sends synthetic requests to a local HTTP server through
+the shipped adapter. Successful Unicode streaming passes; a stalled body times
+out and a second request is cancelled after headers. The server observes both
+connections close. CI runs this browser check with the locked renderer's
+Playwright dependency. Callback promises are awaited, so asynchronous consumer
+errors are typed and stream production respects consumer progress.

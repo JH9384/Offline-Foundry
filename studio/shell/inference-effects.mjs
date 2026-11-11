@@ -1,5 +1,18 @@
 // Typed cloud transport for FoundrySpecification.inferenceEffectsBoundary.
-const fault = code => Object.assign(new Error(`Cloud inference refused: ${code}`), { code });
+const messages = {
+  invalidInferenceRequest: "The cloud request is invalid or exceeds the size limit",
+  inferenceCancelled: "Cloud response stopped; submitted inference may continue and incur charges",
+  inferenceTimedOut: "The cloud response timed out; submitted inference may continue and incur charges",
+  inferenceNetworkFailed: "The cloud connection failed",
+  inferenceUnauthorized: "The provider requires a valid API key",
+  inferencePaymentRequired: "The provider requires available credit",
+  inferenceRateLimited: "The provider is busy; try again later",
+  inferenceProviderFailed: "The provider could not complete this response",
+  malformedInferenceResponse: "The provider returned an incomplete or invalid response",
+  inferenceResponseTooLarge: "The cloud response exceeded the size limit",
+  inferenceConsumerFailed: "The response could not be displayed or saved",
+};
+const fault = code => Object.assign(new Error(messages[code]), { code });
 const codes = new Set(["invalidInferenceRequest", "inferenceCancelled", "inferenceTimedOut", "inferenceNetworkFailed", "inferenceUnauthorized", "inferencePaymentRequired", "inferenceRateLimited", "inferenceProviderFailed", "malformedInferenceResponse", "inferenceResponseTooLarge", "inferenceConsumerFailed"]);
 const endpoints = { openrouter: "https://openrouter.ai/api/v1/chat/completions", featherless: "https://api.featherless.ai/v1/chat/completions" };
 export async function cloudCompletion({ provider, key, bytes, origin, signal, onDelta, onReasoning }, { fetch = globalThis.fetch, timeoutMs = 600000, retryMs = 5000 } = {}) {
@@ -15,7 +28,7 @@ export async function cloudCompletion({ provider, key, bytes, origin, signal, on
     timer = setTimeout(() => stop("inferenceTimedOut"), timeoutMs);
   });
   const check = () => { if (!active || signal?.aborted) throw interrupted ?? fault("inferenceCancelled"); };
-  const notify = (callback, value) => { check(); if (callback) { try { callback(value); } catch { throw fault("inferenceConsumerFailed"); } } };
+  const notify = async (callback, value) => { check(); if (callback) { try { await callback(value); } catch { throw fault("inferenceConsumerFailed"); } } check(); };
   const readBytes = async (response, maximum, consume) => {
     if (!response.body || typeof response.body.getReader !== "function") throw fault("malformedInferenceResponse");
     reader = response.body.getReader(); let total = 0;
@@ -25,7 +38,7 @@ export async function cloudCompletion({ provider, key, bytes, origin, signal, on
       if (!(item.value instanceof Uint8Array)) throw fault("malformedInferenceResponse");
       total += item.value.byteLength;
       if (total > maximum) throw fault("inferenceResponseTooLarge");
-      consume(item.value);
+      await consume(item.value);
     }
     reader.releaseLock(); reader = null;
   };
@@ -44,14 +57,14 @@ export async function cloudCompletion({ provider, key, bytes, origin, signal, on
       try { await readBytes(response, 65536, bytes => { errorText += decoder.decode(bytes, { stream: true }); }); errorText += decoder.decode(); }
       catch (error) { if (codes.has(error?.code)) throw error; throw fault("malformedInferenceResponse"); }
       if (!/concurren/i.test(errorText)) throw fault("inferenceRateLimited");
-      notify(onReasoning, `Waiting for a free slot on the shared Featherless plan, ${attempt * retryMs / 1000} s…`);
+      await notify(onReasoning, `Waiting for a free slot on the shared Featherless plan, ${attempt * retryMs / 1000} s…`);
       await new Promise(resolve => { pauseTimer = setTimeout(resolve, retryMs); }); check();
     }
     if (!/^text\/event-stream(?:\s*;|$)/i.test(response.headers.get("content-type") || "")) throw fault("malformedInferenceResponse");
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let pending = "", data = [], frameLength = 0, text = "", thought = "", finish = null, last = null, first = null, done = false;
     const started = performance.now();
-    const frame = () => {
+    const frame = async () => {
       if (!data.length) return;
       const payload = data.join("\n"); data = []; frameLength = 0;
       if (payload === "[DONE]") { if (done) throw fault("malformedInferenceResponse"); done = true; return; }
@@ -77,21 +90,21 @@ export async function cloudCompletion({ provider, key, bytes, origin, signal, on
           finish = choice.finish_reason;
         }
         const reasoning = delta.reasoning || delta.reasoning_content;
-        if (reasoning && !text) { thought += reasoning; notify(onReasoning, thought); }
-        if (delta.content) { if (first === null) first = performance.now() - started; text += delta.content; notify(onDelta, text); }
+        if (reasoning && !text) { thought += reasoning; await notify(onReasoning, thought); }
+        if (delta.content) { if (first === null) first = performance.now() - started; text += delta.content; await notify(onDelta, text); }
       }
       last = chunk;
     };
-    const line = raw => {
+    const line = async raw => {
       if (raw.length > 65536) throw fault("inferenceResponseTooLarge");
       const value = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-      if (!value) { frame(); return; }
+      if (!value) { await frame(); return; }
       if (value.startsWith("data:")) { const part = value.slice(5).replace(/^ /, ""); frameLength += part.length; if (frameLength > 65536) throw fault("inferenceResponseTooLarge"); data.push(part); }
     };
     try {
-      await readBytes(response, 8 * 1024 * 1024, bytes => {
+      await readBytes(response, 8 * 1024 * 1024, async bytes => {
         pending += decoder.decode(bytes, { stream: true });
-        let at; while ((at = pending.indexOf("\n")) >= 0) { line(pending.slice(0, at)); pending = pending.slice(at + 1); }
+        let at; while ((at = pending.indexOf("\n")) >= 0) { await line(pending.slice(0, at)); pending = pending.slice(at + 1); }
         if (pending.length > 65536) throw fault("inferenceResponseTooLarge");
       });
       pending += decoder.decode();

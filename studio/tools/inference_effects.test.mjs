@@ -49,7 +49,7 @@ test("cancellation aborts work and late provider data cannot invoke callbacks", 
   await new Promise(r => setTimeout(r, 0)); assert.equal(deltas, 0);
 });
 test("malformed, incomplete, oversized and failed streams cannot become successful answers", async () => {
-  const bad = ["data: broken\n\n", valid.replace("data: [DONE]\n\n", ""), valid.replace('"content":"hello 🌱"', '"content":17'), valid.replace('"finish_reason":"stop"', '"finish_reason":"content_filter"'), valid + event(chunk({ content: "late" })), valid.replace('"completion_tokens":2', '"completion_tokens":-1')];
+  const bad = ["data: broken\n\n", "data: broken\n\n" + valid, valid.replace("data: [DONE]\n\n", ""), valid.replace('"content":"hello 🌱"', '"content":17'), valid.replace('"finish_reason":"stop"', '"finish_reason":"content_filter"'), valid + event(chunk({ content: "late" })), valid.replace('"completion_tokens":2', '"completion_tokens":-1')];
   for (const text of bad) await assert.rejects(execute(text), code("malformedInferenceResponse"));
   await assert.rejects(execute("data: " + "x".repeat(65537)), code("inferenceResponseTooLarge"));
   await assert.rejects(execute(": heartbeat\n\n".repeat(700000)), code("inferenceResponseTooLarge"));
@@ -58,7 +58,7 @@ test("malformed, incomplete, oversized and failed streams cannot become successf
   await assert.rejects(execute(event({ error: { message: "private" } })), code("inferenceProviderFailed"));
   await assert.rejects(cloudCompletion(request, { fetch: async () => new Response(valid) }), code("malformedInferenceResponse"));
   await assert.rejects(cloudCompletion(request, { fetch: async () => new Response(Uint8Array.of(255), { headers: { "content-type": "text/event-stream" } }) }), code("malformedInferenceResponse"));
-  await assert.rejects(cloudCompletion({ ...request, onDelta: () => { throw Error("private"); } }, { fetch: async () => response(valid) }), code("inferenceConsumerFailed"));
+  for (const onDelta of [() => { throw Error("private"); }, async () => { throw Error("private"); }]) await assert.rejects(cloudCompletion({ ...request, onDelta }, { fetch: async () => response(valid) }), code("inferenceConsumerFailed"));
 });
 test("bounded Featherless concurrency retries preserve the same request and can succeed", async () => {
   const calls = []; let messages = 0;

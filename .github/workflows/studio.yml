@@ -62,6 +62,7 @@ jobs:
         run: |
           node tools/snapshot_restore_browser.mjs
           node tools/rules_source_browser.mjs
+          node tools/inference_effects_browser.mjs
       - name: Every shell script parses the way the browser parses it
         run: node tools/shell_parse.mjs
       - name: The kernel in the shell is the holo KERNEL_REV pins, and every vector replays
