@@ -127,3 +127,24 @@ jobs:
 
       - name: Browser acceptance and tamper rejection
         run: node tools/browser_release.mjs
+
+      # An independently verified local-installable snapshot, never a deployment.
+      # Preserve file names and bytes inside the tar archive; the macOS operator
+      # independently rechecks all formal and delivery hashes before installing.
+      - name: Archive verified offline shell for local use
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C studio -czf "$RUNNER_TEMP/offline-foundry-shell.tar.gz" shell
+          shasum -a 256 "$RUNNER_TEMP/offline-foundry-shell.tar.gz" > "$RUNNER_TEMP/offline-foundry-shell.tar.gz.sha256"
+          test -s "$RUNNER_TEMP/offline-foundry-shell.tar.gz"
+
+      - name: Upload verified offline shell artifact (not deployment)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: offline-foundry-shell-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/offline-foundry-shell.tar.gz
+            ${{ runner.temp }}/offline-foundry-shell.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
