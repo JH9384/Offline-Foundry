@@ -386,7 +386,7 @@ async function positive() {
           await editorPage.addScriptTag({
             url: `${origin}${prefix}runtime/monaco/vs/loader.js`,
           });
-          const monacoTest = await editorPage.evaluate(async base => {
+          const monacoTest = await editorPage.evaluate(async ({base,appId}) => {
             if (typeof window.require?.config !== 'function') {
               throw new Error('Locally staged Monaco AMD loader missing');
             }
@@ -402,30 +402,51 @@ async function positive() {
             if (typeof window.monaco?.editor?.create !== 'function') {
               throw new Error('Monaco editor API not loaded');
             }
+            const ipc = window.electron?.ipcRenderer;
+            if (!ipc) throw new Error('Browser project IPC unavailable in editor');
+            const filePath = 'src/main.tsx';
+            const original = await ipc.invoke('read-app-file', {appId,filePath});
+            const before = await ipc.invoke('app:get-current-commit-hash', {appId});
             const container = document.createElement('div');
             container.style.cssText = 'position:fixed;left:0;top:0;width:600px;height:320px;z-index:1000';
             document.body.append(container);
             const editor = window.monaco.editor.create(container, {
-              value: 'const result = 40;',
-              language: 'typescript',
+              value: original, language: 'typescript',
               automaticLayout: false,
             });
             try {
-              editor.setPosition({lineNumber:1,column:18});
-              editor.trigger('offline-acceptance', 'type', {text:' + 2'});
-              const value = editor.getValue();
-              if (value !== 'const result = 40 + 2;') {
-                throw new Error('Monaco edit did not update the model: ' + value);
+              const model = editor.getModel();
+              const lastLine = model.getLineCount();
+              editor.setPosition({lineNumber:lastLine,column:model.getLineMaxColumn(lastLine)});
+              editor.trigger('offline-acceptance', 'type', {text:'\n// Edited using offline Monaco'});
+              const edited = editor.getValue();
+              if (!edited.endsWith('\n// Edited using offline Monaco')) {
+                throw new Error('Monaco did not modify project source');
               }
-              return {model:value, language:editor.getModel().getLanguageId()};
+              await ipc.invoke('edit-app-file', {appId,filePath,content:edited});
+              const after = await ipc.invoke('app:get-current-commit-hash', {appId});
+              const stored = await ipc.invoke('read-app-file', {appId,filePath});
+              if (!before || !after || before === after || stored !== edited) {
+                throw new Error('Monaco project edit was not versioned and saved');
+              }
+              return {appId,filePath,edited,after,language:model.getLanguageId()};
             } finally {
               editor.dispose(); container.remove();
             }
-          }, `${origin}${prefix}runtime/monaco/vs`);
+          }, {base:`${origin}${prefix}runtime/monaco/vs`,appId:project.appId});
+          await editorPage.reload({waitUntil:'load',timeout:30000});
+          await editorPage.waitForFunction(() => !!window.electron?.ipcRenderer, null, {timeout:30000});
+          const persistedMonaco = await editorPage.evaluate(async ({appId,filePath,edited,after}) => {
+            const ipc = window.electron.ipcRenderer;
+            const saved = await ipc.invoke('read-app-file', {appId,filePath});
+            const version = await ipc.invoke('app:get-current-commit-hash', {appId});
+            return saved === edited && version === after;
+          }, monacoTest);
+          if (!persistedMonaco) throw new Error('Monaco project edit lost after offline reload');
           if (outgoing.length) {
             throw new Error('Monaco editor attempted outbound requests: ' + outgoing.join('; '));
           }
-          console.log('  Local Monaco TypeScript editing offline: PASS', JSON.stringify(monacoTest));
+          console.log('  Local Monaco project edit/version/reload offline: PASS', JSON.stringify({appId:monacoTest.appId,filePath:monacoTest.filePath,language:monacoTest.language}));
         } finally {
           await editorPage.close();
         }
