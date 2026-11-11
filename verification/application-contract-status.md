@@ -105,3 +105,9 @@ adding current main reword behavior. All 114 embedded, 26 composition, 30 work
 and five reword cases pass in document/worker contexts. New component
 reproduction and full feature CI are pending; the earlier reproduction receipt
 remains evidence for the earlier work-protocol artifact only.
+
+FA-24 component reproduction is now qualified: independent signed runs
+43033504480 and 43035286261 from `686c09b89757fa3a924dd71bd17e53dd43509a73`
+produced byte-identical 385046-byte archives. Both signatures bind the exact
+source and build workflow. The current `kernel-reproduction.json` and bundle
+record this component result; full application reproducibility remains open.

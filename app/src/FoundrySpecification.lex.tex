@@ -547,5 +547,19 @@ definition{
   result: String,
   body: "Rename captures current source, prepares a snapshot with the new name and current parent, and commits metadata, snapshot, reference and version together only while captured source still matches. Checkout and revert validate all snapshot and file identities before touching the project, compare the captured source in the committing transaction, restore name and snapshot-bound direct dependencies, and invalidate source-bound proof status. Checkout selects the exact validated target reference without adding a history entry; revert creates one child of the previously current reference containing target files. Deletion removes app, its files, main and proof references, versions and dependent chats in one transaction while retaining shared content-addressed objects. Persistent allocation high-water marks prevent subsequent automatic app/chat ID reuse after deletion, including legacy records. Import refuses an allocation at or below the persisted mark and advances marks in its committing transaction. Chat updates require both the chat and its owning app in one transaction and return false after deletion, so late generation cannot resurrect deleted records. Missing projects, malformed lifecycle arguments and storage errors have typed fixed public refusals; edit conflicts and snapshot validation errors retain their existing types. Storage failure aborts the transaction. This is browser-local lifecycle consistency, not authenticated ownership, garbage collection, cross-device identity or a whole-product release claim."
 }
+
+inductive{
+  name: BuildSourceError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [{name: buildSourceMismatch, fields: []}, {name: buildSourceChanged, fields: []}]
+}
+
+definition{
+  name: snapshotBuildBoundary,
+  parameters: [],
+  result: String,
+  body: "Preview and portable publication capture project name, main reference, files and direct dependency metadata in one transaction. They independently validate the snapshot and every file object using the existing restoration identity and generated-core admission boundary, then require exact name and file-byte agreement with captured source and exact dependency agreement with the snapshot declaration. Build adapters consume that captured source rather than rereading each file or metadata. Before promoting a current preview or installing a portable archive they compare current source against the capture; a change refuses with buildSourceChanged. Identity, basis and storage failures retain existing snapshot and project error types; disagreement uses buildSourceMismatch. A captured snapshot containing prism/spec.json always takes the Prism rule publication route, irrespective of whether cached rule state exists or is valid, so invalidation cannot bypass proof publication. The portable receipt names the captured project and reference. This qualifies source coherence and publication routing, not transitive package integrity, browser compiler preservation, atomic coordination between CacheStorage and IndexedDB, or complete live release acceptance."
+}
 \end{semanticmodule}
 \end{lexlean}

@@ -1,3 +1,4 @@
+import { captureBuildSource, assertBuildSourceCurrent, requiresRulePublication } from "./build-source.mjs";
 import { applyStoredProjectPatch, assertGenerationActive } from "./generation-patch.mjs";
 import { editStoredProject, captureProjectSource } from "./project-edit.mjs";
 import { loadProjectScaffold, prepareNewProject, createStoredProject, createStoredChat } from "./project-creation.mjs";
@@ -398,20 +399,24 @@ async function grantPreview(id, endpoints) {
   await put("refs", "capabilities:" + id, { serve: true, network: { endpoints: [...endpoints], denied: [] } });
 }
 
+async function verifiedBuildSource(appId) {
+  return captureBuildSource(await dbReady, appId, {
+    readObject: key => get("objects", key), derive: kappa,
+    admit: async (derived, expected) => core.run({ op: "restore", derived, expected }).decision === "Accept",
+  });
+}
 async function buildPreview(appId) {
   await coreReady;
-  const head = await get("refs", appId + ":main");
-  const { path } = core.run({ op: "preview", kappa: head });
+  const source = await verifiedBuildSource(appId);
+  const { path } = core.run({ op: "preview", kappa: source.reference });
   const appUrl = new URL(path.slice(1), BASE);
   const owner = await get("apps", appId);
   await grantPreview(previewId(appUrl.pathname), Array.isArray(owner && owner.grants) ? owner.grants : PREVIEW_ENDPOINTS);
-  const files = new Map();
-  for (const p of await filesOf(appId)) files.set(p, await get("files", appId + ":" + p));
+  const files = new Map(source.files);
   const pkg = await (await fetch(new URL("scaffold/package.json", BASE))).json();
   const pkgs = Object.fromEntries(Object.entries(pkg.dependencies).map(([n, v]) => [n, v.replace(/^[\^~]/, "")]));
   // Packages the model added with <dyad-add-dependency>: name or name@version, resolved by esm.sh.
-  const app = await get("apps", appId);
-  for (const d of app.extraDeps || []) { const at = d.lastIndexOf("@"); if (at > 0) pkgs[d.slice(0, at)] = d.slice(at + 1); else pkgs[d] = ""; }
+  for (const d of source.dependencies) { const at = d.lastIndexOf("@"); if (at > 0) pkgs[d.slice(0, at)] = d.slice(at + 1); else pkgs[d] = ""; }
   const react = pkgs.react, dom = pkgs["react-dom"];
   const imports = { react: `https://esm.sh/react@${react}`, "react/": `https://esm.sh/react@${react}/`, "react-dom": `https://esm.sh/react-dom@${dom}?external=react`, "react-dom/": `https://esm.sh/react-dom@${dom}&external=react/` };
   for (const [n, v] of Object.entries(pkgs)) { if (n === "react" || n === "react-dom") continue; const at = v ? "@" + v : ""; imports[n] = `https://esm.sh/${n}${at}?external=react,react-dom`; imports[n + "/"] = `https://esm.sh/${n}${at}&external=react,react-dom/`; }
@@ -449,6 +454,7 @@ async function buildPreview(appId) {
 <script src="https://cdn.tailwindcss.com"><\/script>
 <style>${css}</style></head><body><div id="root"></div>
 <script type="module">${js}<\/script></body></html>`;
+  await assertBuildSourceCurrent(await dbReady, appId, source);
   const cache = await caches.open("previews");
   await cache.put(appUrl.pathname + "index.html", new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } }));
   return { appUrl: appUrl.href, bytes: js.length };
@@ -1261,15 +1267,14 @@ function dispatch(channel, args) {
 // under holoPath(κ) for the worker, and offered as one link and one download. The core decides first:
 // the shell closure of this page must be the closure the lane recorded beside the core, and the
 // lane's attestation must be present; otherwise the View's refusal word and an audit row.
-async function buildPortable(appId) {
+async function buildPortable(appId, captured) {
   await coreReady;
+  const source = captured || await verifiedBuildSource(appId);
   const t0 = performance.now();
-  const files = new Map();
-  for (const p of await filesOf(appId)) files.set(p, await get("files", appId + ":" + p));
+  const files = new Map(source.files);
   const pkg = await (await fetch(new URL("scaffold/package.json", BASE))).json();
   const pkgs = Object.fromEntries(Object.entries(pkg.dependencies).map(([n, v]) => [n, v.replace(/^[\^~]/, "")]));
-  const app = await get("apps", appId);
-  for (const d of app.extraDeps || []) { const at = d.lastIndexOf("@"); if (at > 0) pkgs[d.slice(0, at)] = d.slice(at + 1); else pkgs[d] = ""; }
+  for (const d of source.dependencies) { const at = d.lastIndexOf("@"); if (at > 0) pkgs[d.slice(0, at)] = d.slice(at + 1); else pkgs[d] = ""; }
   // Every package resolves to one esm.sh URL and is fetched once; react and react-dom are external
   // to every other package so one React is bundled; the output is one script with no imports left.
   const urlOf = (name) => {
@@ -1333,7 +1338,8 @@ async function buildPortable(appId) {
   const compilePage = head + ` tailwind = { config: ${tailwindConfig} };<\/script>\n<script src="https://cdn.tailwindcss.com"><\/script>\n<div hidden id="tw-candidates" class="${candidates.replace(/"/g, "")}"></div>\n` + body;
   const tailwindCss = await compileTailwind(compilePage);
   const html = head + `<\/script>\n<style>${tailwindCss}</style>\n` + body;
-  return { html, modules: fetched.size, jsBytes: js.length, cssBytes: css.length, tailwindBytes: tailwindCss.length, ms: Math.round(performance.now() - t0) };
+  await assertBuildSourceCurrent(await dbReady, appId, source);
+  return { html, sourceReference: source.reference, modules: fetched.size, jsBytes: js.length, cssBytes: css.length, tailwindBytes: tailwindCss.length, ms: Math.round(performance.now() - t0) };
 }
 // Runs inside the compile frame. The frame is a preview address, so the worker serves it in a CSP
 // sandbox with an opaque origin and the host cannot read its document: the frame reports instead,
@@ -1404,26 +1410,17 @@ handlers.set("holo:publish", async ({ appId }) => {
   const closure = manifest.closure, built = provenance ? provenance.browser_projection_sha256 || "" : "";
   const attestation = provenance && provenance.attestation_id ? provenance.attestation_id : null;
   const { decision } = core.run({ op: "publish-decision", closure, built, attestation });
-  const app = await get("apps", appId);
-  const version = await get("refs", appId + ":main");
+  const captured = await verifiedBuildSource(appId);
+  const app = { name: captured.name }, version = captured.reference;
   const row = (outcome, resource) => put("audit", Date.now() + ":publish:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "holo.application.publish", resource, outcome });
   if (decision !== "Accept") { await row("refused", version || ""); return { decision, word: words.publishRefusedLabel, closure, built, attestation }; }
-  // An app with rules publishes only proved rules: the kernel's answer to `<phase> publish`. The View
-  // then carries the rules and Lean's record beside the page, at prism/spec.json and prism/proof.json.
-  const rules = await rulesOf(appId);
-  const ruleFiles = [];
-  // An app with rules is published with the Prism SDK, through the chat ("publish", publishTurn), so the
-  // holo's guest is its rules compiled; this route is for apps that decide nothing.
-  if (rules && rules.spec) { await row("refused", version || ""); return { decision: "Chat", word: "This app has rules, so it is built with the Prism SDK: say publish in the chat.", closure, built, attestation }; }
-  if (rules) {
-    if ((await nextPhase(rules.phase, "publish")) !== "published") {
-      await row("refused", version || "");
-      return { decision: "Refuse", word: `Publishing waits for proved rules. These rules are ${rules.phase === "checked" ? "checked, not yet proved: reply approve in the chat" : rules.phase}.`, closure, built, attestation };
-    }
-    ruleFiles.push({ path: "prism/spec.json", bytes: enc.encode(JSON.stringify(rules.spec, null, 2) + "\n") }, { path: "prism/proof.json", bytes: enc.encode(JSON.stringify(rules.proof, null, 2) + "\n") });
+  // Cached proof status can be absent after an edit; source determines the publication route.
+  if (requiresRulePublication(captured)) {
+    await row("refused", version);
+    return { decision: "Chat", word: "This app has rules, so it is built with the Prism SDK: say publish in the chat.", closure, built, attestation };
   }
-  const page = await buildPortable(appId);
-  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }, ...ruleFiles]);
+  const page = await buildPortable(appId, captured);
+  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }]);
   const guest = new Uint8Array(await (await fetch(new URL("core.wasm", BASE), { cache: "no-store" })).arrayBuffer());
   const model = core.run({ op: "publish-preimage", application: app.name, version, closure, attestation }).bytes;
   const modelBytes = enc.encode(model);
@@ -1437,9 +1434,9 @@ handlers.set("holo:publish", async ({ appId }) => {
   const bytes = unb64(composed.bytes);
   const address = await kappa(bytes);
   if (address !== composed.identities.archive_kappa) throw new Error("the page's address of the archive differs from PrismPM's: " + address);
+  await assertBuildSourceCurrent(await dbReady, appId, captured);
   const done = await install(bytes, { appId, application: app.name, version });
   await row("granted", address);
-  if (rules) await saveRules(appId, { ...rules, phase: await nextPhase(rules.phase, "publish"), publishedAs: address, updated: now() });
   const record = { application: app.name, version, closure, attestation, provenance: prov, identities: composed.identities, directory: composed.directory, byteLength: bytes.length, modelId, viewBytes: view.length, guestBytes: guest.length };
   lastPublish = { record, bytes, guest, view, model: modelBytes, source: sourceBytes, page };
   return { decision, kappa: address, url: done.url, byteLength: bytes.length, viewBytes: view.length, guestBytes: guest.length, ms: Math.round(performance.now() - t0), buildMs: page.ms, composeMs, installMs: done.ms, modules: page.modules, jsBytes: page.jsBytes, cssBytes: page.cssBytes, tailwindBytes: page.tailwindBytes, identities: composed.identities, record };

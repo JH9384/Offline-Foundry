@@ -160,6 +160,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-09` | `build` | Rule status and asynchronous proof or publication completion remain bound to the current rule source |
 
+## snapshot-bound-builds
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-26` | `build` | Preview and portable publication consume one verified snapshot and cannot bypass rule publication through an absent cache |
+
 ## snapshot-restore
 
 | ID | Level | Statement |
