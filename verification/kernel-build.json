@@ -1,15 +1,15 @@
 {
   "schema": "prism/remote-build/1",
   "repository": "UOR-Foundation/foundry",
-  "sha": "775fa3a16852b6e76b287f7a9f3807843f5fcc43",
-  "run_id": 43007577514,
-  "run_url": "https://github.com/UOR-Foundation/foundry/actions/runs/43007577514",
-  "workflow_ref": "UOR-Foundation/foundry/.github/workflows/build.yml@refs/heads/prism/build/composition-closed-fixtures",
+  "sha": "d3a3bbae7d33098d6da3720464317dd82117ab7d",
+  "run_id": 43017603564,
+  "run_url": "https://github.com/UOR-Foundation/foundry/actions/runs/43017603564",
+  "workflow_ref": "UOR-Foundation/foundry/.github/workflows/build.yml@refs/heads/prism/build/work-protocol",
   "event": "push",
-  "ref": "refs/heads/prism/build/composition-closed-fixtures",
+  "ref": "refs/heads/prism/build/work-protocol",
   "project": "app",
-  "build": "eb33909742d8f7718cffd8f622ed597e3564400982d44e17e2f4bbfe17ab10ce",
+  "build": "82b27538c1da2cb660c6d4da4cb06f190ad2ec8fdac2435a11aa0d5eb31e97ab",
   "holo": "Forge kernel.holo",
-  "fingerprint": "b6b44b8c90c46f8aa138c52d34fac8dbb6a14bcaa864aef0ebbf5db29587dfca",
-  "holo_sha256": "99af77c426735d19a1b467457c037a60aae05596454ba0aefb69320be5ae5c01"
+  "fingerprint": "8bac054c120cd91f6cc25c70ad0035ed06ab6a80c4c963c2e8d8bacf1bf19ce0",
+  "holo_sha256": "22f6782a4f0b36b2b50415ea053a1f6f2b635d2295f5743e15f03c8e0ad2ad99"
 }

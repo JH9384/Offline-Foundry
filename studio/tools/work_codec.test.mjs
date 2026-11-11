@@ -47,4 +47,13 @@ test("every independent corpus vector is embedded in the generated guest accepta
   assert.ok(kernel.includes('\\importmodule{WorkProtocol}'));
   assert.ok(kernel.includes('WorkProtocol::dispatchWork'));
   assert.ok(kernel.includes('responseMaximum := (128 : UInt32)'));
+  const model = fs.readFileSync(new URL("../../app/src/WorkProtocol.lex.tex", import.meta.url), "utf8");
+  assert.equal(model.match(/theorem\{/g).length, 3);
+  for (const [name, label] of [["wrong-owner", "wireRejectsWrongOwner"], ["progress", "wireProgressKeepsAccounting"], ["counter-exhausted", "wireRefusesCounterOverflow"]]) {
+    const start = model.indexOf(`theorem{\n  name: ${label},`);
+    assert.ok(start >= 0); const proof = model.slice(start, model.indexOf("\n}\n", start));
+    const value = vector(name);
+    assert.ok(proof.includes(`statement: ((dispatchWork 0x${Buffer.from(value.request.slice(5)).toString("hex")}) = 0x${Buffer.from(value.response).toString("hex")})`));
+    assert.ok(proof.includes("proof: reflexivity{}")); assert.ok(proof.includes("axioms: [Quot.sound, propext]"));
+  }
 });

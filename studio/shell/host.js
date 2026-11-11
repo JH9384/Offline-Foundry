@@ -1,3 +1,4 @@
+import { executeWorkWithGuest } from "./work-codec.mjs";
 import { validateProviderKey } from "./provider-key-validation.mjs";
 // The browser host: the surface src/preload.ts exposes as window.electron, implemented on the page
 // with no server. Rules come from the generated core (core.wasm: preimage, restore, network, view);
@@ -633,6 +634,7 @@ handlers.set("forge:compose", async (input) => {
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== "features,policy") return { ok: false, code: "malformedComposition", error: "Composition requires policy and features" };
   return admitWithGuest(await kernelReady, input.policy, input.features);
 });
+handlers.set("forge:work", async input => executeWorkWithGuest(await kernelReady, input));
 const PHASES = ["drafting", "checked", "proving", "proved", "published"];
 async function nextPhase(phase, event) {
   const answer = await (await kernelReady).ask(phase + " " + event);

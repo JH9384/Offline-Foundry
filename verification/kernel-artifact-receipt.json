@@ -1,10 +1,18 @@
 {
   "schema": "foundry/kernel-artifact-review/1",
-  "source": "775fa3a16852b6e76b287f7a9f3807843f5fcc43",
-  "run": 43007577514,
-  "artifact": 13849308927,
-  "archiveFingerprint": {"algorithm": "blake3", "profile": "hologram-archive-body", "digest": "b6b44b8c90c46f8aa138c52d34fac8dbb6a14bcaa864aef0ebbf5db29587dfca"},
-  "archiveFile": {"algorithm": "sha256", "profile": "whole-file", "digest": "99af77c426735d19a1b467457c037a60aae05596454ba0aefb69320be5ae5c01"},
+  "source": "d3a3bbae7d33098d6da3720464317dd82117ab7d",
+  "run": 43017603564,
+  "artifact": 13853464282,
+  "archiveFingerprint": {
+    "algorithm": "blake3",
+    "profile": "hologram-archive-body",
+    "digest": "8bac054c120cd91f6cc25c70ad0035ed06ab6a80c4c963c2e8d8bacf1bf19ce0"
+  },
+  "archiveFile": {
+    "algorithm": "sha256",
+    "profile": "whole-file",
+    "digest": "22f6782a4f0b36b2b50415ea053a1f6f2b635d2295f5743e15f03c8e0ad2ad99"
+  },
   "provenance": {
     "verifier": "GitHub CLI 2.103.3",
     "verifierArchiveSha256": "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d",
@@ -17,6 +25,16 @@
     "wrongSource": "refused",
     "changedArchiveByte": "refused"
   },
-  "runtime": {"embeddedVectors": 79, "wireVectors": 26, "maximumPayloadBytes": 32768, "maximumPayloadOutcome": "malformedComposition", "browserContexts": ["document", "dedicated-worker"]},
+  "runtime": {
+    "embeddedVectors": 109,
+    "wireVectors": 26,
+    "maximumPayloadBytes": 32768,
+    "maximumPayloadOutcome": "malformedComposition",
+    "browserContexts": [
+      "document",
+      "dedicated-worker"
+    ],
+    "workWireVectors": 30
+  },
   "claimScope": "Executed qualification of this artifact and the browser adapter; not independent review approval, registry authenticity, R4 routing, or whole-application release acceptance."
 }

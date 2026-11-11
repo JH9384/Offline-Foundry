@@ -9,6 +9,8 @@ const files = new Map([
   ["/kernel/guest.wasm", "../shell/kernel/guest.wasm"],
   ["/composition-codec.mjs", "../shell/composition-codec.mjs"],
   ["/vectors.json", "../../verification/composition-wire-vectors.json"],
+  ["/work-vectors.json", "../../verification/work-wire-vectors.json"],
+  ["/work-codec.mjs", "../shell/work-codec.mjs"],
 ].map(([url, file]) => [url, fs.readFileSync(new URL(file, import.meta.url))]));
 const exercise = async () => {
   const { admitWithGuest } = await import("/composition-codec.mjs");
@@ -26,8 +28,13 @@ const exercise = async () => {
       if (result.ok !== (vector.response === "accepted") || (!result.ok && result.code !== vector.response)) throw Error("composition: " + vector.name);
     }
   }
+  const { executeWorkWithGuest } = await import("/work-codec.mjs");
+  const work = (await (await fetch("/work-vectors.json")).json()).vectors;
+  for (const vector of work) if (await guest.ask(vector.request) !== vector.response) throw Error("work: " + vector.name);
+  const initialized = await executeWorkWithGuest(guest, { kind: "initialize", owner: 7, capacity: 20, remaining: 2 });
+  if (!initialized.ok || initialized.state.owner !== 7 || initialized.state.remaining !== 2) throw Error("work adapter");
   if (await guest.ask("drafting check") !== "checked") throw Error("legacy phase");
-  return { vectors: vectors.length, embedded: guest.vectors, digest: guest.digest };
+  return { vectors: vectors.length, work: work.length, embedded: guest.vectors, digest: guest.digest };
 };
 const workerSource = `importScripts('/kernel.js'); (${exercise.toString()})().then(result => postMessage({result}), error => postMessage({error: String(error)}));`;
 const server = http.createServer((request, response) => {
@@ -54,7 +61,8 @@ try {
   }));
   assert.deepEqual(workerResult, documentResult);
   assert.equal(documentResult.vectors, 26);
-  assert.ok(documentResult.embedded >= 79);
+  assert.equal(documentResult.work, 30);
+  assert.ok(documentResult.embedded >= 109);
   console.log(JSON.stringify({ page: documentResult, worker: workerResult }));
 } finally {
   if (browser) await browser.close();

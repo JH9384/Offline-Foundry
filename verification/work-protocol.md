@@ -34,3 +34,21 @@ Signed build 43016818911 rejected the first protocol revision because the genera
 Rust projection flattened both modules' `dispatchWords` into one namespace
 (E0428). The work module now names its dispatcher `dispatchWorkWords`. No compiler
 limit, acceptance vector or proof was weakened to resolve this export collision.
+
+Signed build 43017603564 at d3a3bbae7d33098d6da3720464317dd82117ab7d
+produced the installed artifact, fingerprint
+`8bac054c120cd91f6cc25c70ad0035ed06ab6a80c4c963c2e8d8bacf1bf19ce0`.
+Independent replay passes all 109 embedded vectors, 26 composition wire cases,
+30 work cases and the maximum composition payload. Provenance verifies against
+the exact source digest and build workflow; wrong-source and changed-archive
+controls fail. `kernel-artifact-receipt.json` records the component qualification.
+
+The regenerated 18625-byte guest passes all eight loader/actual-host controls.
+`forge:work` delegates through the wire-only adapter and the verified loader.
+The actual guest completes reservation, execution, suspension, ownership transfer,
+resumption and completion while retaining accounting and checkpoint state.
+Chromium document and dedicated-worker contexts replay all 30 work and 26
+composition cases, with all 109 embedded vectors required at loading.
+Changing the encoder's endianness fails the seven-control wire suite. All three
+wire proof statements are also pinned to the independent corpus by that suite.
+The final combined revision still requires its full SDK and Studio gates.

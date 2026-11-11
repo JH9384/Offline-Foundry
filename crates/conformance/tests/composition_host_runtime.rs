@@ -21,8 +21,8 @@ fn composition_host_runtime_fa_10() {
         String::from_utf8_lossy(&output.stderr)
     );
     for required in [
-        "# tests 7",
-        "# pass 7",
+        "# tests 8",
+        "# pass 8",
         "# fail 0",
         "# cancelled 0",
         "# skipped 0",
