@@ -288,12 +288,12 @@ async function positive() {
       if (!appId) throw new Error('Offline project creation returned no app ID');
       const app = await ipc.invoke('get-app', appId);
       const filePath = app?.files?.find(path => path === 'src/main.tsx') ??
-        app?.files?.find(path => /\\.(tsx|ts|jsx|js)$/.test(path));
+        app?.files?.find(path => ['.tsx','.ts','.jsx','.js'].some(ext => path.endsWith(ext)));
       if (!filePath) throw new Error('Created project contains no editable source file');
       const original = await ipc.invoke('read-app-file', { appId, filePath });
       const oldHead = await ipc.invoke('app:get-current-commit-hash', { appId });
       const marker = '// OFFLINE_FOUNDRY_ACCEPTANCE_EDIT';
-      const edited = original + '\\n' + marker + '\\n';
+      const edited = original + '\n' + marker + '\n';
       await ipc.invoke('edit-app-file', { appId, filePath, content: edited });
       const newHead = await ipc.invoke('app:get-current-commit-hash', { appId });
       const confirmed = await ipc.invoke('read-app-file', { appId, filePath });
