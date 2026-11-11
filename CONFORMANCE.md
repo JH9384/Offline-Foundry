@@ -48,6 +48,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-07` | `build` | The generated guest decodes bounded composition requests and returns the model admission result |
 
+## event-admission
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-19` | `build` | Typed event admission binds exact feature routes to current composition policy, generation, sequence and bounded payloads |
+
 ## exact-representation
 
 | ID | Level | Statement |
