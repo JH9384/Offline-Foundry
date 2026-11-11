@@ -29,3 +29,8 @@ proofs. Replacing the caller-owner word with the stored owner makes the Lean
 kernel reject `wireRejectsWrongOwner`; the defect was restored. The browser guest
 integration test rejects the previous composition-only archive, so it cannot
 silently pass until the new work-capable artifact is installed and replayed.
+
+Signed build 43016818911 rejected the first protocol revision because the generated
+Rust projection flattened both modules' `dispatchWords` into one namespace
+(E0428). The work module now names its dispatcher `dispatchWorkWords`. No compiler
+limit, acceptance vector or proof was weakened to resolve this export collision.
