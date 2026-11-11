@@ -110,6 +110,11 @@ jobs:
       - name: Test invalid release rejection
         run: python3 tools/release_gate_negative.py
 
+      - name: Verify loopback LLM model bindings
+        run: |
+          node --check tools/local_llm_gateway.mjs
+          node --test tools/local_llm_gateway.test.mjs
+
       - name: Check local-only operator server syntax
         run: node --check tools/serve_offline.mjs
 
