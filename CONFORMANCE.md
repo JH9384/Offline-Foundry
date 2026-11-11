@@ -24,6 +24,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
 
+## feature-composition
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-06` | `build` | The LexLean composition model rejects duplicate identity, missing dependencies, conflicts, incompatible inputs, ungranted effects and excess budgets |
+
 ## forge_kernel
 
 | ID | Level | Statement |
