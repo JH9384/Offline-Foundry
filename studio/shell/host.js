@@ -1,4 +1,5 @@
-import { editStoredProject } from "./project-edit.mjs";
+import { applyStoredProjectPatch, assertGenerationActive } from "./generation-patch.mjs";
+import { editStoredProject, captureProjectSource } from "./project-edit.mjs";
 import { loadProjectScaffold, prepareNewProject, createStoredProject, createStoredChat } from "./project-creation.mjs";
 import { storageRequest } from "./storage-request.mjs";
 import { executeWorkWithGuest } from "./work-codec.mjs";
@@ -579,13 +580,10 @@ function parseDyadTags(text) {
   for (const m of text.matchAll(/<dyad-add-dependency\s+([^>]*?)\s*\/?>/g)) { const p = attr(m[1], "packages") || attr(m[1], "package"); if (p) deps.push(...p.split(/\s+/).filter(Boolean)); }
   return { writes, deletes, renames, deps };
 }
-async function applyDyadTags(appId, tags) {
-  let changed = 0;
-  for (const w of tags.writes) if (w.path) { await put("objects", await kappa(enc.encode(w.content)), enc.encode(w.content)); await put("files", appId + ":" + w.path, w.content); changed++; }
-  for (const d of tags.deletes) if (d.path) { await del("files", appId + ":" + d.path); changed++; }
-  for (const r of tags.renames) if (r.from && r.to) { const c = await get("files", appId + ":" + r.from); if (c !== undefined) { await del("files", appId + ":" + r.from); await put("files", appId + ":" + r.to, c); changed++; } }
-  if (tags.deps.length) { const app = await get("apps", appId); app.extraDeps = [...new Set([...(app.extraDeps || []), ...tags.deps])]; await put("apps", appId, app); }
-  return changed;
+async function applyDyadTags(appId, tags, options = {}) {
+  await coreReady;
+  const result = await applyStoredProjectPatch(await dbReady, appId, tags, { core, derive: kappa, ...options });
+  return result;
 }
 window.__chat = { streamOpenRouter, parseDyadTags, applyDyadTags };
 
@@ -612,12 +610,13 @@ async function messagesOf(chatId) { const c = await get("chats", chatId); return
 async function saveMessages(chatId, messages) { const c = await get("chats", chatId); c.messages = messages; await put("chats", chatId, c); }
 // What the model is shown of the project: every path, and the source of the files a visitor's app
 // is made of; the shadcn ui library files are named, not pasted, since the model knows them.
-async function codebaseOf(appId) {
-  const paths = await filesOf(appId);
+async function codebaseOf(appId, source) {
+  const captured = source ? new Map(source.files) : null;
+  const paths = captured ? [...captured.keys()] : await filesOf(appId);
   const parts = [];
   for (const p of paths) {
     if (p.startsWith("src/components/ui/")) continue;
-    const c = await get("files", appId + ":" + p);
+    const c = captured ? captured.get(p) : await get("files", appId + ":" + p);
     parts.push(`<dyad-file path="${p}">\n${c}\n</dyad-file>`);
   }
   return "Files in the project:\n" + paths.join("\n") + "\n\n" + parts.join("\n\n");
@@ -647,40 +646,39 @@ async function nextPhase(phase, event) {
   return answer;
 }
 const rulesOf = async (appId) => readBoundRules(await dbReady, appId, kappa);
-const saveRules = async (appId, state, expected) => saveBoundRules(await dbReady, appId, state, kappa, expected);
+const saveRules = async (appId, state, expected, signal) => saveBoundRules(await dbReady, appId, state, kappa, expected, signal);
 // After a turn: the spec the model wrote (if any) becomes prism/spec.json; new rules drop the proof
 // (the kernel's edit), are checked (its check), and on a pass the app's rule module is written.
 // Returns the files changed and the card that replaces the spec in the chat.
-async function rulesAfterTurn(appId, text, written = []) {
+async function rulesAfterTurn(appId, text, written = [], options = {}) {
+  assertGenerationActive(options.signal);
+  await coreReady;
+  const source = options.source || await captureProjectSource(await dbReady, appId);
+  const files = new Map(source.files), writes = [];
+  const stage = (path, content) => { if (files.get(path) !== content) { files.set(path, content); writes.push({ path, content }); } };
   const tag = prism.parseSpecTag(text);
-  let changed = 0;
-  if (tag && tag.spec) {
-    const json = JSON.stringify(tag.spec, null, 2) + "\n";
-    if ((await get("files", appId + ":prism/spec.json")) !== json) { await put("objects", await kappa(enc.encode(json)), enc.encode(json)); await put("files", appId + ":prism/spec.json", json); changed++; }
-  }
-  const current = await get("files", appId + ":prism/spec.json");
-  const before = await rulesOf(appId);
-  if (!current) return { changed, card: tag && tag.error ? `**Rules** · not checked\n\n- ${tag.error}\n\nAsk me to fix the rules.` : null };
+  if (tag && tag.spec) stage("prism/spec.json", JSON.stringify(tag.spec, null, 2) + "\n");
+  const current = files.get("prism/spec.json"), before = await rulesOf(appId);
+  if (!current) return { changed: 0, card: tag && tag.error ? `**Rules** · not checked\n\n- ${tag.error}\n\nAsk me to fix the rules.` : null };
   const specKappa = await kappa(enc.encode(current));
-  if (before && before.specKappa === specKappa) return { changed, card: tag ? prism.card(before) : null };
+  if (before && before.specKappa === specKappa && writes.length === 0) return { changed: 0, card: tag ? prism.card(before) : null };
   let phase = before ? await nextPhase(before.phase, "edit") : "drafting";
   let checked;
   try { checked = prism.checkSpec(JSON.parse(current)); } catch (e) { checked = { ok: false, issues: ["The rules are not valid JSON: " + e.message] }; }
   if (checked.ok) {
     phase = await nextPhase(phase, "check");
-    if ((await get("files", appId + ":src/lib/prism.ts")) !== checked.module) { await put("objects", await kappa(enc.encode(checked.module)), enc.encode(checked.module)); await put("files", appId + ":src/lib/prism.ts", checked.module); changed++; }
-    // No page asks the rules yet, and this turn wrote none: Forge draws the form (the device's turns
-    // write only rules). A page the model wrote, or one that already uses the rules, is left alone.
-    const page = (await get("files", appId + ":src/pages/Index.tsx")) || "";
-    if (!page.includes("@/lib/prism") && !written.some((p) => p && p.startsWith("src/pages/"))) {
-      const screen = prism.screenSource();
-      await put("objects", await kappa(enc.encode(screen)), enc.encode(screen)); await put("files", appId + ":src/pages/Index.tsx", screen); changed++;
-    }
+    stage("src/lib/prism.ts", checked.module);
+    const page = files.get("src/pages/Index.tsx") || "";
+    if (!page.includes("@/lib/prism") && !written.some((p) => p && p.startsWith("src/pages/"))) stage("src/pages/Index.tsx", prism.screenSource());
   }
+  const applied = await applyStoredProjectPatch(await dbReady, appId, { writes, deletes: [], renames: [], deps: [] }, { core, derive: kappa, ...options, source });
+  assertGenerationActive(options.signal);
   const notes = [...(tag && tag.repaired ? ["Forge repaired the JSON syntax the model wrote. Read the rules before you approve them."] : []), ...(checked.notes || [])];
   const state = { phase, specKappa, spec: checked.spec || null, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: null, updated: now() };
-  if (!await saveRules(appId, state)) return { changed, card: "The rules changed while being checked. Check the current rules again." };
-  return { changed, card: prism.card(state) };
+  const saved = await saveRules(appId, state, undefined, options.signal);
+  assertGenerationActive(options.signal);
+  if (!saved) return { changed: applied.changed, card: "The rules changed while being checked. Check the current rules again." };
+  return { changed: applied.changed, card: prism.card(state) };
 }
 // Lean proves the rules on the hosted verifier; the kernel moves the phase on its attestation or its
 // refusal. A proof of rules that changed meanwhile is dropped: it is about other rules. Resolves the
@@ -831,7 +829,8 @@ async function chatTurn(chatId, intent) {
   if (prism.isApproval(intent.prompt)) return approveTurn(chatId, appId, messages, userId, ref, intent.intentId);
   if (prism.isPublish(intent.prompt)) return publishTurn(chatId, appId, messages, userId, ref, intent.intentId);
   // T3: the assistant placeholder
-  const head = (await get("refs", appId + ":main")) || null;
+  const projectSource = await captureProjectSource(await dbReady, appId);
+  const head = projectSource.reference;
   const asstId = userId + 1;
   messages.push({ id: asstId, role: "assistant", content: "", approvalState: "approved", commitHash: null, sourceCommitHash: head, model, createdAt: now() });
   await saveMessages(chatId, messages);
@@ -839,13 +838,15 @@ async function chatTurn(chatId, intent) {
   let full = "", lastSent = "", updatedFiles = false, summary, error = null;
   const abort = new AbortController(); m.abort = abort;
   let provenance = null;
+  const committed = [];
+  const onCommit = (oid) => { committed.push(oid); updatedFiles = true; emit("version-created", { appId, oid }); };
   try {
     const app = await get("apps", appId);
-    const rules = await get("files", appId + ":AI_RULES.md");
+    const rules = new Map(projectSource.files).get("AI_RULES.md");
     const history = messages.slice(0, -2).filter((x) => x.content).map((x) => ({ role: x.role, content: x.content }));
     const request = [
       { role: "system", content: buildSystemPrompt(rules) + "\n\n" + prism.SPEC_RULES },
-      { role: "user", content: "This is my codebase. " + (await codebaseOf(appId)) },
+      { role: "user", content: "This is my codebase. " + (await codebaseOf(appId, projectSource)) },
       { role: "assistant", content: "OK, got it. I'm ready to help" },
       ...history,
       { role: "user", content: intent.prompt },
@@ -906,9 +907,11 @@ async function chatTurn(chatId, intent) {
       // Rules that checked are the base of an edit. Rules that did not are left out: given them, the small
       // model copies them back unchanged, so it is asked again from the user's own words, every request so far.
       const current = await rulesOf(appId);
+      const capturedSpec = new Map(projectSource.files).get("prism/spec.json");
+      const currentMatches = typeof capturedSpec === "string" && current?.specKappa === await kappa(enc.encode(capturedSpec));
       const asks = messages.filter((x) => x.role === "user" && x.content && !prism.isApproval(x.content)).map((x) => x.content);
-      const deviceMessages = current && current.spec && current.phase !== "drafting"
-        ? prism.deviceRequest(intent.prompt, await get("files", appId + ":prism/spec.json"))
+      const deviceMessages = currentMatches && current.spec && current.phase !== "drafting"
+        ? prism.deviceRequest(intent.prompt, capturedSpec)
         : prism.deviceRequest(asks.join("\n"), null);
       const { ids } = gpuIds(inst, deviceMessages, held.model);
       const room = held.model.ctx - ids.length - 8;
@@ -926,22 +929,23 @@ async function chatTurn(chatId, intent) {
       const rec = await inst.buildReceipt({ promptText: intent.prompt, ctxIds: [], turnIds: ids, outIds: res.outIds, paramsPatch: { repetitionPenalty: 1, maxTokens: maxNew } });
       provenance = { receipt: await sealAnswer(body, rec, hit.key), fingerprint: `${(rec.body["prov:used"] || {})["holo:model"]}` };
     }
-    // T6: what the model wrote becomes the project, sealed as a version
+    // T6: completed batches have their own committed snapshots.
+    assertGenerationActive(abort.signal);
     const sm = full.match(/<dyad-chat-summary>([\s\S]*?)<\/dyad-chat-summary>/); summary = sm ? sm[1].trim() : undefined;
     if (summary && (!chat.title || chat.title === "New chat")) { const c = await get("chats", chatId); c.title = summary; await put("chats", chatId, c); }
     const tags = parseDyadTags(full);
-    let changed = await applyDyadTags(appId, tags);
-    const spec = await rulesAfterTurn(appId, full, tags.writes.map((w) => w.path));
+    const applied = await applyDyadTags(appId, tags, { signal: abort.signal, source: projectSource, onCommit });
+    let changed = applied.changed;
+    const spec = await rulesAfterTurn(appId, full, tags.writes.map((w) => w.path), { signal: abort.signal, source: applied.source, onCommit });
     changed += spec.changed;
-    updatedFiles = changed > 0;
-    let commit = null;
-    if (updatedFiles) commit = await seal(appId, summary || `${changed} file(s) changed`);
+    updatedFiles = updatedFiles || changed > 0;
+    const commit = committed.at(-1) || null;
     messages[messages.length - 1] = { ...messages[messages.length - 1], content: prism.withCard(full, spec.card), commitHash: commit, approvalState: "approved", requestId: provenance && provenance.receipt || null };
     await saveMessages(chatId, messages);
     emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
   } catch (e) {
     error = abort.signal.aborted ? null : String((e && e.message) || e);
-    messages[messages.length - 1] = { ...messages[messages.length - 1], content: full + (abort.signal.aborted ? "\n\n<dyad-output type=\"warning\" message=\"Response cancelled by user\"></dyad-output>" : error ? `\n\n<dyad-output type="error" message="${error.replace(/"/g, "'")}"></dyad-output>` : "") };
+    messages[messages.length - 1] = { ...messages[messages.length - 1], commitHash: committed.at(-1) || null, content: full + (updatedFiles ? "\n\nCommitted project changes were retained." : "") + (abort.signal.aborted ? "\n\n<dyad-output type=\"warning\" message=\"Response cancelled by user\"></dyad-output>" : error ? `\n\n<dyad-output type="error" message="${error.replace(/"/g, "'")}"></dyad-output>` : "") };
     await saveMessages(chatId, messages);
     emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
   }

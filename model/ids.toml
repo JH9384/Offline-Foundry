@@ -206,3 +206,9 @@ id = "FA-22"
 level = "build"
 suite = "atomic-project-edit"
 statement = "File edits atomically commit a source-bound snapshot or refuse concurrent project changes without partial writes"
+
+[[id]]
+id = "FA-23"
+level = "build"
+suite = "atomic-generation-patch"
+statement = "Generated file batches commit against captured project source and cancellation prevents uncommitted project writes"

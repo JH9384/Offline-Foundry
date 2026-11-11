@@ -24,6 +24,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
 
+## atomic-generation-patch
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-23` | `build` | Generated file batches commit against captured project source and cancellation prevents uncommitted project writes |
+
 ## atomic-project-creation
 
 | ID | Level | Statement |

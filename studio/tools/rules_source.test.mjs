@@ -59,7 +59,7 @@ test("imports discard untrusted proof metadata and actual host reads use source 
   const imported = host.slice(host.indexOf('handlers.set("forge:import"'), host.indexOf("// ---- versions:"));
   assert.doesNotMatch(imported, /writes\.push\([^\n]*entry\.rules/);
   assert.match(host, /const rulesOf = async \(appId\) => readBoundRules\(await dbReady, appId, kappa\)/);
-  assert.match(host, /saveBoundRules\(await dbReady, appId, state, kappa, expected\)/);
+  assert.match(host, /saveBoundRules\(await dbReady, appId, state, kappa, expected, signal\)/);
   assert.doesNotMatch(host, /Nothing was published:/);
 });
 test("invalid state and storage errors are typed and private", async () => {

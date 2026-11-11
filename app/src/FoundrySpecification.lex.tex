@@ -298,7 +298,7 @@ definition{
   name: rulesSourceBoundary,
   parameters: [],
   result: String,
-  body: "Cached rule status is usable only when its canonical blake3 specKappa equals the independently recomputed identity of the project's current prism/spec.json bytes and its phase is declared by the kernel. Reads capture file and state together. Writes first check source identity and then compare the exact source again inside the same IndexedDB transaction that writes status. Asynchronous approval, proof and publication also compare their expected prior status in that transaction, so intervening edits, restores or competing completions cannot promote stale state. A stale completion returns false and never changes the current preview or claims current publication. Imported files may be reconstructed, but imported cached approval, proof and publication state is discarded; they require fresh checking and approval. Invalid state, identity engine failure and storage failure are typed and contain no source, credential or exception payloads. The IPC boundary maps these exceptions to handlerFailed. Publication progress callbacks belong to their captured active operation; after stop or completion they cannot overwrite its final message. Remote publication may already be live when current-state promotion or local verification fails; the UI states this explicitly. These checks bind lifecycle state to current source; they do not verify the hosted prover, authenticate build provenance or undo remote effects."
+  body: "Cached rule status is usable only when its canonical blake3 specKappa equals the independently recomputed identity of the project's current prism/spec.json bytes and its phase is declared by the kernel. Reads capture file and state together. Writes first check source identity and then compare the exact source again inside the same IndexedDB transaction that writes status. Asynchronous approval, proof and publication also compare their expected prior status in that transaction, so intervening edits, restores or competing completions cannot promote stale state. A stale completion returns false and never changes the current preview or claims current publication. An optional generation cancellation signal refuses status writes before commit and aborts an active status transaction; cancellation returns false, while already completed writes remain committed. Imported files may be reconstructed, but imported cached approval, proof and publication state is discarded; they require fresh checking and approval. Invalid state, identity engine failure and storage failure are typed and contain no source, credential or exception payloads. The IPC boundary maps these exceptions to handlerFailed. Publication progress callbacks belong to their captured active operation; after stop or completion they cannot overwrite its final message. Remote publication may already be live when current-state promotion or local verification fails; the UI states this explicitly. These checks bind lifecycle state to current source; they do not verify the hosted prover, authenticate build provenance or undo remote effects."
 }
 
 inductive{
@@ -493,7 +493,8 @@ inductive{
     {name: invalidProjectEdit, fields: []},
     {name: projectEditConflict, fields: []},
     {name: projectEditStorageFailed, fields: []},
-    {name: projectEditStateInvalid, fields: []}
+    {name: projectEditStateInvalid, fields: []},
+    {name: projectMutationCancelled, fields: []}
   ]
 }
 
@@ -502,6 +503,24 @@ definition{
   parameters: [],
   result: String,
   body: "The browser file-edit command copies its input and captures the app name, complete file set and main reference from one read transaction. It prepares exact file objects and generated snapshot bytes outside storage transactions, with the captured main reference as parent and the same preparation bounds as creation. A single write transaction compares the app name, reference and complete file contents to the capture; a rename, changed, added or removed file or changed reference refuses as projectEditConflict. It then writes the edited file, all prepared objects, snapshot reference, new version and app update atomically. Editing prism/spec.json also deletes cached rule status in that same transaction; other edits do not change the rule-source-specific claim. Existing version metadata is read within the write transaction and preserved. Failed writes abort all queued changes. Invalid input, conflict, invalid stored state and storage failure use fixed-message ProjectEditError values, while preparation retains ProjectCreationError.projectPreparationFailed; IPC maps these to handlerFailed. A conflict is not silently retried. The comparison binds bytes and reference at commit, not a history of intervening changes that returned to identical state. This boundary covers the explicit edit-app-file command, not streamed generation, deletion, renaming or every other project mutation, nor whole-application proof validity or durable storage beyond IndexedDB."
+}
+
+inductive{
+  name: GenerationPatchError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidGenerationPatch, fields: []},
+    {name: unlockedDependencyRequest, fields: []},
+    {name: generationCancelled, fields: []}
+  ]
+}
+
+definition{
+  name: generationPatchBoundary,
+  parameters: [],
+  result: String,
+  body: "Model-supplied file batches contain at most 1000 write, delete and rename operations and 128 direct dependency requests. Operations use portable paths, cannot overlap and cannot overwrite a rename target or delete a missing source. Staging copies inputs and leaves storage unchanged. Direct dependency requests require exact stable numeric package versions, reject conflicting versions, and are serialized in sorted order as foundry/direct-dependency-requests/1 in prism/dependencies.json; explicit file operations cannot replace that reserved file. Dependency metadata and that snapshot file commit together. These requests are not a transitive dependency lock or authenticated package closure. The request context uses one captured project file set and reference. Each generated batch compares that source inside its atomic write transaction; the resulting exact source is carried to the next rules batch, including when the first batch is a no-op. A stale source refuses. Rules files, generated module and generated screen are staged and committed together before source-bound rule status is saved. Cancellation is checked before preparation and commit, and an abort signal aborts an active write transaction. A completed transaction remains committed; the chat records its last committed snapshot and states that committed changes were retained when later work is cancelled or fails. Cancellation does not undo earlier commits, stop already submitted remote or device inference, or claim zero physical work. Invalid batches, unversioned dependency requests and pre-commit cancellation use GenerationPatchError; transaction cancellation uses ProjectEditError.projectMutationCancelled, with other edit/preparation failures preserved. This qualifies generation file batches and their source/cancellation boundary, not the complete chat admission lifecycle, authenticated dependency closure, inference truth, whole-turn atomicity or every effect in generation."
 }
 \end{semanticmodule}
 \end{lexlean}

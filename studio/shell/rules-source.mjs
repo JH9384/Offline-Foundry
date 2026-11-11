@@ -28,20 +28,25 @@ export async function readBoundRules(db, appId, derive) {
   return await matches(captured.source, captured.state, derive) ? captured.state : null;
 }
 
-export async function saveBoundRules(db, appId, state, derive, expected) {
+export async function saveBoundRules(db, appId, state, derive, expected, signal) {
+  if (signal?.aborted) return false;
   // Freeze both caller-owned records before any asynchronous work.
   let next, prior;
   try { next = structuredClone(state); if (!valid(next)) throw fail("invalidRulesState"); prior = expected === undefined ? undefined : JSON.stringify(expected); }
   catch { throw fail("invalidRulesState"); }
   const captured = await capture(db, appId);
-  if (!await matches(captured.source, next, derive)) return false;
+  if (!await matches(captured.source, next, derive) || signal?.aborted) return false;
   // The exact raw source comparison closes the race while hashing outside IndexedDB.
   return new Promise((resolve, reject) => {
     let t, written = false;
-    const refuse = () => reject(fail("rulesStorageFailed"));
+    const clean = () => signal?.removeEventListener("abort", cancel);
+    const cancel = () => { if (t) { try { t.abort(); } catch {} } };
+    const refuse = () => { clean(); if (signal?.aborted) resolve(false); else reject(fail("rulesStorageFailed")); };
     try {
+      if (signal?.aborted) { resolve(false); return; }
+      signal?.addEventListener("abort", cancel, { once: true });
       t = db.transaction(["files", "refs"], "readwrite");
-      t.oncomplete = () => resolve(written);
+      t.oncomplete = () => { clean(); resolve(written); };
       t.onerror = t.onabort = refuse;
       const source = t.objectStore("files").get(`${appId}:prism/spec.json`);
       const current = t.objectStore("refs").get(`prism:${appId}`);
