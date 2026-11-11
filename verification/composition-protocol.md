@@ -6,8 +6,9 @@ now accepts a bounded composition request, decodes it in LexLean, calls
 `FeatureComposition.admitComposition`, and returns the modeled outcome. Existing
 phase and permission requests retain their existing 64-byte limit and behavior.
 
-The protocol uses unsigned 32-bit little-endian representation values and
-length-prefixed lists. Limits are 16,384 payload bytes, 32 features and 64 entries
+The protocol uses unsigned 32-bit little-endian representation values encoded as lowercase
+hexadecimal ASCII and length-prefixed lists. Limits are 32,768 payload characters
+(16,384 decoded bytes), 32 features and 64 entries
 per list. Truncated, excessive-count and trailing data refuse. The expanded guest
 request/allocation bounds are declared in the application model. All semantic
 admission remains in the generated guest; the browser module only encodes the
@@ -15,7 +16,7 @@ wire representation and decodes known responses from a caller-supplied guest.
 
 ## Evidence
 
-Registration, scenario and failing test preceded implementation. Twenty-four guest
+Registration, scenario and failing test preceded implementation. Twenty-six guest
 acceptance vectors are independently recorded in `composition-wire-vectors.json`
 and pinned to the actual application model by the executable codec suite. The
 complete SDK `prismpm verify` gate replays those vectors in the compiled guest;
@@ -78,3 +79,36 @@ SDK and independent runtime before acceptance.
 Earlier code-generation failures were resolved by separating uint8 conversion
 into its own function and removing colliding exported dispatch/byteAt symbols.
 No compiler limits, heap limits, SDK sources or acceptance gates were weakened.
+
+## Text projection closure
+
+The cursor revision reached browser replay, where the dense case failed with
+`payloadMatches: false`: raw carriage-return octets in the binary wire were
+normalized by the text view. The unmerged wire now uses lowercase hexadecimal
+ASCII octets after its header, preserving the same decoded words and admission
+semantics. The 32,768-character payload represents the original 16,384-byte
+limit. Public request/allocation bounds are 32,776 and 32,784 bytes respectively,
+including the header. The allocation-boundary fixture is updated accordingly.
+Uppercase and nonhexadecimal input have explicit negative vectors, bringing the
+composition corpus to 26. The codec asserts printable canonical representation
+for all structured fixtures. Browser acceptance remains mandatory.
+
+The enlarged ASCII stress fixtures exceeded Lean's elaboration depth when each
+request was emitted as one large array literal. Their model expressions now
+append balanced chunks of at most 4096 bytes. Independent fixture bytes and the
+compiled requests are unchanged; the source-binding check pins the complete
+assembled expression. No recursion limit or stress case was removed.
+
+Balanced byte arrays resolved elaboration depth but revision 5645b53 still
+exceeded the locked application-Lean time limit in build 43004793784 (PP5007).
+The printable wire fixtures now use UTF8 encoding of literal ASCII strings,
+removing large per-byte array terms entirely. The independently maintained hex
+fixtures still pin every byte; no request, expected response, limit or compiler
+budget changed.
+
+The UTF8-literal attempt was refused by the locked metadata grammar (PP2001,
+run 43006777118). Fixtures now use the supported closed Bytes aliases and append
+primitive exclusively: 156 shared definitions, each at most 64 bytes, assembled
+in balanced expressions. The independent gate binds every alias body and every
+assembled request to the original corpus. No SDK grammar extension or bypass is
+introduced.
