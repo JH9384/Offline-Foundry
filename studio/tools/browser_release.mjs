@@ -344,6 +344,41 @@ async function positive() {
         throw new Error('Real offline preview attempted external network: ' + outgoing.join('; '));
       }
       console.log('  Real host build and offline preview: PASS', JSON.stringify(actual));
+
+      // The first real JSX/React preview must render without downloading React
+      // or ReactDOM from an external module CDN.
+      const jsxApp = await page.evaluate(async ({appId}) => {
+        const ipc = window.electron.ipcRenderer;
+        await ipc.invoke('edit-app-file', {
+          appId,
+          filePath: 'src/main.tsx',
+          content: [
+            'import React from "react";',
+            'import { createRoot } from "react-dom/client";',
+            'createRoot(document.getElementById("root")!).render(',
+            '  <section data-offline-react="yes">React rendered offline</section>',
+            ');',
+          ].join('\\n'),
+        });
+        const app = await window.__host.get('apps', appId);
+        await window.__host.put('apps', appId, {...app, grants:[]});
+        return window.__preview(appId);
+      }, project);
+      const reactPage = await context.newPage();
+      const reactErrors = [];
+      reactPage.on('pageerror', error => reactErrors.push(String(error)));
+      try {
+        await reactPage.goto(jsxApp.appUrl, {waitUntil:'load',timeout:30000});
+        await reactPage.waitForFunction(() =>
+          document.querySelector('[data-offline-react="yes"]')?.textContent === 'React rendered offline',
+          null, {timeout:20000});
+        if (reactErrors.length) throw new Error('React preview exception: ' + reactErrors.join('; '));
+        if (outgoing.length) throw new Error('React preview tried outbound network: ' + outgoing.join('; '));
+        console.log('  Bundled React JSX offline preview: PASS');
+      } finally {
+        await reactPage.close();
+      }
+
     } finally {
       await preview.close();
     }
