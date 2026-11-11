@@ -68,6 +68,10 @@ export function createLocalLLMBridge(raw) {
     // Local websites cannot silently use this as a general-purpose model proxy.
     const origin = req.headers.origin;
     const sameOrigin = 'http://127.0.0.1:' + port;
+    if (req.headers.host !== '127.0.0.1:' + port) {
+      json(res,403,{error:'loopback host required'});
+      return true;
+    }
     const site = req.headers['sec-fetch-site'];
     if ((origin && origin !== sameOrigin) || (site && site !== 'same-origin' && site !== 'none')) {
       json(res,403,{error:'cross-origin model access refused'});
