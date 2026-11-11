@@ -360,12 +360,55 @@ handlers.set("checkout-version", async ({ appId, versionId }) => { await restore
 handlers.set("revert-version", async ({ appId, previousVersionId }) => { await restore(appId, previousVersionId); await seal(appId, "Revert to " + previousVersionId.slice(0, 22)); return { successMessage: "Reverted" }; });
 
 // ---- chats as records; the stream is the next slice
-handlers.set("get-chats", async (appId) => (await all("chats")).filter((c) => appId == null || c.appId === appId).map((c) => chatRow(c)));
-handlers.set("get-chat", async (id) => { const c = await get("chats", id); if (!c) throw new Error("no chat " + id); return { ...c, chatMode: c.chatMode || "build", referencedApps: c.referencedApps || [], messages: (c.messages || []).map((x) => ({ ...x, createdAt: x.createdAt || now() })) }; });
-const chatRow = (c) => ({ id: c.id, appId: c.appId, title: c.title, createdAt: new Date(c.createdAt || Date.now()), chatMode: c.chatMode || "build", isFavorite: !!c.isFavorite });
+// Chat creation accepts both the legacy numeric ID and the renderer's modern
+// {appId, initialChatMode} input. Previous builds accidentally persisted the
+// entire input object as appId. Normalize only known shapes; never invent an ID.
+const chatAppId = (input) => {
+  const id = typeof input === "number" ? input : input && typeof input === "object" ? input.appId : null;
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("chat appId must be a positive integer");
+  return id;
+};
+const normalizedChat = (c) => ({ ...c, appId: chatAppId(c.appId), chatMode: c.chatMode || "build",
+  referencedApps: Array.isArray(c.referencedApps) ? c.referencedApps : [],
+  messages: Array.isArray(c.messages) ? c.messages.map(x=>({...x, createdAt: x.createdAt || now()})) : [] });
+const chatRow = (c) => {
+  const chat = normalizedChat(c);
+  return { id: chat.id, appId: chat.appId, title: chat.title, createdAt: new Date(chat.createdAt || Date.now()),
+    chatMode: chat.chatMode, isFavorite: !!chat.isFavorite };
+};
+handlers.set("get-chats", async (appId) => {
+  const filter = appId == null ? null : chatAppId(appId);
+  const rows = [];
+  for (const c of await all("chats")) {
+    try {
+      const row = chatRow(c);
+      if (filter == null || row.appId === filter) rows.push(row);
+    } catch (error) { console.error("[host] invalid stored chat identity", c?.id, error); }
+  }
+  return rows;
+});
+handlers.set("get-chat", async (id) => { const c = await get("chats", id);
+  if (!c) throw new Error("no chat " + id);
+  return normalizedChat(c);
+});
 handlers.set("get-chat-metadata", async (id) => { const c = await get("chats", id); return c ? chatRow(c) : null; });
-handlers.set("create-chat", async (appId) => { const id = await nextId("chats"); await put("chats", id, { id, appId, title: "New chat", createdAt: now(), messages: [], initialCommitHash: null, dbTimestamp: null, chatMode: "build", modelSelection: null, referencedApps: [] }); return id; });
-handlers.set("update-chat", async ({ chatId, title }) => { const c = await get("chats", chatId); if (c && title) c.title = title; if (c) await put("chats", chatId, c); });
+handlers.set("create-chat", async (input) => {
+  const appId = chatAppId(input);
+  if (!(await get("apps", appId))) throw new Error("chat app does not exist: " + appId);
+  const id = await nextId("chats");
+  const mode = input && typeof input === "object" && input.initialChatMode || "build";
+  await put("chats", id, { id, appId, title: "New chat", createdAt: now(), messages: [],
+    initialCommitHash: null, dbTimestamp: null, chatMode: mode, modelSelection: null, referencedApps: [] });
+  return id;
+});
+handlers.set("update-chat", async ({ chatId, title, chatMode, modelSelection }) => {
+  const c = await get("chats", chatId);
+  if (!c) throw new Error("no chat " + chatId);
+  if (title !== undefined) c.title = title;
+  if (chatMode !== undefined) c.chatMode = chatMode;
+  if (modelSelection !== undefined) c.modelSelection = modelSelection;
+  await put("chats", chatId, c);
+});
 handlers.set("delete-chat", async (id) => { await del("chats", id); });
 // The sidebar's search: a chat matches by title or by the text of one of its messages, and the line
 // that matched is what the renderer shows under it.
