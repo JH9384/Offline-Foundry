@@ -22,16 +22,16 @@ export async function invokeHost(channel, args, handler, schema, inputContract =
     let input;
     try { input = structuredClone(args[0]); }
     catch { return refusal("invalidInput", channel, "validation", "The command cannot be transferred"); }
-    let parsed;
-    try { parsed = inputContract.schema.safeParse(input); }
-    catch { return refusal("inputValidatorFailed", channel, "internal", "The browser input validator failed"); }
-    if (parsed?.success !== true) {
-      return refusal("invalidInput", channel, "validation", "The command arguments do not match their contract");
-    }
-    if (!Object.hasOwn(parsed, "data")) {
-      return refusal("inputValidatorFailed", channel, "internal", "The browser input validator returned no value");
-    }
-    args = [parsed.data];
+    try {
+      const parsed = inputContract.schema.safeParse(input);
+      if (parsed?.success !== true) {
+        return refusal("invalidInput", channel, "validation", "The command arguments do not match their contract");
+      }
+      if (!Object.hasOwn(parsed, "data")) {
+        return refusal("inputValidatorFailed", channel, "internal", "The browser input validator returned no value");
+      }
+      args = [parsed.data];
+    } catch { return refusal("inputValidatorFailed", channel, "internal", "The browser input validator failed"); }
   }
   let value;
   try {
