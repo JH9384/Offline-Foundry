@@ -158,3 +158,9 @@ id = "FA-14"
 level = "build"
 suite = "exact-representation"
 statement = "Byte representations verify original, payload, decoder specification and optional basis identities before returning exact reconstructed bytes"
+
+[[id]]
+id = "FA-15"
+level = "build"
+suite = "capability-availability"
+statement = "Unimplemented browser queries return typed unsupported errors rather than fabricated resource status or empty findings"

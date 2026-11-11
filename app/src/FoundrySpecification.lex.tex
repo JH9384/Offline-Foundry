@@ -413,5 +413,19 @@ definition{
   result: String,
   body: "foundry/deflate-xor/1: RFC1950 inflate; without basis return inflated bytes; with basis require equal lengths and XOR corresponding bytes; verify exact original length and SHA256"
 }
+
+definition{
+  name: unavailableBrowserQueries,
+  parameters: [],
+  result: (List String),
+  body: (cons "prompts:list" (cons "list-all-media" (cons "free-agent-quota:get-status" (cons "get-themes" (cons "get-custom-themes" (cons "user-input:get-pending" (cons "get-app-upgrades" (cons "get-app-env-vars" (cons "get-templates" (cons "check-problems" (cons "app:list-screenshots" (cons "app:list-thumbnails" (cons "appCollections:list" (cons "coolify:get-status" (cons "coolify:discover" (cons "coolify-setup:snapshot" (cons "coolify-setup:get-server-key" (cons "coolify-setup:reveal-credentials" (cons "local-models:list-ollama" (cons "local-models:list-lmstudio" (cons "mcp:list-catalog" (cons "mcp:is-oauth-storage-encrypted" (cons "mcp:probe-callback-port" (cons "neon:get-project" (cons "neon:get-branch-env-vars" (cons "neon:get-email-password-config" (cons "supabase:detect-legacy-app-key" (cons "tests:list" (cons "tests:detect-legacy" (cons "vercel:get-sync-preview" (cons "get-latest-security-review" (cons "free-model-quota:get-status" (nil String)))))))))))))))))))))))))))))))))
+}
+
+definition{
+  name: capabilityAvailabilityBoundary,
+  parameters: [],
+  result: String,
+  body: "The declared unavailable browser queries return HostResponseError.unsupportedChannel through both IPC entrypoints. Empty findings, quota values, connection details and resource lists cannot stand in for unimplemented checks or external reads. Renderer error recovery must preserve the failure rather than substitute empty success. This negative scope is not implementation of the excluded capabilities, and it is not a complete inventory of every renderer command. Each added capability requires a new modeled boundary and executed acceptance before removing its unavailable declaration."
+}
 \end{semanticmodule}
 \end{lexlean}

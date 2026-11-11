@@ -30,6 +30,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-02` | `build` | The authoring boundary checks every generated Studio module and export root without rewriting drift |
 
+## capability-availability
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-15` | `build` | Unimplemented browser queries return typed unsupported errors rather than fabricated resource status or empty findings |
+
 ## composition-host-runtime
 
 | ID | Level | Statement |

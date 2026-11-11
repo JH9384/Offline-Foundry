@@ -131,16 +131,6 @@ handlers.set("validate-provider-api-key", async ({ provider, apiKey }) => {
   if (!r.ok) throw new Error("OpenRouter did not accept this key (" + r.status + ")");
   return { ok: true };
 });
-handlers.set("prompts:list", () => []);
-handlers.set("list-all-media", () => ({ apps: [] }));
-handlers.set("free-agent-quota:get-status", () => ({ messagesUsed: 0, messagesLimit: 5, isQuotaExceeded: false, windowStartTime: null, resetTime: null, hoursUntilReset: null }));
-handlers.set("get-themes", () => []);
-handlers.set("get-custom-themes", () => []);
-handlers.set("user-input:get-pending", () => []);
-handlers.set("get-app-upgrades", () => []);
-handlers.set("get-app-env-vars", () => []);
-handlers.set("get-templates", () => []);
-handlers.set("check-problems", () => ({ problems: [], totalErrors: 0, totalWarnings: 0 }));
 
 // ---- apps and files. A file is stored under "<appId>:<path>"; the app record carries no files,
 // get-app lists them. Every edit seals a version: the address of the project state.
@@ -238,9 +228,6 @@ handlers.set("search-app-files", async ({ appId, query }) => {
   return out;
 });
 handlers.set("app:get-current-commit-hash", async ({ appId }) => (await get("refs", appId + ":main")) || null);
-handlers.set("app:list-screenshots", () => ({ screenshots: [] }));
-handlers.set("app:list-thumbnails", () => ({ thumbnails: [] }));
-handlers.set("appCollections:list", () => []);
 
 // ---- moving in. A browser keeps this store per origin, so apps made on the site Forge was served from
 // before stay there; its moved page writes them to a file (hologram-forge/export/1) and Import App on the
@@ -544,33 +531,8 @@ handlers.set("get-context-paths", async ({ appId }) => {
   };
 });
 handlers.set("set-context-paths", async ({ appId, chatContext }) => { const a = await get("apps", appId); if (!a) throw new Error("no app " + appId); a.chatContext = chatContext; await put("apps", appId, a); });
-// Features this build does not have, each answering what is true here rather than a placeholder:
-// nothing is connected, nothing is installed, nothing was found. A settings or integration screen
-// reads one of these the moment it mounts, and a screen that reads nothing renders its empty state,
-// while a refusal would crash it. Every other unimplemented channel is answered from its own contract
-// in `dispatch` below.
-handlers.set("coolify:get-status", () => ({ hasToken: false, tokenId: null, instanceUrl: null, serverUrl: null, connection: null, appUrl: null, lastDeployedAt: null }));
-handlers.set("coolify:discover", () => ({ servers: [], projects: [] }));
-handlers.set("coolify-setup:snapshot", () => ({ type: "idle" }));
-handlers.set("coolify-setup:get-server-key", () => ({ publicKey: "" }));
-handlers.set("coolify-setup:reveal-credentials", () => ({ instance: null, server: null }));
-handlers.set("local-models:list-ollama", () => ({ models: [] }));
-handlers.set("local-models:list-lmstudio", () => ({ models: [] }));
-handlers.set("mcp:list-catalog", () => ({ entries: [], addedSlugs: [] }));
-handlers.set("mcp:is-oauth-storage-encrypted", () => ({ available: false }));
-handlers.set("mcp:probe-callback-port", () => ({ port: 0 }));
-handlers.set("neon:get-project", () => ({ projectId: "", projectName: "", orgId: "", branches: [] }));
-handlers.set("neon:get-branch-env-vars", () => ({ databaseUrl: "" }));
-handlers.set("neon:get-email-password-config", () => ({ enabled: false, email_verification_method: "link", require_email_verification: false, auto_sign_in_after_verification: false, send_verification_email_on_sign_up: false, send_verification_email_on_sign_in: false, disable_sign_up: false }));
-handlers.set("supabase:detect-legacy-app-key", () => ({ hasLegacyKey: false }));
-handlers.set("tests:list", () => ({ specs: [] }));
-handlers.set("tests:detect-legacy", () => ({ files: [] }));
-handlers.set("vercel:get-sync-preview", () => ({ vercelProjectName: null, branchType: "development", envKeys: [], cookieSecretIncluded: false, target: [], trustedDomainOrigins: [], authActive: false }));
-// No review has been run: this host makes no review turn, so there are no findings to show.
-handlers.set("get-latest-security-review", () => ({ findings: [], timestamp: new Date(0).toISOString(), chatId: 0 }));
-// The site's included key answers without a quota of its own, and a visitor's own key has whatever
-// OpenRouter gives it. Either way nothing is counted here.
-handlers.set("free-model-quota:get-status", () => ({ messagesUsed: 0, messagesLimit: 0, messagesRemaining: 0, isQuotaExceeded: false, resetTime: null }));
+// Unimplemented imported capabilities have no handler. The typed dispatch
+// boundary reports unsupportedChannel, preserving the renderer error state.
 window.__preview = buildPreview;
 
 // ---- the model: OpenRouter with the visitor's own key, streamed as OpenAI compatible SSE. The key
