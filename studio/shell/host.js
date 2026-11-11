@@ -830,8 +830,36 @@ function publishChat(chatId, patch) {
   const queuePaused = patch.queuePaused === undefined ? m.state.queuePaused : patch.queuePaused;
   m.state = { ...m.state, ...patch, revision: m.revision, capabilities: { canSubmit: true, canCancel: phase === "admitting" || phase === "streaming", canPauseQueue: !queuePaused, canResumeQueue: queuePaused } };
   emit("distributed-machine:snapshot", { protocolVersion: 1, machineId: "chat_stream", encodedKey: { chatId }, actorInstanceId: "web-chat_stream-" + chatId, revision: m.revision, encodedState: m.state });
+  // shellUpdate is declared below and read here before it exists while the host starts: var, and checked.
+  if (shellUpdate && shellUpdate.waiting && !turnRunning()) setTimeout(reloadIfIdle, 1500);
   return m;
 }
+// ---- never cut a turn short. A turn (a build, a proof, a publish) runs in this page; reloading the page
+// ends it here while a cloud model may go on generating its answer, holding the shared plan's one slot
+// for minutes. So: a newer shell waits until no turn runs (the worker announces it, see sw.template.js);
+// leaving the page while one runs asks first; and a turn a reload did cut is marked as cut, not left as a
+// silent half message.
+function turnRunning() { return [...chatMachines.values()].some((m) => ["admitting", "streaming", "finalizing", "cancelling"].includes(m.state.phase)); }
+var shellUpdate = { waiting: false };
+function reloadIfIdle() { if (shellUpdate.waiting && !turnRunning()) location.reload(); }
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "shell-updated") { shellUpdate.waiting = true; reloadIfIdle(); }
+});
+addEventListener("beforeunload", (e) => { if (turnRunning()) { e.preventDefault(); e.returnValue = ""; } });
+// A turn a reload cut: the last message of a chat left as an open reasoning block or empty. Nothing runs
+// when the page starts, so such a message is never a live turn.
+const CUT = "\n\n<dyad-output type=\"warning\" message=\"This answer was interrupted: the page reloaded before it finished. Ask again.\"></dyad-output>";
+async function markInterruptedTurns() {
+  for (const chat of await all("chats")) {
+    const last = chat && chat.messages && chat.messages[chat.messages.length - 1];
+    if (!last || last.role !== "assistant" || last.content.includes("<dyad-output")) continue;
+    const open = /^<think>/.test(last.content) && !last.content.includes("</think>");
+    if (!open && last.content.trim()) continue;
+    last.content = (open ? last.content + "</think>" : last.content) + CUT;
+    await put("chats", chat.id, chat);
+  }
+}
+markInterruptedTurns().catch((e) => console.warn("[host] marking interrupted turns", e));
 const djb2 = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0; return h; };
 const now = () => new Date().toISOString();
 async function messagesOf(chatId) { const c = await get("chats", chatId); return c ? c.messages : []; }
