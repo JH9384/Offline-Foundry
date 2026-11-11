@@ -434,8 +434,34 @@ async function buildPreview(appId) {
   const tailwindConfig = m ? "{darkMode:['class'],theme:" + m[1] + "}" : "{}";
   const exts = ["", ".tsx", ".ts", ".jsx", ".js", "/index.tsx", "/index.ts"];
   const resolveFile = (p) => { for (const e of exts) if (files.has(p + e)) return p + e; return null; };
+  // React/JSX imports resolve inside esbuild, never through remote import maps.
+  const offlineReactModules = {
+    "react": [
+      "const R = globalThis.__offlineReact.React;",
+      "export default R;",
+      ...["createElement","cloneElement","isValidElement","Children","Fragment",
+          "StrictMode","Suspense","lazy","memo","forwardRef","createContext",
+          "use","useState","useReducer","useEffect","useLayoutEffect",
+          "useInsertionEffect","useRef","useMemo","useCallback","useContext",
+          "useId","useDeferredValue","useTransition","useImperativeHandle",
+          "useSyncExternalStore","startTransition","act"]
+        .map(name => "export const " + name + " = R." + name + ";"),
+    ].join("\n"),
+    "react-dom/client": [
+      "const R = globalThis.__offlineReact;",
+      "export const createRoot = R.createRoot;",
+      "export const hydrateRoot = R.hydrateRoot;",
+    ].join("\n"),
+    "react/jsx-runtime": [
+      "const R = globalThis.__offlineReact;",
+      "export const jsx = R.jsx;",
+      "export const jsxs = R.jsxs;",
+      "export const Fragment = R.Fragment;",
+    ].join("\n"),
+  };
   const plugin = { name: "project", setup(b) {
     b.onResolve({ filter: /.*/ }, (args) => {
+      if (Object.hasOwn(offlineReactModules, args.path)) return { path: args.path, namespace: "offline-react" };
       if (args.kind === "entry-point") { const r = resolveFile(args.path); if (r) return { path: r, namespace: "project" }; }
       if (args.path.startsWith("@/")) { const r = resolveFile("src/" + args.path.slice(2)); if (r) return { path: r, namespace: "project" }; }
       if (/^\.\.?\//.test(args.path) || args.path.startsWith("/")) {
@@ -446,6 +472,7 @@ async function buildPreview(appId) {
       }
       return { path: args.path, external: true };
     });
+    b.onLoad({ filter: /.*/, namespace: "offline-react" }, (args) => ({ contents: offlineReactModules[args.path], loader: "js" }));
     b.onLoad({ filter: /.*/, namespace: "project" }, (args) => {
       const src = files.get(args.path);
       if (args.path.endsWith(".css")) return { contents: src.replace(/@tailwind[^;]*;/g, ""), loader: "css" };
@@ -457,11 +484,15 @@ async function buildPreview(appId) {
     define: { "import.meta.env.DEV": "true", "import.meta.env.MODE": '"development"', "import.meta.env.BASE_URL": JSON.stringify(appUrl.pathname), "process.env.NODE_ENV": '"development"' } });
   const js = r.outputFiles.find((f) => f.path.endsWith(".js")).text;
   const css = (r.outputFiles.find((f) => f.path.endsWith(".css")) || { text: "" }).text;
+  const reactResource = await fetch(new URL("runtime/packages/react-bundle.js", BASE));
+  if (!reactResource.ok) throw new Error("offline React bundle missing");
+  const offlineReactCode = (await reactResource.text()).replaceAll("</script", "<\\/script");
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script type="importmap">${JSON.stringify({ imports })}<\/script>
 <script>tailwind = { config: ${tailwindConfig} };<\/script>
 <!-- Offline preview: remote Tailwind runtime deliberately omitted. -->
 <style>${css}</style></head><body><div id="root"></div>
+<script>${offlineReactCode}<\/script>
 <script type="module">${js}<\/script></body></html>`;
   const cache = await caches.open("previews");
   await cache.put(appUrl.pathname + "index.html", new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } }));
