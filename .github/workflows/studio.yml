@@ -58,5 +58,7 @@ jobs:
         run: node tools/prism_journey.mjs --check
       - name: The commit Forge makes on a template instance is prism-code's, byte for byte
         run: node tools/prism_template.mjs --check
+      - name: The live preview draws the spec, and only the spec
+        run: node tools/live_preview.mjs --check
       - name: Nothing in this repository names Forge's old home
         run: node tools/self_contained.mjs
