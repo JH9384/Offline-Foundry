@@ -44,3 +44,10 @@ Neither this review nor these controls establish runtime source-owner discovery,
 external-checker validity, application generation, or factory integration.
 The PR remains draft until locked-SDK acceptance and the remaining review
 requirements are satisfied.
+
+A second, semantic mutation changed `admitOwnerCount` so zero owners were
+admitted while the seven controls remained unchanged. In the isolated diagnostic
+project, `lexlean verify --all` rejected `missingProductOwner` and
+`missingExternalOwner` with `LLV7002`. Restoring the source restored successful
+verification. This establishes that those diagnostic kernel checks reject the
+semantic defect, subject to the same compiler-identity limitation above.
