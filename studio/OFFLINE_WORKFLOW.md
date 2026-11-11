@@ -15,6 +15,25 @@ The starter is staged by `studio/scripts/stamp_shell.py` into:
 - `scaffold/src/main.extended.tsx` — preserved original entrypoint;
 - all existing scaffold source files are retained.
 
+## Launch on Mac Studio (verified assets only)
+
+The static browser shell can run on loopback without publishing a website.
+After building the exact verification revision using the steps in
+`.github/workflows/forge-verify.yml`, run from `studio/`:
+
+```bash
+python3 tools/release_gate.py
+node tools/serve_offline.mjs 4173
+```
+
+Open **http://127.0.0.1:4173/foundry/** in a browser. The server binds to
+`127.0.0.1` only and serves the assembled `studio/shell` directory.
+It does not install dependencies or compile missing browser assets.
+Serving locally is not authorization to publish or deploy.
+
+A fresh checkout is not a built shell. Follow the workflow's pinned compiler,
+renderer and assembly steps first; never bypass the release gate.
+
 ## Operator workflow
 
 1. **Build and verify** the repository's exact verification revision using
