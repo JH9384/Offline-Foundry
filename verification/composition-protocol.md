@@ -98,3 +98,10 @@ request was emitted as one large array literal. Their model expressions now
 append balanced chunks of at most 4096 bytes. Independent fixture bytes and the
 compiled requests are unchanged; the source-binding check pins the complete
 assembled expression. No recursion limit or stress case was removed.
+
+Balanced byte arrays resolved elaboration depth but revision 5645b53 still
+exceeded the locked application-Lean time limit in build 43004793784 (PP5007).
+The printable wire fixtures now use UTF8 encoding of literal ASCII strings,
+removing large per-byte array terms entirely. The independently maintained hex
+fixtures still pin every byte; no request, expected response, limit or compiler
+budget changed.

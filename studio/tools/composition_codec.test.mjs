@@ -45,12 +45,10 @@ test("invalid guest responses and runtime failures refuse", async () => {
   assert.equal((await admitWithGuest({ dispatch() { throw Error("private"); } }, policy, [feature])).code, "compositionRuntimeFailed");
 });
 
-// A balanced byte-expression avoids a single giant Lean array literal. The
-// independent fixture still pins every byte of the assembled runtime request.
+// Printable fixture strings avoid enormous Lean byte-array literal elaboration.
+// The independent hexadecimal fixture still pins every UTF8-encoded byte.
 function requestTerm(hex) {
-  if (hex.length <= 8192) return "0x" + hex;
-  const cut = Math.floor(hex.length / 4) * 2;
-  return `(prim append ${requestTerm(hex.slice(0, cut))} ${requestTerm(hex.slice(cut))} : Bytes)`;
+  return `(prim utf8_encode ${JSON.stringify(Buffer.from(hex, "hex").toString("ascii"))} : Bytes)`;
 }
 test("the actual guest model carries the full wire corpus and routes through semantic admission", () => {
   const kernel = fs.readFileSync(new URL("../../app/src/ForgeKernel.lex.tex", import.meta.url), "utf8");
