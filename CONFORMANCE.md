@@ -92,6 +92,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-11` | `build` | Cloud inference bounds requests and streamed responses and refuses cancellation, malformed data and provider failures explicitly |
 
+## proposal-admission
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-18` | `build` | Router proposals resolve exact registered feature versions and cannot bypass ambiguity, registry revision or composition admission |
+
 ## provider-key-validation
 
 | ID | Level | Statement |

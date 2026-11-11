@@ -176,3 +176,9 @@ id = "FA-17"
 level = "build"
 suite = "work-protocol"
 statement = "The generated guest executes bounded work ownership requests and returns exact state or typed refusal"
+
+[[id]]
+id = "FA-18"
+level = "build"
+suite = "proposal-admission"
+statement = "Router proposals resolve exact registered feature versions and cannot bypass ambiguity, registry revision or composition admission"
