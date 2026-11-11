@@ -315,6 +315,40 @@ async function positive() {
     if (outgoing.length) throw new Error('Unexpected outbound request during offline project persistence');
     console.log('  Offline project create/edit/version/reload: PASS', JSON.stringify(restored));
 
+    // Exercise the REAL host preview builder, not the standalone esbuild probe.
+    // Use an entirely local entrypoint so any outbound fetch is a regression.
+    const actual = await page.evaluate(async ({appId}) => {
+      const ipc = window.electron.ipcRenderer;
+      await ipc.invoke('edit-app-file', {
+        appId, filePath:'src/main.tsx',
+        content:'document.getElementById("root").textContent = "Offline Foundry real preview";',
+      });
+      const app = await window.__host.get('apps', appId);
+      await window.__host.put('apps', appId, {...app, grants:[]});
+      if (typeof window.__preview !== 'function') throw new Error('Real preview builder unavailable');
+      const result = await window.__preview(appId);
+      if (!result.appUrl.includes('/foundry/p/')) throw new Error('Unexpected preview URL: ' + result.appUrl);
+      const html = await (await fetch(result.appUrl)).text();
+      if (!html.includes('Offline Foundry real preview')) {
+        throw new Error('Preview cache did not contain locally compiled project');
+      }
+      return {url:result.appUrl, bytes:result.bytes};
+    }, project);
+    const preview = await context.newPage();
+    try {
+      await preview.goto(actual.url, {waitUntil:'load',timeout:30000});
+      await preview.waitForFunction(() =>
+        document.getElementById('root')?.textContent === 'Offline Foundry real preview',
+        null, {timeout:15000});
+      if (outgoing.length) {
+        throw new Error('Real offline preview attempted external network: ' + outgoing.join('; '));
+      }
+      console.log('  Real host build and offline preview: PASS', JSON.stringify(actual));
+    } finally {
+      await preview.close();
+    }
+
+
 
   } finally { await context.close(); await close(); }
 }
