@@ -225,9 +225,18 @@ async function positive() {
       };
       const first = await es.build(options);
       const second = await es.build(options);
-      const js = first.outputFiles.find(file => file.path.endsWith('.js'))?.text;
-      if (!js || js !== second.outputFiles.find(file => file.path.endsWith('.js'))?.text) {
-        throw new Error('Offline TypeScript compilation absent or non-repeatable');
+      // With stdin and no outfile esbuild may report a virtual output path
+      // such as "<stdout>" rather than one ending in .js.
+      const js = first.outputFiles?.[0]?.text;
+      const jsAgain = second.outputFiles?.[0]?.text;
+      if (!js || !jsAgain || js !== jsAgain) {
+        throw new Error('Offline TypeScript compilation absent or non-repeatable: ' +
+          JSON.stringify({
+            firstPaths: first.outputFiles?.map(file => file.path),
+            secondPaths: second.outputFiles?.map(file => file.path),
+            firstBytes: js?.length ?? 0,
+            secondBytes: jsAgain?.length ?? 0,
+          }));
       }
 
       const frame = document.createElement('iframe');
