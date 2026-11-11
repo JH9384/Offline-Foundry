@@ -42,6 +42,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-22` | `build` | File edits atomically commit a source-bound snapshot or refuse concurrent project changes without partial writes |
 
+## atomic-project-lifecycle
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-25` | `build` | Project rename, deletion, checkout and revert commit coherent state and refuse stale sources |
+
 ## authoring-projection
 
 | ID | Level | Statement |

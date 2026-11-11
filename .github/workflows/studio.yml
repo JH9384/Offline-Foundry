@@ -65,6 +65,7 @@ jobs:
           node tools/storage_request_browser.mjs
           node tools/project_creation_browser.mjs
           node tools/project_edit_browser.mjs
+          node tools/project_lifecycle_browser.mjs
           node tools/generation_patch_browser.mjs
           node tools/rules_source_browser.mjs
           node tools/inference_effects_browser.mjs

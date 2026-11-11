@@ -66,9 +66,13 @@ try {
     check(refused && await snapshot() === before, "partial project survived aborted transaction");
     refused = false; try { await createStoredChat(db, 999); } catch (e) { refused = e.code === "projectStorageFailed"; }
     check(refused && await snapshot() === before, "missing app acquired chat");
+    // Legacy installations have no allocation marks: insert-only writes still matter.
+    await storageRequest(db, "refs", "readwrite", s => s.put(0, "allocation:apps"));
+    await storageRequest(db, "refs", "readwrite", s => s.put(0, "allocation:chats"));
+    const beforeImport = await snapshot();
     const importer = importHandler({ handlers: new Map(), kappa, unb64: x => Uint8Array.from(atob(x), c => c.charCodeAt(0)), all, nextId: async () => 1, nulls: {}, enc: new TextEncoder(), dbReady: Promise.resolve(db) });
     refused = false; try { await importer({ schema: "hologram-forge/export/1", apps: [{ app: { name: "collision" }, files: { "new.txt": "new" }, chats: [] }] }); } catch (e) { refused = e.code === "projectStorageFailed"; }
-    check(refused && await snapshot() === before, "import replaced an existing project");
+    check(refused && await snapshot() === beforeImport, "import replaced an existing project");
     const recovery = await createStoredProject(db, await prepare("recovery")); check(recovery.app.id === 6, "failed transaction consumed ID");
     db.close();
     return { concurrentProjects: 5, uniqueChats: 13, closure: "complete", failedWrite: "rolled-back", missingApp: "refused", importCollision: "refused-without-overwrite", recovery: "complete" };

@@ -231,3 +231,9 @@ id = "FA-24"
 level = "build"
 suite = "current-main-integration"
 statement = "Current live editing and reword flows retain source-bound commits and the complete compiled kernel protocols"
+
+[[id]]
+id = "FA-25"
+level = "build"
+suite = "atomic-project-lifecycle"
+statement = "Project rename, deletion, checkout and revert commit coherent state and refuse stale sources"

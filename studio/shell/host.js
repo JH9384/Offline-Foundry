@@ -16,7 +16,7 @@ import { validateProviderKey } from "./provider-key-validation.mjs";
 import { packBytes, unpackBytes, RepresentationError } from "./exact-representation.mjs";
 import { admitWithGuest } from "./composition-codec.mjs";
 import { readBoundRules, saveBoundRules } from "./rules-source.mjs";
-import { restoreSnapshot } from "./snapshot-restore.mjs";
+import { renameStoredProject, restoreStoredProject, deleteStoredProject, deleteStoredChat, updateStoredChat } from "./project-lifecycle.mjs";
 import { invokeHost, unwrapHost } from "./host-boundary.mjs";
 import { buildSystemPrompt } from "./prompts.js";
 import * as inference from "./inference.js";
@@ -138,32 +138,12 @@ handlers.set("validate-provider-api-key", input => validateProviderKey(input));
 
 // ---- apps and files. A file is stored under "<appId>:<path>"; the app record carries no files,
 // get-app lists them. Every edit seals a version: the address of the project state.
-const nextId = async (store) => { const ks = await keys(store); return ks.length ? Math.max(...ks.map(Number)) + 1 : 1; };
+const nextId = async (store) => { const ks = await keys(store), high = await get("refs", `allocation:${store}`); const maximum = Math.max(0, high || 0, ...ks.map(Number)); if (!Number.isSafeInteger(maximum) || maximum < 0 || maximum >= Number.MAX_SAFE_INTEGER) throw new Error("Identifier allocation failed"); return maximum + 1; };
 const nulls = { githubOrg: null, githubRepo: null, githubBranch: null, supabaseProjectId: null, supabaseParentProjectId: null, supabaseOrganizationSlug: null, neonProjectId: null, neonDevelopmentBranchId: null, neonPreviewBranchId: null, neonActiveBranchId: null, selectedDatabaseBranchType: null, vercelProjectId: null, vercelProjectName: null, vercelDeploymentUrl: null, vercelTeamId: null, installCommand: null, startCommand: null, chatContext: null, isFavorite: false, testingEnabled: false, collectionId: null };
 const withDates = (a) => ({ ...a, createdAt: new Date(a.createdAt), updatedAt: new Date(a.updatedAt), resolvedPath: a.path });
 async function filesOf(appId) {
   const ks = (await keys("files")).filter((k) => k.startsWith(appId + ":")).map((k) => k.slice(String(appId).length + 1)).sort();
   return ks;
-}
-async function entriesOf(appId) {
-  const out = [];
-  for (const path of await filesOf(appId)) { const bytes = enc.encode(await get("files", appId + ":" + path)); out.push({ path, kappa: await kappa(bytes), bytes: bytes.length }); }
-  return out;
-}
-async function seal(appId, message) {
-  await coreReady;
-  const app = await get("apps", appId);
-  const parent = (await get("refs", appId + ":main")) || "";
-  const { bytes: preimage } = core.run({ op: "preimage", project: { label: app.name, entries: await entriesOf(appId) }, parent });
-  const body = enc.encode(preimage);
-  const k = await kappa(body);
-  await put("objects", k, body);
-  await put("refs", appId + ":main", k);
-  const versions = (await get("versions", appId)) || [];
-  versions.unshift({ oid: k, message, timestamp: Math.floor(Date.now() / 1000), dbTimestamp: null, isFavorite: false, note: null });
-  await put("versions", appId, versions);
-  emit("version-created", { appId, oid: k });
-  return k;
 }
 let scaffold = null;
 async function loadScaffold() {
@@ -188,8 +168,12 @@ handlers.set("edit-app-file", async (input) => {
   emit("version-created", { appId: input.appId, oid });
   return { success: true, warning: null };
 });
-handlers.set("delete-app", async ({ appId }) => { for (const p of await filesOf(appId)) await del("files", appId + ":" + p); await del("apps", appId); await del("versions", appId); await del("refs", appId + ":main"); for (const c of await all("chats")) if (c.appId === appId) await del("chats", c.id); });
-handlers.set("rename-app", async ({ appId, appName }) => { const a = await get("apps", appId); a.name = appName; a.path = appName; a.updatedAt = new Date().toISOString(); await put("apps", appId, a); return { app: withDates(a) }; });
+handlers.set("delete-app", async ({ appId }) => { await deleteStoredProject(await dbReady, appId); liveEditors.delete(appId); });
+handlers.set("rename-app", async (input) => {
+  await coreReady;
+  await renameStoredProject(await dbReady, input, { core, derive: kappa, onCommit: oid => emit("version-created", { appId: input.appId, oid }) });
+  return { app: withDates(await get("apps", input.appId)) };
+});
 // A search matches a project by name, by the title of one of its chats, or by a line in one of their
 // messages, and says which: the renderer shows the matched title and message under the project's name.
 handlers.set("search-app", async (q) => {
@@ -278,7 +262,19 @@ handlers.set("forge:import", async (input) => {
     try {
       t = db.transaction(["apps", "chats", "files", "objects", "refs", "versions"], "readwrite");
       t.oncomplete = res; t.onerror = refuse; t.onabort = refuse;
-      for (const [store, key, value] of writes) { if (store === "apps" || store === "chats") t.objectStore(store).add(value, key); else t.objectStore(store).put(value, key); }
+      const marks = new Map();
+      const commit = () => {
+        if (marks.size !== 2) return;
+        try {
+          for (const store of ["apps", "chats"]) {
+            const high = marks.get(store), assigned = writes.filter(row => row[0] === store).map(row => row[1]);
+            if (!Number.isSafeInteger(high) || high < 0 || assigned.some(id => !Number.isSafeInteger(id) || id <= high)) throw Error("stale allocation");
+            if (assigned.length) t.objectStore("refs").put(Math.max(high, ...assigned), `allocation:${store}`);
+          }
+          for (const [store, key, value] of writes) { if (store === "apps" || store === "chats") t.objectStore(store).add(value, key); else t.objectStore(store).put(value, key); }
+        } catch { try { t.abort(); } catch {} refuse(); }
+      };
+      for (const store of ["apps", "chats"]) { const q = t.objectStore("refs").get(`allocation:${store}`); q.onsuccess = () => { marks.set(store, q.result === undefined ? 0 : q.result); commit(); }; }
     } catch { if (t) { try { t.abort(); } catch {} } refuse(); }
   });
   return { apps, objects: objects.size, refused };
@@ -315,9 +311,10 @@ handlers.set("get-version-changes", async ({ versionId }) => {
 });
 handlers.set("set-version-favorite", async ({ appId, oid, isFavorite }) => { const v = (await get("versions", appId)) || []; for (const x of v) if (x.oid === oid) x.isFavorite = isFavorite; await put("versions", appId, v); });
 handlers.set("set-version-note", async ({ appId, oid, note }) => { const v = (await get("versions", appId)) || []; for (const x of v) if (x.oid === oid) x.note = note; await put("versions", appId, v); });
-async function restore(appId, oid) {
+async function restore(appId, oid, revert = false) {
   await coreReady;
-  return restoreSnapshot(await dbReady, appId, oid, {
+  return restoreStoredProject(await dbReady, appId, oid, {
+    core, onCommit: hash => emit("version-created", { appId, oid: hash }),
     readObject: key => get("objects", key),
     derive: kappa,
     admit: async (derived, expected) => {
@@ -325,10 +322,10 @@ async function restore(appId, oid) {
       await put("audit", Date.now() + ":" + oid, { ts: Date.now(), operation: "snapshot.restore", resource: oid, outcome: decision });
       return decision === "Accept";
     },
-  });
+  }, revert);
 }
 handlers.set("checkout-version", async ({ appId, versionId }) => { await restore(appId, versionId); });
-handlers.set("revert-version", async ({ appId, previousVersionId }) => { await restore(appId, previousVersionId); await seal(appId, "Revert to " + previousVersionId.slice(0, 22)); return { successMessage: "Reverted" }; });
+handlers.set("revert-version", async ({ appId, previousVersionId }) => { await restore(appId, previousVersionId, true); return { successMessage: "Reverted" }; });
 
 // ---- chats as records; the stream is the next slice
 handlers.set("get-chats", async (appId) => (await all("chats")).filter((c) => appId == null || c.appId === appId).map((c) => chatRow(c)));
@@ -336,8 +333,8 @@ handlers.set("get-chat", async (id) => { const c = await get("chats", id); if (!
 const chatRow = (c) => ({ id: c.id, appId: c.appId, title: c.title, createdAt: new Date(c.createdAt || Date.now()), chatMode: c.chatMode || "build", isFavorite: !!c.isFavorite });
 handlers.set("get-chat-metadata", async (id) => { const c = await get("chats", id); return c ? chatRow(c) : null; });
 handlers.set("create-chat", async (appId) => createStoredChat(await dbReady, appId, now()));
-handlers.set("update-chat", async ({ chatId, title }) => { const c = await get("chats", chatId); if (c && title) c.title = title; if (c) await put("chats", chatId, c); });
-handlers.set("delete-chat", async (id) => { await del("chats", id); });
+handlers.set("update-chat", async ({ chatId, title }) => { if (title) await updateStoredChat(await dbReady, chatId, { title }); });
+handlers.set("delete-chat", async (id) => { await deleteStoredChat(await dbReady, id); });
 // The sidebar's search: a chat matches by title or by the text of one of its messages, and the line
 // that matched is what the renderer shows under it.
 handlers.set("search-chats", async (q) => {
@@ -827,14 +824,14 @@ async function markInterruptedTurns() {
     const open = /^<think>/.test(last.content) && !last.content.includes("</think>");
     if (!open && last.content.trim()) continue;
     last.content = (open ? last.content + "</think>" : last.content) + CUT;
-    await put("chats", chat.id, chat);
+    await updateStoredChat(await dbReady, chat.id, { messages: chat.messages });
   }
 }
 markInterruptedTurns().catch((e) => console.warn("[host] marking interrupted turns", e));
 const djb2 = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0; return h; };
 const now = () => new Date().toISOString();
 async function messagesOf(chatId) { const c = await get("chats", chatId); return c ? c.messages : []; }
-async function saveMessages(chatId, messages) { const c = await get("chats", chatId); c.messages = messages; await put("chats", chatId, c); }
+async function saveMessages(chatId, messages) { return updateStoredChat(await dbReady, chatId, { messages }); }
 // What the model is shown of the project: every path, and the source of the files a visitor's app
 // is made of; the shadcn ui library files are named, not pasted, since the model knows them.
 async function codebaseOf(appId, source) {
@@ -1181,7 +1178,7 @@ async function chatTurn(chatId, intent) {
     // T6: completed batches have their own committed snapshots.
     assertGenerationActive(abort.signal);
     const sm = full.match(/<dyad-chat-summary>([\s\S]*?)<\/dyad-chat-summary>/); summary = sm ? sm[1].trim() : undefined;
-    if (summary && (!chat.title || chat.title === "New chat")) { const c = await get("chats", chatId); c.title = summary; await put("chats", chatId, c); }
+    if (summary && (!chat.title || chat.title === "New chat")) { await updateStoredChat(await dbReady, chatId, { title: summary }); }
     const tags = parseDyadTags(full);
     const applied = await applyDyadTags(appId, tags, { signal: abort.signal, source: projectSource, onCommit });
     let changed = applied.changed;

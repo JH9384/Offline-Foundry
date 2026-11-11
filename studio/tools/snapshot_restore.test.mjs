@@ -73,8 +73,8 @@ test("storage failure and invalid app identity expose typed refusals", async () 
 });
 test("the real host delegates restoration to the checked atomic adapter", () => {
   const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
-  const restore = host.slice(host.indexOf("async function restore(appId, oid)"), host.indexOf('handlers.set("checkout-version"'));
-  assert.match(restore, /return restoreSnapshot\(await dbReady, appId, oid/);
+  const restore = host.slice(host.indexOf("async function restore(appId, oid, revert = false)"), host.indexOf('handlers.set("checkout-version"'));
+  assert.match(restore, /return restoreStoredProject\(await dbReady, appId, oid/);
   assert.match(restore, /readObject: key => get\("objects", key\)/);
   assert.match(restore, /derive: kappa/);
   assert.match(restore, /core.run\(\{ op: "restore", derived, expected \}\)/);

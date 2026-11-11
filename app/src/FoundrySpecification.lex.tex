@@ -529,5 +529,23 @@ definition{
   result: String,
   body: "Live edits, undo, redo and agent spec patches use captured project source and the atomic generation batch boundary. No second seal captures unrelated concurrent files. A refused write discards optimistic history and reloads committed state. Agent patches carry the preceding committed source and cancellation signal. Checked wording changes retain proof state only when the checked candidate logic identity and the recomputed prior checked-spec logic identity both equal the recorded identity, and the compiled lifecycle guest accepts reword. Logical changes drop proof through edit and check. Proof completion compares current source-bound logic identity and uses compare-and-set on the current state; competing completions cannot overwrite it. Reword preserves published semantic phase while publicationCurrent becomes false when source bytes differ; the card identifies that wording changed since publication. A successful new publication resets that marker. The signed guest must replay at least 114 acceptance vectors and retain lifecycle reword, composition and work protocols. These checks qualify integration of current main, not authenticated proof records, full publication closure or whole-journey conversion. Existing GenerationPatchError and ProjectEditError refusals remain authoritative."
 }
+
+inductive{
+  name: ProjectLifecycleError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidProjectLifecycle, fields: []},
+    {name: projectLifecycleStorageFailed, fields: []},
+    {name: projectLifecycleMissing, fields: []}
+  ]
+}
+
+definition{
+  name: projectLifecycleBoundary,
+  parameters: [],
+  result: String,
+  body: "Rename captures current source, prepares a snapshot with the new name and current parent, and commits metadata, snapshot, reference and version together only while captured source still matches. Checkout and revert validate all snapshot and file identities before touching the project, compare the captured source in the committing transaction, restore name and snapshot-bound direct dependencies, and invalidate source-bound proof status. Checkout selects the exact validated target reference without adding a history entry; revert creates one child of the previously current reference containing target files. Deletion removes app, its files, main and proof references, versions and dependent chats in one transaction while retaining shared content-addressed objects. Persistent allocation high-water marks prevent subsequent automatic app/chat ID reuse after deletion, including legacy records. Import refuses an allocation at or below the persisted mark and advances marks in its committing transaction. Chat updates require both the chat and its owning app in one transaction and return false after deletion, so late generation cannot resurrect deleted records. Missing projects, malformed lifecycle arguments and storage errors have typed fixed public refusals; edit conflicts and snapshot validation errors retain their existing types. Storage failure aborts the transaction. This is browser-local lifecycle consistency, not authenticated ownership, garbage collection, cross-device identity or a whole-product release claim."
+}
 \end{semanticmodule}
 \end{lexlean}

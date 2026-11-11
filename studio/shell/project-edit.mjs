@@ -29,7 +29,7 @@ export function captureProjectSource(db, appId) {
     } catch { refuse("projectEditStorageFailed"); }
   });
 }
-export function commitPreparedProject(db, appId, changedPaths, captured, prepared, { signal, dependencies, message } = {}) {
+export function commitPreparedProject(db, appId, changedPaths, captured, prepared, { signal, dependencies, message, name, recordVersion = true } = {}) {
   return new Promise((resolve, reject) => {
     let t, app, reference, appRead = false, refRead = false, filesRead = false, failed = false;
     const original = new Map(captured.files); let seen = 0;
@@ -44,7 +44,7 @@ export function commitPreparedProject(db, appId, changedPaths, captured, prepare
       t.oncomplete = () => { clean(); if (failed) reject(failure("projectEditStorageFailed")); else resolve(prepared.oid); };
       const write = () => {
         if (failed || !appRead || !refRead || !filesRead) return;
-        if (!app || app.name !== captured.name || reference !== captured.reference || seen !== original.size || (dependencies && (!dependencyShape(app.extraDeps || []) || JSON.stringify(app.extraDeps || []) !== JSON.stringify(captured.dependencies)))) { refuse("projectEditConflict"); return; }
+        if (!app || app.name !== captured.name || reference !== captured.reference || seen !== original.size || (!dependencyShape(app.extraDeps || []) || JSON.stringify(app.extraDeps || []) !== JSON.stringify(captured.dependencies))) { refuse("projectEditConflict"); return; }
         try {
           const q = t.objectStore("versions").get(appId);
           q.onsuccess = () => {
@@ -59,8 +59,8 @@ export function commitPreparedProject(db, appId, changedPaths, captured, prepare
               for (const [key, bytes] of prepared.objects) t.objectStore("objects").put(bytes, key);
               t.objectStore("refs").put(prepared.oid, `${appId}:main`);
               if (changedPaths.includes("prism/spec.json")) t.objectStore("refs").delete(`prism:${appId}`);
-              t.objectStore("versions").put([{ oid: prepared.oid, message: message || `Edit ${changedPaths.join(", ")}`, timestamp: Math.floor(Date.parse(at) / 1000), dbTimestamp: null, isFavorite: false, note: null }, ...q.result], appId);
-              t.objectStore("apps").put({ ...app, ...(dependencies ? { extraDeps: dependencies } : {}), updatedAt: at }, appId);
+              if (recordVersion) t.objectStore("versions").put([{ oid: prepared.oid, message: message || `Edit ${changedPaths.join(", ")}`, timestamp: Math.floor(Date.parse(at) / 1000), dbTimestamp: null, isFavorite: false, note: null }, ...q.result], appId);
+              t.objectStore("apps").put({ ...app, ...(name === undefined ? {} : { name, path: name }), ...(dependencies ? { extraDeps: dependencies } : {}), updatedAt: at }, appId);
             } catch { refuse("projectEditStorageFailed"); }
           };
         } catch { refuse("projectEditStorageFailed"); }

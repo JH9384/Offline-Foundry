@@ -71,6 +71,22 @@ const nextIdentifier = keys => {
   for (const key of keys) { if (!Number.isSafeInteger(key) || key < 1) throw Error(); maximum = Math.max(maximum, key); }
   if (maximum >= Number.MAX_SAFE_INTEGER) throw Error(); return maximum + 1;
 };
+// A committed high-water mark survives deletion and also accounts for legacy keys.
+export function allocateIdentifier(transaction, storeName, accept, refuse) {
+  const store = transaction.objectStore(storeName), refs = transaction.objectStore("refs");
+  const keys = store.getAllKeys(), mark = refs.get(`allocation:${storeName}`);
+  let rows, high, read = false;
+  const ready = () => {
+    if (!rows || !read) return;
+    try {
+      if (high !== undefined && (!Number.isSafeInteger(high) || high < 0)) throw Error();
+      const id = nextIdentifier(high ? [...rows, high] : rows);
+      refs.put(id, `allocation:${storeName}`); accept(id);
+    } catch { refuse(); }
+  };
+  keys.onsuccess = () => { rows = keys.result; ready(); }; mark.onsuccess = () => { high = mark.result; read = true; ready(); };
+  keys.onerror = refuse; mark.onerror = refuse;
+}
 export async function createStoredProject(db, prepared, defaults = {}) {
   let data, appDefaults;
   try { data = structuredClone(prepared); appDefaults = structuredClone(defaults); }
@@ -83,11 +99,11 @@ export async function createStoredProject(db, prepared, defaults = {}) {
       t.oncomplete = () => answer ? resolve(answer) : reject(failure("projectStorageFailed"));
       t.onabort = () => reject(failure("projectStorageFailed")); t.onerror = refuse;
       const apps = t.objectStore("apps"), chats = t.objectStore("chats");
-      const aq = apps.getAllKeys(), cq = chats.getAllKeys(); let appKeys, chatKeys;
+      let allocatedApp, allocatedChat;
       const write = () => {
-        if (!appKeys || !chatKeys) return;
+        if (!allocatedApp || !allocatedChat) return;
         try {
-          const id = nextIdentifier(appKeys), chatId = nextIdentifier(chatKeys), at = new Date().toISOString();
+          const id = allocatedApp, chatId = allocatedChat, at = new Date().toISOString();
           const app = { ...appDefaults, id, name: data.name, path: data.name, createdAt: at, updatedAt: at };
           apps.add(app, id);
           for (const [path, text] of data.files) t.objectStore("files").add(text, `${id}:${path}`);
@@ -98,8 +114,8 @@ export async function createStoredProject(db, prepared, defaults = {}) {
           answer = { app, chatId, oid: data.oid };
         } catch { refuse(); }
       };
-      aq.onsuccess = () => { appKeys = aq.result; write(); }; cq.onsuccess = () => { chatKeys = cq.result; write(); };
-      aq.onerror = refuse; cq.onerror = refuse;
+      allocateIdentifier(t, "apps", id => { allocatedApp = id; write(); }, refuse);
+      allocateIdentifier(t, "chats", id => { allocatedChat = id; write(); }, refuse);
     } catch { refuse(); }
   });
 }
@@ -109,18 +125,16 @@ export async function createStoredChat(db, appId, at = new Date().toISOString())
     let t, id;
     const refuse = () => { if (t) { try { t.abort(); } catch {} } reject(failure("projectStorageFailed")); };
     try {
-      t = db.transaction(["apps", "chats"], "readwrite");
+      t = db.transaction(["apps", "chats", "refs"], "readwrite");
       t.oncomplete = () => id ? resolve(id) : reject(failure("projectStorageFailed"));
       t.onabort = () => reject(failure("projectStorageFailed")); t.onerror = refuse;
       const aq = t.objectStore("apps").get(appId);
       aq.onsuccess = () => {
         if (!aq.result) { refuse(); return; }
-        const store = t.objectStore("chats"), q = store.getAllKeys();
-        q.onerror = refuse;
-        q.onsuccess = () => {
-          try { id = nextIdentifier(q.result); store.add({ id, appId, title: "New chat", createdAt: at, messages: [], initialCommitHash: null, dbTimestamp: null, chatMode: "build", modelSelection: null, referencedApps: [] }, id); }
+        allocateIdentifier(t, "chats", allocated => {
+          try { id = allocated; t.objectStore("chats").add({ id, appId, title: "New chat", createdAt: at, messages: [], initialCommitHash: null, dbTimestamp: null, chatMode: "build", modelSelection: null, referencedApps: [] }, id); }
           catch { refuse(); }
-        };
+        }, refuse);
       };
       aq.onerror = refuse;
     } catch { refuse(); }
