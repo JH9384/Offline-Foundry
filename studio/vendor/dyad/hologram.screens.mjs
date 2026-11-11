@@ -188,6 +188,31 @@ export const PATCHES = [
     from: `<span>{selectedApp.updatedAt.toString()}</span>`,
     to: `<span>{new Date(selectedApp.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>`,
   },
+  // The build screen on a phone (the kit's useIsMobile, the sidebar's own breakpoint): one pane at a time and
+  // a bar at the bottom (hologram.screens/MobileBuild.tsx) instead of the two resizable panels.
+  {
+    file: "src/pages/chat.tsx",
+    from: `import { ipc } from "@/ipc/types";`,
+    to: `import { ipc } from "@/ipc/types";
+import { useIsMobile } from "@/registry/new-york-v4/hooks/use-mobile";
+import { MobileBuild } from "../../hologram.screens/MobileBuild";`,
+  },
+  {
+    file: "src/pages/chat.tsx",
+    from: `  return (
+    <PanelGroup autoSaveId="persistence" direction="horizontal">`,
+    to: `  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <MobileBuild
+        chat={<ChatPanel chatId={chatId} isPreviewOpen={true} onTogglePreview={() => {}} />}
+        preview={<PreviewPanel />}
+      />
+    );
+  }
+  return (
+    <PanelGroup autoSaveId="persistence" direction="horizontal">`,
+  },
 ];
 
 // A retag patch: the one JSX element whose opening tag is exactly `retag` becomes `to`, its closing tag
