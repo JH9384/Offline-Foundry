@@ -61,7 +61,7 @@ handlers.set("set-user-settings", async (patch) => { const s = { ...DEFAULT_SETT
 // What the renderer takes as "set up": the site's included key counts as OpenRouter's, the device's
 // GPU counts as the local provider's, so no connect dialog stands between the first prompt and the
 // answer. The values are words, never the key itself.
-handlers.set("get-env-vars", async () => { await siteKeyReady(); const env = {}; if (site.key) env.OPENROUTER_API_KEY = "included by this site"; if (navigator.gpu) env.HOLOGRAM_DEVICE = "webgpu"; return env; });
+handlers.set("get-env-vars", async () => { await siteKeyReady(); const env = {}; if (site.key) env.OPENROUTER_API_KEY = "included by this site"; if (navigator.gpu) env.HOLOGRAM_DEVICE = "webgpu"; if ((await localApiCatalog()).length) env.FOUNDRY_LOCAL_LLM = "verified loopback model catalog"; return env; });
 handlers.set("get-system-platform", () => "web");
 handlers.set("get-app-version", () => ({ version: "1.15.0-web" }));
 handlers.set("native-theme:get-state", () => ({ shouldUseDarkColors: matchMedia("(prefers-color-scheme: dark)").matches }));
