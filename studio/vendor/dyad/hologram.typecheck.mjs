@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { toRadix } from "./hologram.radix.mjs";
+import { screenSource } from "./hologram.screens.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Files the shell's build replaces with ours (vite.shell.config.mts resolveId): their errors do not ship.
@@ -26,7 +27,7 @@ function program(configName, rewrite) {
       if (slash(file).startsWith(src) && /\.tsx$/.test(file) && !slash(file).includes("/components/ui/")) {
         const text = ts.sys.readFile(file);
         if (text !== undefined) {
-          const r = toRadix(text, slash(path.relative(here, file)));
+          const r = toRadix(screenSource(file, text), slash(path.relative(here, file)));
           if (!REPLACED.has(slash(path.relative(here, file)))) problems.push(...r.problems);
           return ts.createSourceFile(file, r.code, lang, true);
         }

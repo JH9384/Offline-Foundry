@@ -23,6 +23,6 @@
       "ts-pg-schema-diff/*": ["./packages/ts-pg-schema-diff/src/*"]
     }
   },
-  "include": ["src", "shared", "hologram.*.tsx", "packages/ts-pg-schema-diff/src", "packages/pg-schema-classifier/src"],
+  "include": ["src", "shared", "hologram.*.tsx", "hologram.env.d.ts", "packages/ts-pg-schema-diff/src", "packages/pg-schema-classifier/src"],
   "exclude": ["src/__tests__", "src/**/*.test.tsx", "src/**/*.test.ts", "src/**/*.stories.tsx", "src/components/ui/*.tsx"]
 }

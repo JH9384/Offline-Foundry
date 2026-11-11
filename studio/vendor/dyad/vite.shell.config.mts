@@ -21,6 +21,7 @@ import { mergeConfig, type Plugin } from "vite";
 import base from "./vite.renderer.config.mts";
 import { audit, kitUi, registry, resolveUi } from "./hologram.ui.mjs";
 import { toRadix } from "./hologram.radix.mjs";
+import { screenSource } from "./hologram.screens.mjs";
 
 const src = path.resolve(__dirname, "src").replace(/\\/g, "/");
 const mark = path.resolve(__dirname, "../../shell/mark.svg");
@@ -46,11 +47,12 @@ const hologramUi: Plugin = {
     if (id.startsWith("@/registry/") || id.replace(/\\/g, "/").startsWith(src + "/registry/")) throw new Error(`not vendored: ${id} (run node tools/live_components.mjs --vendor)`);
     return null;
   },
-  // Dyad's screens call the components with Base UI's props; the kit's are Radix (hologram.radix.mjs).
+  // The shell's own screens and patches first (hologram.screens.mjs); then Dyad's screens, which call the
+  // components with Base UI's props, are rewritten for the kit's, which are Radix (hologram.radix.mjs).
   transform(code, id) {
     const file = id.replace(/\\/g, "/").split("?")[0];
     if (!file.startsWith(src) || !/\.tsx$/.test(file) || file.includes("/components/ui/")) return null;
-    const r = toRadix(code, path.relative(__dirname, file));
+    const r = toRadix(screenSource(file, code), path.relative(__dirname, file));
     if (r.problems.length) this.error("not rewritten for Radix:\n" + r.problems.join("\n"));
     return r.code === code ? null : { code: r.code, map: null };
   },
