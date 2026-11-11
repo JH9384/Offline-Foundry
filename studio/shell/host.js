@@ -404,7 +404,9 @@ async function esbuild() {
 // serves a preview, and the gate refuses anything that has no record, so every preview gets one:
 // it may be served, and it may reach the hosts its build names: esm.sh for packages and the play
 // build of Tailwind. An app may carry its own list in app.grants; nothing else is reachable.
-const PREVIEW_ENDPOINTS = ["https://esm.sh", "https://cdn.tailwindcss.com"];
+// Default to no preview network capabilities. External package imports are not
+// silently permitted; project grants must explicitly authorize any endpoints.
+const PREVIEW_ENDPOINTS = [];
 const previewId = (pathname) => pathname.split("/").filter(Boolean).pop();
 async function grantPreview(id, endpoints) {
   await put("refs", "capabilities:" + id, { serve: true, network: { endpoints: [...endpoints], denied: [] } });
@@ -458,7 +460,7 @@ async function buildPreview(appId) {
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script type="importmap">${JSON.stringify({ imports })}<\/script>
 <script>tailwind = { config: ${tailwindConfig} };<\/script>
-<script src="https://cdn.tailwindcss.com"><\/script>
+<!-- Offline preview: remote Tailwind runtime deliberately omitted. -->
 <style>${css}</style></head><body><div id="root"></div>
 <script type="module">${js}<\/script></body></html>`;
   const cache = await caches.open("previews");
