@@ -63,6 +63,9 @@ jobs:
             --no-fund \
             --loglevel=error
 
+      - name: Inventory scaffold dependencies
+        run: node tools/scaffold_dependency_inventory.mjs
+
       - name: Acquire pinned browser compiler
         shell: bash
         run: |
