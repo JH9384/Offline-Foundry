@@ -452,5 +452,19 @@ definition{
   result: String,
   body: "Credential validation supports only OpenRouter authentication metadata. Other providers fail explicitly before network effects. A nonempty printable ASCII key of at most 8192 characters is transmitted only as a Bearer header to the fixed HTTPS OpenRouter auth/key endpoint, with redirect refusal, no cookies and no caching. Success requires HTTP 200 and a JSON data object with a nonempty label and Boolean is_free_tier. A 20 second maximum deadline covers headers and body; the body is bounded to 65536 bytes with fatal UTF8 decoding. Cancellation, network failure, credential rejection, rate limits, provider failure and malformed responses return typed fixed messages without provider exception bodies or credentials. The browser does not store keys in this command. Authentication metadata does not establish inference access, model availability, sufficient balance or permissions for subsequent effects."
 }
+
+inductive{
+  name: StorageRequestError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [{name: storageTransactionFailed, fields: []}]
+}
+
+definition{
+  name: storageCommitBoundary,
+  parameters: [],
+  result: String,
+  body: "The browser host's single-store transaction helper captures the request result but returns success only after IndexedDB transaction completion. A later abort or error cannot become success. Opening the transaction, invoking its synchronous operation, obtaining the request and reading its result all fail closed. Synchronous exceptions and request or transaction errors abort queued writes. Abort, missing request, completion without request success and storage failures use storageTransactionFailed with a fixed public message; exception contents and stored values are not exposed. Undefined delete results are valid after commit. The host IPC boundary maps this failure to handlerFailed. This is the shared host helper's transaction acknowledgement boundary, not atomicity of multi-transaction journeys, durable storage beyond browser guarantees, quota availability, authorization, or cross-device persistence."
+}
 \end{semanticmodule}
 \end{lexlean}

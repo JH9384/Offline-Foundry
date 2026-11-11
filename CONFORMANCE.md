@@ -134,6 +134,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-08` | `build` | Snapshot restoration validates every referenced object before atomically replacing files and the main reference |
 
+## storage-commit-boundary
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-20` | `build` | Host storage requests report success only after transaction completion and refuse aborted or invalid operations |
+
 ## work-ownership
 
 | ID | Level | Statement |
