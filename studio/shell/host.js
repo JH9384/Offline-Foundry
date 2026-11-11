@@ -421,14 +421,7 @@ async function buildPreview(appId) {
   await grantPreview(previewId(appUrl.pathname), Array.isArray(owner && owner.grants) ? owner.grants : PREVIEW_ENDPOINTS);
   const files = new Map();
   for (const p of await filesOf(appId)) files.set(p, await get("files", appId + ":" + p));
-  const pkg = await (await fetch(new URL("scaffold/package.json", BASE))).json();
-  const pkgs = Object.fromEntries(Object.entries(pkg.dependencies).map(([n, v]) => [n, v.replace(/^[\^~]/, "")]));
-  // Packages the model added with <dyad-add-dependency>: name or name@version, resolved by esm.sh.
-  const app = await get("apps", appId);
-  for (const d of app.extraDeps || []) { const at = d.lastIndexOf("@"); if (at > 0) pkgs[d.slice(0, at)] = d.slice(at + 1); else pkgs[d] = ""; }
-  const react = pkgs.react, dom = pkgs["react-dom"];
-  const imports = { react: `https://esm.sh/react@${react}`, "react/": `https://esm.sh/react@${react}/`, "react-dom": `https://esm.sh/react-dom@${dom}?external=react`, "react-dom/": `https://esm.sh/react-dom@${dom}&external=react/` };
-  for (const [n, v] of Object.entries(pkgs)) { if (n === "react" || n === "react-dom") continue; const at = v ? "@" + v : ""; imports[n] = `https://esm.sh/${n}${at}?external=react,react-dom`; imports[n + "/"] = `https://esm.sh/${n}${at}&external=react,react-dom/`; }
+  // Preview imports are local-only: no CDN-backed import map is generated.
   const tw = await (await fetch(new URL("scaffold/tailwind.config.ts", BASE))).text();
   const m = tw.match(/theme:\s*(\{[\s\S]*\n  \}),\n  plugins/);
   const tailwindConfig = m ? "{darkMode:['class'],theme:" + m[1] + "}" : "{}";
@@ -470,7 +463,7 @@ async function buildPreview(appId) {
         const r = resolveFile(norm); if (r) return { path: r, namespace: "project" };
         return { errors: [{ text: "not in project: " + norm }] };
       }
-      return { path: args.path, external: true };
+      return { errors: [{ text: "Offline dependency not bundled: " + args.path }] };
     });
     b.onLoad({ filter: /.*/, namespace: "offline-react" }, (args) => ({ contents: offlineReactModules[args.path], loader: "js" }));
     b.onLoad({ filter: /.*/, namespace: "project" }, (args) => {
@@ -488,7 +481,6 @@ async function buildPreview(appId) {
   if (!reactResource.ok) throw new Error("offline React bundle missing");
   const offlineReactCode = (await reactResource.text()).replaceAll("</script", "<\\/script");
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<script type="importmap">${JSON.stringify({ imports })}<\/script>
 <script>tailwind = { config: ${tailwindConfig} };<\/script>
 <!-- Offline preview: remote Tailwind runtime deliberately omitted. -->
 <style>${css}</style></head><body><div id="root"></div>
