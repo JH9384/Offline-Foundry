@@ -451,12 +451,15 @@ function sendLive(appId) {
   const latest = liveLatest.get(appId);
   if (!latest) return;
   const p = live.project(latest.raw);
-  const message = { type: "live/projection", app: appId, root: p.root, logic: p.logic, logicKappa: p.logicKappa, nodes: p.nodes, trust: latest.trust, theme: themeOf(), edit: !!latest.edit };
+  const message = { type: "live/projection", app: String(appId), root: p.root, logic: p.logic, logicKappa: p.logicKappa, nodes: p.nodes, trust: latest.trust, theme: themeOf(), edit: !!latest.edit };
   for (const [win, app] of liveWindows) { if (win.closed) liveWindows.delete(win); else if (app === appId) win.postMessage(message, "*"); }
 }
 // Coalesced to one projection per animation frame: a model streams far faster than a screen draws.
 function pushLive(appId, raw, trust, edit = false) {
   liveLatest.set(appId, { raw, trust, edit });
+  // An edit is one change a person just made: it goes now, not at the next frame, so the frame can paint
+  // it on its own next frame. Only a model's stream, many changes a frame, is coalesced.
+  if (edit) { livePending.delete(appId); sendLive(appId); return; }
   if (livePending.has(appId)) return;
   livePending.add(appId);
   requestAnimationFrame(() => { livePending.delete(appId); sendLive(appId); });
@@ -464,7 +467,8 @@ function pushLive(appId, raw, trust, edit = false) {
 window.addEventListener("message", (e) => {
   const m = e.data;
   if (!m || typeof m.type !== "string" || !m.type.startsWith("live/") || !isLiveFrame(e.source)) return;
-  if (m.type === "live/hello") { liveWindows.set(e.source, m.app); if (liveLatest.has(m.app)) sendLive(m.app); else refreshLive(m.app); return; }
+  // The frame reads its app from the address (a string); the host keys apps as the store does (a number).
+  if (m.type === "live/hello") { const app = /^[0-9]+$/.test(String(m.app)) ? Number(m.app) : m.app; liveWindows.set(e.source, app); if (liveLatest.has(app)) sendLive(app); else refreshLive(app); return; }
   if (m.type === "live/painted") { if (m.changed) { liveTimes.push(m.ms); if (liveTimes.length > 200) liveTimes.shift(); } return; }
   // Everything else acts on an app: the one this frame was shown, never the one the message names.
   const appId = liveWindows.get(e.source);
@@ -502,13 +506,16 @@ async function editorOf(appId) {
   if (!ed) { ed = createEditor(spec, checkForEdit); liveEditors.set(appId, ed); } else ed.sync(spec);
   return ed;
 }
+const liveBusy = new Map(); // appId -> jobs queued or running
 function inOrder(appId, job) {
-  const next = (liveQueue.get(appId) || Promise.resolve()).then(job, job);
+  liveBusy.set(appId, (liveBusy.get(appId) || 0) + 1);
+  const run = () => Promise.resolve().then(job).finally(() => { const n = liveBusy.get(appId) - 1; if (n) liveBusy.set(appId, n); else liveBusy.delete(appId); });
+  const next = (liveQueue.get(appId) || Promise.resolve()).then(run, run);
   liveQueue.set(appId, next.catch(() => {}));
   return next;
 }
 function refuse(appId, key, message) {
-  for (const [win, app] of liveWindows) if (app === appId && !win.closed) win.postMessage({ type: "live/refused", app: appId, key, message }, "*");
+  for (const [win, app] of liveWindows) if (app === appId && !win.closed) win.postMessage({ type: "live/refused", app: String(appId), key, message }, "*");
 }
 async function saveSpec(appId, spec, summary) {
   const result = await rulesAfterTurn(appId, "<dyad-spec>" + JSON.stringify(spec) + "</dyad-spec>", []);
@@ -517,11 +524,16 @@ async function saveSpec(appId, spec, summary) {
   return result;
 }
 async function patchSpec(appId, ops, { author = "user", key = null } = {}) {
+  // Optimistic, before anything is awaited: with the app's history already in memory and nothing ahead of
+  // it in the queue, the patched spec is drawn now, then checked.
+  const cached = liveEditors.get(appId);
+  let drawn = false;
+  if (cached && !liveBusy.has(appId)) { try { pushLive(appId, applyOps(cached.spec, ops), "draft", true); drawn = true; } catch (e) { if (!(e instanceof PatchError)) throw e; } }
   return inOrder(appId, async () => {
     const ed = await editorOf(appId);
     if (!ed) return { ok: false, issues: ["This app has no rules yet."] };
     const before = ed.spec, trust = ((await rulesOf(appId)) || {}).phase || "draft";
-    try { pushLive(appId, applyOps(before, ops), "draft", true); }
+    try { if (!drawn) pushLive(appId, applyOps(before, ops), "draft", true); }
     catch (e) { if (!(e instanceof PatchError)) throw e; refuse(appId, key, e.message); return { ok: false, issues: [e.message] }; }
     const result = ed.apply(ops);
     if (!result.ok) { pushLive(appId, before, trust); refuse(appId, key, result.issues[0]); return result; }
@@ -531,7 +543,7 @@ async function patchSpec(appId, ops, { author = "user", key = null } = {}) {
 }
 async function stepSpec(appId, way) {
   return inOrder(appId, async () => {
-    const ed = await editorOf(appId);
+    const ed = liveEditors.get(appId) || (await editorOf(appId));
     if (!ed || !(way === "undo" ? ed.canUndo : ed.canRedo)) return;
     const spec = way === "undo" ? ed.undo() : ed.redo();
     pushLive(appId, spec, "draft", true);
@@ -548,11 +560,16 @@ function pointedNote(appId) {
 // Point the app's preview at the live frame. The iframe loads once: after this, the address it shows
 // never changes for this app, so the preview never reloads.
 async function showLive(appId) {
+  liveShown.add(appId);
   liveFrameUrl = await liveFrame();
   const appUrl = liveFrameUrl + "#" + encodeURIComponent(appId);
   const m = machineOf(appId);
   if (m.state.phase === "ready" && m.state.url && m.state.url.appUrl === appUrl) return appUrl;
-  publish(appId, { phase: "ready", operation: null, startedAt: Date.now(), operationError: null, exit: null, url: { appUrl, originalUrl: appUrl, mode: "cloud" }, previewReloadEpoch: m.state.previewReloadEpoch + 1 });
+  // The renderer keeps the route the preview was on when the new address shares its origin (it expects
+  // a dev server per app), and every preview here shares this origin; so a preview already showing
+  // another page is first announced as restarting, the renderer's own signal to forget that route.
+  if (m.state.url) publish(appId, { phase: "starting", operation: "restart", invocationRef: { kind: "app-run", entityKey: appId, operationId: "live-" + appId + "-" + Date.now() }, startedAt: Date.now(), operationError: null, exit: null });
+  publish(appId, { phase: "ready", operation: null, invocationRef: null, startedAt: Date.now(), operationError: null, exit: null, url: { appUrl, originalUrl: appUrl, mode: "cloud" }, previewReloadEpoch: m.state.previewReloadEpoch + 1 });
   return appUrl;
 }
 const hasRules = async (appId) => !!(await get("files", appId + ":prism/spec.json"));
@@ -602,6 +619,9 @@ handlers.set("distributed-machine:dispatch", async (envelope) => {
     (async () => {
       try {
         const { appUrl } = await buildPreview(appId);
+        // A build that finishes after the app's rules took the preview (a model began writing a spec
+        // while it ran) is about a page the app no longer shows: the live frame stays.
+        if (liveShown.has(appId)) return;
         const cur = machineOf(appId);
         publish(appId, { phase: "ready", operation: null, url: { appUrl, originalUrl: appUrl, mode: "cloud" }, previewReloadEpoch: cur.state.previewReloadEpoch + 1, lastSettlement: { operationId: encodedEvent.operationId || messageId, kind: "run", outcome: "succeeded" } });
       } catch (e) {
