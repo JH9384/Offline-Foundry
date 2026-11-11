@@ -302,6 +302,27 @@ async function positive() {
       }
       return { appId, filePath, edited, newHead };
     });
+    // Contract regression: the renderer creates a chat with {appId, initialChatMode}.
+    // A prior host stored that entire object as chat.appId, invalidating both
+    // get-chat and get-chats. Verify real contract shapes including legacy repair.
+    const chatsChecked = await page.evaluate(async ({appId}) => {
+      const ipc = window.electron.ipcRenderer;
+      const modernId = await ipc.invoke('create-chat',{appId,initialChatMode:'build'});
+      const modern = await ipc.invoke('get-chat',modernId);
+      const modernList = await ipc.invoke('get-chats',appId);
+      if (modern.appId !== appId || !modernList.some(c=>c.id===modernId && c.appId===appId))
+        throw new Error('Modern create-chat contract violated');
+      const dbChat = await window.__host.get('chats',modernId);
+      await window.__host.put('chats',modernId,{...dbChat,appId:{appId,initialChatMode:'build'}});
+      const repaired = await ipc.invoke('get-chat',modernId);
+      const persisted = await window.__host.get('chats',modernId);
+      if (repaired.appId !== appId || persisted.appId !== appId)
+        throw new Error('Legacy object-valued chat identity was not safely repaired');
+      const errors = [...document.querySelectorAll('[data-host-error]')];
+      return {modernId,appId,legacyRepaired:true};
+    },project);
+    console.log('  Modern chat create/list/read and legacy identity recovery: PASS',JSON.stringify(chatsChecked));
+
     await page.reload({ waitUntil:'load', timeout:30000 });
     await page.waitForFunction(() => !!window.electron?.ipcRenderer && !!window.__host, null, {timeout:30000});
     const restored = await page.evaluate(async ({appId,filePath,edited,newHead}) => {
