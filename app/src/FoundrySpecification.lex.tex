@@ -181,5 +181,24 @@ theorem{
   proof: reflexivity{},
   axioms: []
 }
+
+inductive{
+  name: HostResponseError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: unsupportedChannel, fields: []},
+    {name: invalidResponse, fields: []},
+    {name: validatorFailed, fields: []},
+    {name: handlerFailed, fields: []}
+  ]
+}
+
+definition{
+  name: hostResponseBoundary,
+  parameters: [],
+  result: String,
+  body: "The browser IPC adapter refuses absent handlers with unsupportedChannel, handler exceptions with handlerFailed, invalid contracted output with invalidResponse and validator exceptions with validatorFailed. A schema accepting an empty value never authorizes synthesizing success. Valid handler output is preserved exactly; schema parsing is validation and cannot replace it. Both envelope and direct invocation retain typed error codes. Unsupported errors map to the imported not_found category; other boundary failures map to internal. Error messages name the channel without including request, response or exception data. Legacy handlers without imported output schemas retain their output, but this is not schema coverage or application acceptance. The external adapter inventory studio/model/host-read-scope.json classifies discovered renderer reads as required or unavailable. Required reads must retain handlers, unavailable reads must remain explicit refusals, and new or stale entries fail scope validation. This inventory declares the current adapter scope, not complete feature coverage. Renderer error-state recovery requires separate runtime journey evidence."
+}
 \end{semanticmodule}
 \end{lexlean}

@@ -38,6 +38,12 @@ model does not sanction.
 | `FK-08` | `build` | The gate never admits a preview or a published app without a grant |
 | `FK-09` | `build` | The gate never lets a preview fetch without a grant |
 
+## host-response-boundary
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-03` | `build` | The browser host refuses unsupported channels and invalid contracted responses with typed errors |
+
 ## Cited authorities
 
 Never re-derived, vendored, or gated on.

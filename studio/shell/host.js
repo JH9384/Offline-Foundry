@@ -7,6 +7,7 @@
 // the preview worker, and the app run machine (build in the tab, serve at the version's address).
 // The chat stream is the next slice.
 
+import { invokeHost, unwrapHost } from "./host-boundary.mjs";
 import { buildSystemPrompt } from "./prompts.js";
 import * as inference from "./inference.js";
 import { viewReady, lookup, routeOf, refusalWord, seal as sealAnswer, sealPaid, paidGenerate, gpuReady, gpuIds, heldFor, rulesModel, rememberSession, withEngine, engine, readWho, MODEL_ID, paidId, site, siteKeyReady, deviceKeyGet } from "./inference.js";
@@ -14,10 +15,7 @@ import { install, installed, encodeView, b64, unb64, sha256 } from "./holo.js";
 import * as prism from "./prism.js";
 import { buildOnGitHub } from "./github-build.js";
 
-const MARKER = "dyad-ipc-envelope-v1";
 const BASE = new URL("./", import.meta.url); // the shell's directory, wherever it is served
-const ok = (value) => ({ __dyadIpcEnvelope: MARKER, ok: true, value });
-const fail = (message, kind = "not_found") => ({ __dyadIpcEnvelope: MARKER, ok: false, error: { name: "DyadError", message, kind } });
 const listeners = new Map();
 const handlers = new Map();
 const seen = new Map();
@@ -999,44 +997,10 @@ function chatDispatch({ encodedKey, messageId, expectedActorInstanceId, encodedE
 handlers.set("chat:observe-submission-stop-policy", (chatId) => chatMachineOf(chatId).state.stopPolicyVersion);
 handlers.set("chat:cancel", (chatId) => { const m = chatMachineOf(chatId); if (m.abort) m.abort.abort(); });
 
-// ---- the surface
-// Every answer is checked against the channel's own contract, which the renderer publishes on the page
-// (vendor/dyad/hologram.contracts.ts). the renderer validates nothing it receives, so a wrong shape
-// used to reach a screen and crash it far from the cause ("is not iterable"). A disagreement is named
-// in the console, and an array the renderer will iterate is answered with an empty one rather than a
-// value it cannot walk: a screen renders empty instead of dying.
-function checked(channel, value) {
-  const schema = window.__contracts && window.__contracts[channel];
-  if (!schema) return value;
-  const parsed = schema.safeParse(value);
-  if (parsed.success) return value;
-  const iterable = Array.isArray(value) || value == null;
-  console.error("[host] the answer for", channel, "does not match its contract", parsed.error && parsed.error.issues ? parsed.error.issues.slice(0, 3) : parsed.error, value);
-  return iterable ? value : (schema._def && (schema._def.type === "array" || schema._def.typeName === "ZodArray") ? [] : value);
-}
-// the renderer carries every screen it has ever had, including Supabase, Vercel, Neon, Coolify,
-// GitHub, MCP, a terminal and native windows, none of which exist here. A channel this build does not
-// implement is answered with the empty value the channel's own contract accepts -- no servers, no
-// tests, no cloud projects, all true here -- so a screen that opens one renders its empty state
-// instead of dying on a refusal. Nothing is invented: the value has to satisfy the contract, and
-// `tools/contract_shapes.mjs --check` fails the build if a channel a screen reads accepts none of
-// them and has no handler either.
-const EMPTY = [undefined, [], null, {}];
-function emptyAnswer(channel) {
-  const schema = window.__contracts && window.__contracts[channel];
-  if (!schema) return null;
-  for (const value of EMPTY) { let parsed = null; try { parsed = schema.safeParse(value); } catch (e) { parsed = null; } if (parsed && parsed.success) return { value }; }
-  return null;
-}
+// ---- the typed host boundary (FoundrySpecification.hostResponseBoundary)
 function dispatch(channel, args) {
-  const n = (seen.get(channel) || 0) + 1; seen.set(channel, n);
-  const h = handlers.get(channel);
-  if (!h) {
-    const empty = emptyAnswer(channel);
-    if (n === 1) console.warn("[host] not implemented:", channel, empty ? "answered with the empty value its contract accepts" : "refused", args[0]);
-    return Promise.resolve(empty ? ok(empty.value) : fail("not implemented in the browser: " + channel));
-  }
-  return Promise.resolve().then(() => h(...args)).then((value) => ok(checked(channel, value)), (e) => { console.warn("[host]", channel, e); return fail(String((e && e.message) || e), "internal"); });
+  seen.set(channel, (seen.get(channel) || 0) + 1);
+  return invokeHost(channel, args, handlers.get(channel), window.__contracts && window.__contracts[channel]);
 }
 // Every stored file's bytes are also an object at their own address, so a restore can find them.
 const originalPut = put;
@@ -1241,7 +1205,7 @@ handlers.set("holo:publish", async ({ appId }) => {
 window.electron = {
   ipcRenderer: {
     invokeEnvelope: (channel, ...args) => dispatch(channel, args),
-    invoke: (channel, ...args) => dispatch(channel, args).then((env) => { if (env.ok) return env.value; const err = new Error(env.error.message); err.name = env.error.name || "Error"; throw err; }),
+    invoke: (channel, ...args) => dispatch(channel, args).then(unwrapHost),
     send: (channel) => { const n = (seen.get(channel) || 0) + 1; seen.set(channel, n); if (n === 1) console.warn("[host] send:", channel); },
     on: (channel, fn) => { if (!listeners.has(channel)) listeners.set(channel, new Set()); listeners.get(channel).add(fn); return () => listeners.get(channel).delete(fn); },
     removeListener: (channel, fn) => { const set = listeners.get(channel); if (set) set.delete(fn); },

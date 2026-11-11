@@ -50,6 +50,14 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: studio/vendor/dyad/package-lock.json
+      - name: Install locked renderer contracts for boundary verification
+        run: npm ci --prefix vendor/dyad --ignore-scripts --no-audit --no-fund
+      - name: Check the declared host scope and real renderer error recovery
+        run: |
+          node tools/contract_shapes.mjs --check
+          node tools/renderer_boundary.mjs
       - name: Every shell script parses the way the browser parses it
         run: node tools/shell_parse.mjs
       - name: The kernel in the shell is the holo KERNEL_REV pins, and every vector replays
