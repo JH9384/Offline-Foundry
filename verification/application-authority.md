@@ -25,3 +25,22 @@ The local locked image pull failed with `no space left on device` in Docker
 storage. Complete acceptance remains the unmodified `just vv` in the image
 selected by `prismpm.lock`, including the actual Lean proof check. The source
 register does not constitute a passing receipt for that gate.
+
+The same isolated diagnostic project subsequently verified all five modules,
+including the seven authority controls, with attestation
+`e76764709820667256ca7a46ff9e56dc325264b2339b8a828273b01dd5bd69fc`.
+Its compiler/lock mismatch still excludes it from locked-SDK acceptance.
+The full local Rust workspace suite passed (36 tests); `xtask validate` passed
+model, limits, deferral and dependency-update checks, then correctly refused
+`audit-bootstrap` outside the selected SDK.
+
+## Completeness review
+
+The author reviewed the diff against FA-01: all three refusal constructors have
+negative controls, both admitted ownership kinds have positive controls, the
+specification is imported by the existing kernel, and the generated conformance
+row matches its scenario and test. The review is not independent approval.
+Neither this review nor these controls establish runtime source-owner discovery,
+external-checker validity, application generation, or factory integration.
+The PR remains draft until locked-SDK acceptance and the remaining review
+requirements are satisfied.
