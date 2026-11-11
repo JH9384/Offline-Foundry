@@ -33,3 +33,14 @@ has no event protocol or handwritten semantic fallback in this feature.
 Diagnostic compiler verification and mutation results are recorded below. The
 full immutable-SDK gate at the PR revision remains the acceptance boundary;
 host diagnostics do not replace it.
+
+The diagnostic compiler verified all twelve modules with attestation
+`94e87930ee29333a8b3dd0c92968b522a0252eef0a8d699e13a6f303cf1415b3`.
+Replacing the envelope sequence comparison with `true` fails the replay and
+future-sequence Lean controls. Replacing composition admission with constant
+success fails `revokedPermissionRefused`. Both defects were restored and all
+twelve modules verified again. The diagnostic command was `lexlean --project
+<diagnostic-project>/lexlean.toml verify --all`; that separate host project is not
+the immutable SDK gate. An initial diagnostic invocation without the configured
+Elan environment failed to find Lean; no successful verification was claimed
+from that invocation.
