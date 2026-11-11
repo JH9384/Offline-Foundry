@@ -1,0 +1,345 @@
+\begin{lexlean}{CompositionProtocol}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\importmodule{Foundation.Bytes}
+\importmodule{FeatureComposition}
+\title{Boolean}
+\begin{semanticmodule}
+structure{
+  name: NatsRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: value, type: (List Nat)}, {name: rest, type: (List Nat)}]
+}
+
+structure{
+  name: ReferenceRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: value, type: FeatureComposition::FeatureRef}, {name: rest, type: (List Nat)}]
+}
+
+structure{
+  name: InputRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: value, type: FeatureComposition::FeatureInput}, {name: rest, type: (List Nat)}]
+}
+
+structure{
+  name: ReferencesRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: value, type: (List FeatureComposition::FeatureRef)},
+    {name: rest, type: (List Nat)}
+  ]
+}
+
+structure{
+  name: InputsRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: value, type: (List FeatureComposition::FeatureInput)},
+    {name: rest, type: (List Nat)}
+  ]
+}
+
+structure{
+  name: FeatureRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [{name: value, type: FeatureComposition::FeatureContract}, {name: rest, type: (List Nat)}]
+}
+
+structure{
+  name: FeaturesRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: value, type: (List FeatureComposition::FeatureContract)},
+    {name: rest, type: (List Nat)}
+  ]
+}
+
+structure{
+  name: PolicyRead,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: value, type: FeatureComposition::CompositionPolicy},
+    {name: rest, type: (List Nat)}
+  ]
+}
+
+definition{
+  name: readNats,
+  parameters: [words : (List Nat), count : Nat],
+  result: (Option NatsRead),
+  body: (match count
+    | Nat.zero => (ctor Option.some [NatsRead] (record NatsRead {value := (nil Nat), rest := words}))
+    | Nat.succ less => (match words
+      | List.nil => (ctor Option.none [NatsRead])
+      | List.cons head tail => (match (readNats tail less)
+        | Option.none => (ctor Option.none [NatsRead])
+        | Option.some parsed => (ctor Option.some [NatsRead] (record NatsRead {value := (cons head (project parsed value)), rest := (project parsed rest)}))))),
+  recursive_argument: count
+}
+
+definition{
+  name: readList,
+  parameters: [words : (List Nat)],
+  result: (Option NatsRead),
+  body: (match words
+    | List.nil => (ctor Option.none [NatsRead])
+    | List.cons count tail => (if (count <=? 64) then (readNats tail count) else (ctor Option.none [NatsRead])))
+}
+
+definition{
+  name: readReference,
+  parameters: [words : (List Nat)],
+  result: (Option ReferenceRead),
+  body: (match words
+    | List.nil => (ctor Option.none [ReferenceRead])
+    | List.cons v0 t0 => (match t0
+      | List.nil => (ctor Option.none [ReferenceRead])
+      | List.cons v1 t1 => (ctor Option.some [ReferenceRead] (record ReferenceRead {value := (record FeatureComposition::FeatureRef {key := v0, version := v1}), rest := t1}))))
+}
+
+definition{
+  name: readInput,
+  parameters: [words : (List Nat)],
+  result: (Option InputRead),
+  body: (match (readReference words)
+    | Option.none => (ctor Option.none [InputRead])
+    | Option.some reference => (match (project reference rest)
+      | List.nil => (ctor Option.none [InputRead])
+      | List.cons schema tail => (ctor Option.some [InputRead] (record InputRead {value := (record FeatureComposition::FeatureInput {producer := (project reference value), schema := schema}), rest := tail}))))
+}
+
+definition{
+  name: readReferences,
+  parameters: [words : (List Nat), count : Nat],
+  result: (Option ReferencesRead),
+  body: (match count
+    | Nat.zero => (ctor Option.some [ReferencesRead] (record ReferencesRead {value := (nil FeatureComposition::FeatureRef), rest := words}))
+    | Nat.succ less => (match (readReference words)
+      | Option.none => (ctor Option.none [ReferencesRead])
+      | Option.some head => (match (readReferences (project head rest) less)
+        | Option.none => (ctor Option.none [ReferencesRead])
+        | Option.some tail => (ctor Option.some [ReferencesRead] (record ReferencesRead {value := (cons (project head value) (project tail value)), rest := (project tail rest)}))))),
+  recursive_argument: count
+}
+
+definition{
+  name: listReferences,
+  parameters: [words : (List Nat)],
+  result: (Option ReferencesRead),
+  body: (match words
+    | List.nil => (ctor Option.none [ReferencesRead])
+    | List.cons count tail => (if (count <=? 64) then (readReferences tail count) else (ctor Option.none [ReferencesRead])))
+}
+
+definition{
+  name: readInputs,
+  parameters: [words : (List Nat), count : Nat],
+  result: (Option InputsRead),
+  body: (match count
+    | Nat.zero => (ctor Option.some [InputsRead] (record InputsRead {value := (nil FeatureComposition::FeatureInput), rest := words}))
+    | Nat.succ less => (match (readInput words)
+      | Option.none => (ctor Option.none [InputsRead])
+      | Option.some head => (match (readInputs (project head rest) less)
+        | Option.none => (ctor Option.none [InputsRead])
+        | Option.some tail => (ctor Option.some [InputsRead] (record InputsRead {value := (cons (project head value) (project tail value)), rest := (project tail rest)}))))),
+  recursive_argument: count
+}
+
+definition{
+  name: listInputs,
+  parameters: [words : (List Nat)],
+  result: (Option InputsRead),
+  body: (match words
+    | List.nil => (ctor Option.none [InputsRead])
+    | List.cons count tail => (if (count <=? 64) then (readInputs tail count) else (ctor Option.none [InputsRead])))
+}
+
+definition{
+  name: readFeature,
+  parameters: [words : (List Nat)],
+  result: (Option FeatureRead),
+  body: (match words
+    | List.nil => (ctor Option.none [FeatureRead])
+    | List.cons key tail0 => (match tail0
+      | List.nil => (ctor Option.none [FeatureRead])
+      | List.cons version tail1 => (match tail1
+        | List.nil => (ctor Option.none [FeatureRead])
+        | List.cons cpu tail2 => (match tail2
+          | List.nil => (ctor Option.none [FeatureRead])
+          | List.cons memory tail3 => (match (readList tail3)
+            | Option.none => (ctor Option.none [FeatureRead])
+            | Option.some r0 => (match (readList (project r0 rest))
+              | Option.none => (ctor Option.none [FeatureRead])
+              | Option.some r1 => (match (readList (project r1 rest))
+                | Option.none => (ctor Option.none [FeatureRead])
+                | Option.some r2 => (match (readList (project r2 rest))
+                  | Option.none => (ctor Option.none [FeatureRead])
+                  | Option.some r3 => (match (readList (project r3 rest))
+                    | Option.none => (ctor Option.none [FeatureRead])
+                    | Option.some r4 => (match (readList (project r4 rest))
+                      | Option.none => (ctor Option.none [FeatureRead])
+                      | Option.some r5 => (match (readList (project r5 rest))
+                        | Option.none => (ctor Option.none [FeatureRead])
+                        | Option.some r6 => (match (readList (project r6 rest))
+                          | Option.none => (ctor Option.none [FeatureRead])
+                          | Option.some r7 => (match (readList (project r7 rest))
+                            | Option.none => (ctor Option.none [FeatureRead])
+                            | Option.some r8 => (match (readList (project r8 rest))
+                              | Option.none => (ctor Option.none [FeatureRead])
+                              | Option.some r9 => (match (listReferences (project r9 rest))
+                                | Option.none => (ctor Option.none [FeatureRead])
+                                | Option.some r10 => (match (listInputs (project r10 rest))
+                                  | Option.none => (ctor Option.none [FeatureRead])
+                                  | Option.some r11 => (ctor Option.some [FeatureRead] (record FeatureRead {value := (record FeatureComposition::FeatureContract {key := key, version := version, vocabulary := (project r0 value), inputs := (project r11 value), outputs := (project r1 value), state := (project r2 value), events := (project r3 value), errors := (project r4 value), effects := (project r5 value), needs := (project r10 value), conflicts := (project r6 value), targets := (project r7 value), accessibility := (project r8 value), quality := (project r9 value), cpu := cpu, memory := memory}), rest := (project r11 rest)}))))))))))))))))))
+}
+
+definition{
+  name: readFeatures,
+  parameters: [words : (List Nat), count : Nat],
+  result: (Option FeaturesRead),
+  body: (match count
+    | Nat.zero => (ctor Option.some [FeaturesRead] (record FeaturesRead {value := (nil FeatureComposition::FeatureContract), rest := words}))
+    | Nat.succ less => (match (readFeature words)
+      | Option.none => (ctor Option.none [FeaturesRead])
+      | Option.some head => (match (readFeatures (project head rest) less)
+        | Option.none => (ctor Option.none [FeaturesRead])
+        | Option.some tail => (ctor Option.some [FeaturesRead] (record FeaturesRead {value := (cons (project head value) (project tail value)), rest := (project tail rest)}))))),
+  recursive_argument: count
+}
+
+definition{
+  name: listFeatures,
+  parameters: [words : (List Nat)],
+  result: (Option FeaturesRead),
+  body: (match words
+    | List.nil => (ctor Option.none [FeaturesRead])
+    | List.cons count tail => (if (count <=? 32) then (readFeatures tail count) else (ctor Option.none [FeaturesRead])))
+}
+
+definition{
+  name: readPolicy,
+  parameters: [words : (List Nat)],
+  result: (Option PolicyRead),
+  body: (match words
+    | List.nil => (ctor Option.none [PolicyRead])
+    | List.cons cpu tail0 => (match tail0
+      | List.nil => (ctor Option.none [PolicyRead])
+      | List.cons memory tail1 => (match (readList tail1)
+        | Option.none => (ctor Option.none [PolicyRead])
+        | Option.some grants => (match (readList (project grants rest))
+          | Option.none => (ctor Option.none [PolicyRead])
+          | Option.some targets => (match (readList (project targets rest))
+            | Option.none => (ctor Option.none [PolicyRead])
+            | Option.some evidence => (ctor Option.some [PolicyRead] (record PolicyRead {value := (record FeatureComposition::CompositionPolicy {grants := (project grants value), targets := (project targets value), evidence := (project evidence value), cpu := cpu, memory := memory}), rest := (project evidence rest)})))))))
+}
+
+definition{
+  name: readWord,
+  parameters: [bytes : Bytes, offset : Nat],
+  result: (Option Nat),
+  body: (match (Foundation.Bytes::byteAt bytes (offset + 0))
+    | Option.none => (ctor Option.none [Nat])
+    | Option.some b0 => (match (Foundation.Bytes::byteAt bytes (offset + 1))
+      | Option.none => (ctor Option.none [Nat])
+      | Option.some b1 => (match (Foundation.Bytes::byteAt bytes (offset + 2))
+        | Option.none => (ctor Option.none [Nat])
+        | Option.some b2 => (match (Foundation.Bytes::byteAt bytes (offset + 3))
+          | Option.none => (ctor Option.none [Nat])
+          | Option.some b3 => (ctor Option.some [Nat] ((prim to_nat b0 : Nat) + ((prim multiply (prim to_nat b1 : Nat) 256 : Nat) + ((prim multiply (prim to_nat b2 : Nat) 65536 : Nat) + (prim multiply (prim to_nat b3 : Nat) 16777216 : Nat))))))))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: decodeWords,
+  parameters: [bytes : Bytes, offset : Nat, fuel : Nat],
+  result: (Option (List Nat)),
+  body: (match fuel
+    | Nat.zero => (if (offset =? (Foundation.Bytes::byteLength bytes)) then (ctor Option.some [(List Nat)] (nil Nat)) else (ctor Option.none [(List Nat)]))
+    | Nat.succ less => (if (offset =? (Foundation.Bytes::byteLength bytes)) then (ctor Option.some [(List Nat)] (nil Nat)) else (match (readWord bytes offset)
+      | Option.none => (ctor Option.none [(List Nat)])
+      | Option.some head => (match (decodeWords bytes (offset + 4) less)
+        | Option.none => (ctor Option.none [(List Nat)])
+        | Option.some tail => (ctor Option.some [(List Nat)] (cons head tail)))))),
+  axioms: [Quot.sound, propext],
+  recursive_argument: fuel
+}
+
+definition{
+  name: encodeError,
+  parameters: [error : FeatureComposition::CompositionError],
+  result: Bytes,
+  body: (match error
+    | FeatureComposition::CompositionError.emptyComposition => 0x656d707479436f6d706f736974696f6e
+    | FeatureComposition::CompositionError.invalidDeclaration => 0x696e76616c69644465636c61726174696f6e
+    | FeatureComposition::CompositionError.duplicateFeature => 0x6475706c696361746546656174757265
+    | FeatureComposition::CompositionError.missingDependency => 0x6d697373696e67446570656e64656e6379
+    | FeatureComposition::CompositionError.incompatibleInput => 0x696e636f6d70617469626c65496e707574
+    | FeatureComposition::CompositionError.featureConflict => 0x66656174757265436f6e666c696374
+    | FeatureComposition::CompositionError.permissionDenied => 0x7065726d697373696f6e44656e696564
+    | FeatureComposition::CompositionError.unsupportedTarget => 0x756e737570706f72746564546172676574
+    | FeatureComposition::CompositionError.missingEvidence => 0x6d697373696e6745766964656e6365
+    | FeatureComposition::CompositionError.budgetExceeded => 0x6275646765744578636565646564)
+}
+
+definition{
+  name: dispatchWords,
+  parameters: [words : (List Nat)],
+  result: Bytes,
+  body: (match (readPolicy words)
+    | Option.none => 0x6d616c666f726d6564436f6d706f736974696f6e
+    | Option.some policy => (match (listFeatures (project policy rest))
+      | Option.none => 0x6d616c666f726d6564436f6d706f736974696f6e
+      | Option.some features => (match (project features rest)
+        | List.cons head tail => 0x6d616c666f726d6564436f6d706f736974696f6e
+        | List.nil => (match (FeatureComposition::admitComposition (project policy value) (project features value))
+          | Result.error error => (encodeError error)
+          | Result.ok admitted => 0x6163636570746564))))
+}
+
+definition{
+  name: dispatch,
+  parameters: [bytes : Bytes],
+  result: Bytes,
+  body: (if (16384 <? (Foundation.Bytes::byteLength bytes)) then 0x636f6d706f736974696f6e546f6f4c61726765 else (match (decodeWords bytes 0 (Foundation.Bytes::byteLength bytes))
+    | Option.none => 0x6d616c666f726d6564436f6d706f736974696f6e
+    | Option.some words => (dispatchWords words))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: boundary,
+  parameters: [],
+  result: String,
+  body: "Composition wire v1 is compose followed by one ASCII space and little-endian unsigned 32-bit words. Policy is CPU, memory, grants list, targets list, evidence list. Each list begins with its item count. Then comes the feature count and features: key, version, CPU, memory; vocabulary, outputs, state, events, errors, effects, conflicts, targets, accessibility and quality ID lists; dependency key/version pairs; input producer-key/version/schema triples. Maximum payload is 16384 bytes, 32 features, 64 entries per list. Truncation, excess counts and trailing words return malformedComposition; oversized payload returns compositionTooLarge. No semantics are decided by the browser codec. Admission errors and accepted are the generated model result. The wire bounds are not runtime resource budgets."
+}
+
+inductive{
+  name: WireError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: malformedComposition, fields: []},
+    {name: compositionTooLarge, fields: []},
+    {name: compositionRuntimeFailed, fields: []},
+    {name: invalidCompositionResponse, fields: []}
+  ]
+}
+
+definition{
+  name: adapterBoundary,
+  parameters: [],
+  result: String,
+  body: "The browser codec encodes exactly the declared fields and preserves their scalar values. It admits only integral unsigned 32-bit representation values and the wire list and payload bounds. It performs no semantic admission. A caller supplies a verified loaded guest; its dispatch result alone determines accepted or the modeled refusal code. Runtime exceptions become compositionRuntimeFailed; unknown, malformed UTF-8, non-byte or oversized responses become invalidCompositionResponse. This adapter does not fetch a guest, authenticate its source, or certify any application generated from the composition."
+}
+\end{semanticmodule}
+\end{lexlean}

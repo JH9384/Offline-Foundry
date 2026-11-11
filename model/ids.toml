@@ -104,3 +104,9 @@ id = "FA-06"
 level = "build"
 suite = "feature-composition"
 statement = "The LexLean composition model rejects duplicate identity, missing dependencies, conflicts, incompatible inputs, ungranted effects and excess budgets"
+
+[[id]]
+id = "FA-07"
+level = "build"
+suite = "composition-protocol"
+statement = "The generated guest decodes bounded composition requests and returns the model admission result"

@@ -24,6 +24,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
 
+## composition-protocol
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-07` | `build` | The generated guest decodes bounded composition requests and returns the model admission result |
+
 ## feature-composition
 
 | ID | Level | Statement |
