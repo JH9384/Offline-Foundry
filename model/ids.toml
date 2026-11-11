@@ -74,3 +74,9 @@ id = "FK-09"
 level = "build"
 suite = "forge_kernel"
 statement = "The gate never lets a preview fetch without a grant"
+
+[[id]]
+id = "FA-01"
+level = "build"
+suite = "application-authority"
+statement = "The application authority model rejects missing or competing product authorities and unchecked external boundaries"

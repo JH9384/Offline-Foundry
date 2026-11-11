@@ -18,6 +18,12 @@ The three honesty levels (R2):
 `cargo xtask audit-limits` fails if any code path returns an error the
 model does not sanction.
 
+## application-authority
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
+
 ## forge_kernel
 
 | ID | Level | Statement |

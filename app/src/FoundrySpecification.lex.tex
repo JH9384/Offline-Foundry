@@ -1,0 +1,185 @@
+\begin{lexlean}{FoundrySpecification}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\title{Boolean}
+\begin{semanticmodule}
+inductive{
+  name: Obligation,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: authority, fields: []},
+    {name: features, fields: []},
+    {name: routing, fields: []},
+    {name: composition, fields: []},
+    {name: projection, fields: []},
+    {name: proofScope, fields: []},
+    {name: effects, fields: []},
+    {name: identity, fields: []},
+    {name: packaging, fields: []},
+    {name: journeys, fields: []},
+    {name: quality, fields: []},
+    {name: release, fields: []},
+    {name: representation, fields: []},
+    {name: ownership, fields: []},
+    {name: factory, fields: []}
+  ]
+}
+
+definition{
+  name: requirement,
+  parameters: [obligation : Obligation],
+  result: String,
+  body: (match obligation
+    | Obligation.authority => "Every product-owned behavior has exactly one canonical semantic owner. An imported behavior names its external authority and an independently checked typed boundary. Authoring front ends and generated projections cannot independently redefine behavior."
+    | Obligation.features => "Features declare versioned identity, vocabulary, inputs, outputs, state, events, errors, effects, dependencies, conflicts, projection targets, resource budgets, accessibility and applicable quality obligations."
+    | Obligation.routing => "A replaceable semantic router proposes ranked features, dependencies, ambiguities and unresolved constraints from typed intent. Held-out relevance, dependency completeness, abstention and latency measurements qualify routing; proposal confidence grants no acceptance authority."
+    | Obligation.composition => "Prism independently admits interfaces, dependency closure, conflicts, permissions, budgets and evidence obligations. Both the Foundry application and each generated application have separate finite declared release scopes."
+    | Obligation.projection => "Product behavior is generated from the accepted model or crosses a declared typed adapter. Independent runtime comparison and qualified compiler evidence bind execution to the exact accepted semantics. An unsupported channel cannot report empty success as capability fulfillment."
+    | Obligation.proofScope => "Every assurance claim binds its property, model, source, executable, toolchain, oracle and dependency identities. Specification proofs, projection preservation, runtime acceptance, measurements and live release acceptance remain separate claims."
+    | Obligation.effects => "Network, inference, storage, preview, build and publication effects require explicit permission, transmitted-data disclosure, provider and credential ownership, timeout, malformed-response, revocation and offline behavior."
+    | Obligation.identity => "An identity includes object kind, canonicalization profile, algorithm, digest and version. Recompute identities independently and retain transformation relationships among model, source, executable, assets, evidence, archive and deployment."
+    | Obligation.packaging => "A complete locked production dependency closure reproduces the accepted artifacts. Independently validate the archive and reconstruction. Dependency or manifest mutation prevents promotion."
+    | Obligation.journeys => "Declared creation, editing, preview, verification, restore, cancellation, recovery and publication journeys have positive and negative runtime acceptance. State, view, effects, diagnostics, focus and publication decisions share an authoritative command boundary."
+    | Obligation.quality => "Functional correctness does not imply accessibility, audiovisual fidelity, usability or performance. Each declared quality requirement has an appropriate independent oracle, measurement or human assessment and a threshold fixed before acceptance."
+    | Obligation.release => "The release receipt binds the declared scope to exact models, source, toolchain, dependencies, artifacts, evidence and destination. Independent retrieval and live replay establish deployment acceptance; a successful process exit alone does not."
+    | Obligation.representation => "Exact byte compression retains original-object identity separately from representation, decoder and basis identities. Self-contained and conditional-basis accounting are distinct. Missing bases fail explicitly. Application optimization requires its own behavioral-preservation contract."
+    | Obligation.ownership => "Admit and reserve work before executing effects. Retain achieved state, outstanding owners, spent work, unused reservations and resumable obligations after failure or cancellation. Semantic work, scheduling reservations and physical resource measurements remain distinct."
+    | Obligation.factory => "Use the qualified PrismPM factory for dependency-scoped obligations. Bind declared input closures, prerequisite identities, commands, environments, policy and oracles. Materialized closures reject undeclared inputs. Scheduling weights affect order only; receipt reuse never weakens the complete acceptance boundary.")
+}
+
+definition{
+  name: scope,
+  parameters: [],
+  result: String,
+  body: "The semantic graph defines required behavior, not evidence that every requirement has been implemented. A source declaration, registered claim, theorem, diagnostic, accepted export and live release are distinct. Only separately executed obligations establish acceptance."
+}
+
+definition{
+  name: adaptation,
+  parameters: [],
+  result: String,
+  body: "An accepted bounded policy may permit parameter adaptation. Changes to transitions, interfaces, permissions or meaning require renewed model acceptance. Learned weights cannot authorize effects or certify themselves."
+}
+
+definition{
+  name: intent,
+  parameters: [],
+  result: String,
+  body: "Intent interpretation precedes accepted requirements. Exact reconstruction of known bytes does not establish that an interpretation captures a user intention. Ambiguity must be represented and resolved before affected behavior is accepted."
+}
+
+definition{
+  name: claims,
+  parameters: [],
+  result: String,
+  body: "Composition validity, model theorem, projection conformance, exact reconstruction, best observed candidate, scoped minimum, measured improvement, journey acceptance and live release are separate claims. A minimum certificate covers only its sealed admissible universe and objective."
+}
+
+definition{
+  name: authorityBoundary,
+  parameters: [],
+  result: String,
+  body: "The authority admission function checks a typed declaration. It does not discover source owners, verify an external checker, bind runtime artifacts or establish whole-product acceptance. Those operations have their own modeled obligations."
+}
+
+definition{
+  name: priorArt,
+  parameters: [],
+  result: String,
+  body: "Design references: afflom/rule30@916669a9b430698c143528ca723c28d9998cef95; afflom/verdant-resonance@a7bf893e325600805d44fa02c163015e8eaeb497; Casey-allard/lexlean-r4@f6f9ac02b596c4b29b4d947088a74a639ce51829; UOR-Foundation/compression@efd3d174f5983409e5ecef892210bf6f92e7e2c6. UOR-Foundation/uor-r4 README blob 7d7245e108e75fd5279bd9bc7876ecebf8a01114 is context only; pin its complete closure before reuse. Imported claims are not local acceptance evidence."
+}
+
+inductive{
+  name: Ownership,
+  type_parameters: [],
+  parameters: [],
+  constructors: [{name: product, fields: [Nat]}, {name: external, fields: [Nat, Bool]}]
+}
+
+inductive{
+  name: AuthorityError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: missingOwner, fields: []},
+    {name: competingOwners, fields: []},
+    {name: uncheckedBoundary, fields: []}
+  ]
+}
+
+definition{
+  name: admitOwnerCount,
+  parameters: [owners : Nat],
+  result: (Result Bool AuthorityError),
+  body: (if (owners =? 0) then (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.missingOwner)) else (if (owners =? 1) then (ctor Result.ok [Bool, AuthorityError] true) else (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.competingOwners))))
+}
+
+definition{
+  name: admitAuthority,
+  parameters: [ownership : Ownership],
+  result: (Result Bool AuthorityError),
+  body: (match ownership
+    | Ownership.product owners => (admitOwnerCount owners)
+    | Ownership.external owners boundaryChecked => (match (admitOwnerCount owners)
+      | Result.error error => (ctor Result.error [Bool, AuthorityError] error)
+      | Result.ok accepted => (if boundaryChecked then (ctor Result.ok [Bool, AuthorityError] true) else (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.uncheckedBoundary)))))
+}
+
+theorem{
+  name: missingProductOwner,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.product 0)) = (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.missingOwner))),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: oneProductOwner,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.product 1)) = (ctor Result.ok [Bool, AuthorityError] true)),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: competingProductOwners,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.product 2)) = (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.competingOwners))),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: uncheckedExternalBoundary,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.external 1 false)) = (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.uncheckedBoundary))),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: checkedExternalBoundary,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.external 1 true)) = (ctor Result.ok [Bool, AuthorityError] true)),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: missingExternalOwner,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.external 0 true)) = (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.missingOwner))),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: competingExternalOwners,
+  parameters: [],
+  statement: ((admitAuthority (ctor Ownership.external 2 true)) = (ctor Result.error [Bool, AuthorityError] (ctor AuthorityError.competingOwners))),
+  proof: reflexivity{},
+  axioms: []
+}
+\end{semanticmodule}
+\end{lexlean}
