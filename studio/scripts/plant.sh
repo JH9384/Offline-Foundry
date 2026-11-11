@@ -14,6 +14,7 @@
 #   ./scripts/plant.sh parse     # put a raw newline in a string in host.js: the Parse gate must refuse
 #   ./scripts/plant.sh hole      # drop a handler a screen reads on mount: the Contract gate must refuse
 #   ./scripts/plant.sh live      # make a node's kappa ignore its content: the Live gate must refuse
+#   ./scripts/plant.sh shadcn    # change one class in a vendored shadcn component: the components gate must refuse
 # `hole` runs the Contract gate, which bundles the vendored contracts with the renderer's own esbuild,
 # so run it where those dependencies were installed for this platform -- otherwise esbuild refuses to
 # start and the gate looks like it fired when it never ran.
@@ -101,7 +102,13 @@ EOF
     sed -i 's/kappa: kappaOfValue({ kind: n.kind, data: n.data })/kappa: kappaOfValue({ kind: n.kind })/' shell/live/project.mjs
     expect_fail node tools/live_preview.mjs --check
     cp /tmp/plant-project.mjs shell/live/project.mjs ;;
-  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live" >&2; exit 2 ;;
+  shadcn)
+    # A component edited in place: the frame would no longer be shadcn/ui as the kit vendors it.
+    cp vendor/shadcn-ui/registry/new-york-v4/ui/button.tsx /tmp/plant-button.tsx
+    sed -i 's/rounded-md text-sm font-medium/rounded-full text-sm font-medium/' vendor/shadcn-ui/registry/new-york-v4/ui/button.tsx
+    expect_fail node tools/live_components.mjs --check
+    cp /tmp/plant-button.tsx vendor/shadcn-ui/registry/new-york-v4/ui/button.tsx ;;
+  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn" >&2; exit 2 ;;
 esac
 restore
 echo "restored"
