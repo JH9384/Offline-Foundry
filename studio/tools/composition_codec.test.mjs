@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
@@ -45,11 +46,17 @@ test("invalid guest responses and runtime failures refuse", async () => {
   assert.equal((await admitWithGuest({ dispatch() { throw Error("private"); } }, policy, [feature])).code, "compositionRuntimeFailed");
 });
 
-// A balanced byte-expression avoids a single giant Lean array literal. The
-// independent fixture still pins every byte of the assembled runtime request.
+// Closed byte aliases keep metadata within the SDK's admitted grammar and
+// avoid repeatedly elaborating large Lean byte-array literals.
+const fixtureChunks = new Map();
 function requestTerm(hex) {
-  if (hex.length <= 8192) return "0x" + hex;
-  const cut = Math.floor(hex.length / 4) * 2;
+  if (hex.length <= 128) {
+    const name = "wire" + createHash("sha256").update(Buffer.from(hex, "hex")).digest("hex").slice(0, 16);
+    if (fixtureChunks.has(name)) assert.equal(fixtureChunks.get(name), hex);
+    fixtureChunks.set(name, hex);
+    return `(CompositionFixtures::${name})`;
+  }
+  const cut = Math.floor(Math.ceil(hex.length / 128) / 2) * 128;
   return `(prim append ${requestTerm(hex.slice(0, cut))} ${requestTerm(hex.slice(cut))} : Bytes)`;
 }
 test("the actual guest model carries the full wire corpus and routes through semantic admission", () => {
@@ -59,8 +66,10 @@ test("the actual guest model carries the full wire corpus and routes through sem
   assert.match(kernel, /CompositionProtocol::dispatchComposition/);
   assert.match(protocol, /FeatureComposition::admitComposition/);
   assert.match(kernel, /requestMaximum := \(32776 : UInt32\)/);
+  const fixtures = fs.readFileSync(new URL("../../app/src/CompositionFixtures.lex.tex", import.meta.url), "utf8");
   for (const vector of vectors) {
     const expected = Buffer.from(vector.response).toString("hex");
     assert.ok(kernel.includes(`request := ${requestTerm(vector.request)}, response := 0x${expected}`), `missing runtime vector ${vector.name}`);
   }
+  for (const [name, hex] of fixtureChunks) assert.ok(fixtures.replace(/\s+/g, "").includes(`definition{name:${name},parameters:[],result:Bytes,body:0x${hex}}`), `fixture alias changed: ${name}`);
 });
