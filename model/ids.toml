@@ -164,3 +164,9 @@ id = "FA-15"
 level = "build"
 suite = "capability-availability"
 statement = "Unimplemented browser queries return typed unsupported errors rather than fabricated resource status or empty findings"
+
+[[id]]
+id = "FA-16"
+level = "build"
+suite = "provider-key-validation"
+statement = "Provider credential validation rejects unsupported providers and requires a bounded authenticated response before success"

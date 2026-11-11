@@ -24,7 +24,7 @@ as evidence that the broader specification is satisfied.
 | quality | Normative requirement recorded. | Fix thresholds and qualify accessibility, fidelity, usability and performance with appropriate independent evidence. |
 | release | Normative requirement recorded. | Bind release receipt to exact scope/artifacts/destination; independently retrieve and replay deployment. |
 | representation | Compression-derived claim distinctions are recorded. FA-08 checks exact reconstruction of existing text snapshots and refuses missing file bases. | FA-14 adds exact deflate/XOR representations with distinct identities and accounting; local Node and Chromium controls pass, full feature CI is required. Production decoder/toolchain closure and application-preserving optimization remain separate. |
-| ownership | FA-13 exports a pure Prism work state machine with owner/revision checks, reservation, progress, suspension, transfer and completion; 28 diagnostic proof controls. Full SDK qualification remains required. | Bind authenticated owners, durable atomic state and achieved checkpoints to actual effect execution; qualify browser cancellation and recovery. |
+| ownership | FA-13 exports a pure Prism work state machine with owner/revision checks, reservation, progress, suspension, transfer and completion; 28 proof controls and full SDK run 43013404724 pass in PR #37. | Bind authenticated owners, durable atomic state and achieved checkpoints to actual effect execution; qualify browser cancellation and recovery. |
 | factory | Factory requirement and upstream boundary inspected. | Qualify immutable factory-capable SDK and template; model obligation closures, oracle/policy identities and complete acceptance-preserving reuse. |
 
 ## Factory prerequisite
@@ -63,13 +63,14 @@ not substituted for this gate.
 | Browser composition guest | #32 | 43009725963, passed |
 | Cloud inference boundary | #34 | 43010915892, passed |
 | Imported input boundary | #35 | 43011523728, passed |
+| Pure work ownership | #37 | 43013404724, passed |
 
 ## Review disposition
 
-PRs #22–32, #34 and #35 have passed their recorded full gates and are ready for
+PRs #22–32, #34, #35 and #37 have passed their recorded full gates and are ready for
 review. Each has documented author completeness review and mutation evidence.
 Author review is not independent approval. This branch retains FA-01 through
-FA-12, including the earlier separate FA-02 branch, and adds FA-13's pure model.
+FA-12, including the earlier separate FA-02 branch, and adds FA-13's pure model. FA-14 exact representations, FA-15 unavailable-query corrections and FA-16 bounded credential checks have local controls; their complete feature CI remains required.
 No PR merge into main, deployment, factory migration, or whole-application
 completion is claimed.
 

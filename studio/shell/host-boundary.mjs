@@ -1,3 +1,4 @@
+import { providerKeyFailure } from "./provider-key-validation.mjs";
 // Typed adapter for FoundrySpecification.hostResponseBoundary. The schema belongs
 // to the imported renderer contract; this adapter never invents a successful value.
 const marker = "dyad-ipc-envelope-v1";
@@ -40,7 +41,9 @@ export async function invokeHost(channel, args, handler, schema, inputContract =
   let value;
   try {
     value = await handler(...args);
-  } catch {
+  } catch (error) {
+    const known = providerKeyFailure(error);
+    if (known) return refusal(known.code, channel, known.kind, known.message);
     return refusal("handlerFailed", channel, "internal", "The browser operation failed");
   }
   // Legacy channels without imported output contracts retain their handler result.

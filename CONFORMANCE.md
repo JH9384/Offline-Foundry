@@ -92,6 +92,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-11` | `build` | Cloud inference bounds requests and streamed responses and refuses cancellation, malformed data and provider failures explicitly |
 
+## provider-key-validation
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-16` | `build` | Provider credential validation rejects unsupported providers and requires a bounded authenticated response before success |
+
 ## publication-cancellation
 
 | ID | Level | Statement |

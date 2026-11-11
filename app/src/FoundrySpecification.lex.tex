@@ -427,5 +427,30 @@ definition{
   result: String,
   body: "The declared unavailable browser queries return HostResponseError.unsupportedChannel through both IPC entrypoints. Empty findings, quota values, connection details and resource lists cannot stand in for unimplemented checks or external reads. Renderer error recovery must preserve the failure rather than substitute empty success. This negative scope is not implementation of the excluded capabilities, and it is not a complete inventory of every renderer command. Each added capability requires a new modeled boundary and executed acceptance before removing its unavailable declaration."
 }
+
+inductive{
+  name: ProviderKeyError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: unsupportedProvider, fields: []},
+    {name: invalidCredential, fields: []},
+    {name: credentialRejected, fields: []},
+    {name: keyValidationRateLimited, fields: []},
+    {name: keyValidationProviderFailed, fields: []},
+    {name: keyValidationMalformed, fields: []},
+    {name: keyValidationTooLarge, fields: []},
+    {name: keyValidationNetworkFailed, fields: []},
+    {name: keyValidationTimedOut, fields: []},
+    {name: keyValidationCancelled, fields: []}
+  ]
+}
+
+definition{
+  name: providerKeyBoundary,
+  parameters: [],
+  result: String,
+  body: "Credential validation supports only OpenRouter authentication metadata. Other providers fail explicitly before network effects. A nonempty printable ASCII key of at most 8192 characters is transmitted only as a Bearer header to the fixed HTTPS OpenRouter auth/key endpoint, with redirect refusal, no cookies and no caching. Success requires HTTP 200 and a JSON data object with a nonempty label and Boolean is_free_tier. A 20 second maximum deadline covers headers and body; the body is bounded to 65536 bytes with fatal UTF8 decoding. Cancellation, network failure, credential rejection, rate limits, provider failure and malformed responses return typed fixed messages without provider exception bodies or credentials. The browser does not store keys in this command. Authentication metadata does not establish inference access, model availability, sufficient balance or permissions for subsequent effects."
+}
 \end{semanticmodule}
 \end{lexlean}

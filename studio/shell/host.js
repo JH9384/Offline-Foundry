@@ -1,3 +1,4 @@
+import { validateProviderKey } from "./provider-key-validation.mjs";
 // The browser host: the surface src/preload.ts exposes as window.electron, implemented on the page
 // with no server. Rules come from the generated core (core.wasm: preimage, restore, network, view);
 // addresses are BLAKE3 over the bytes the core spells; records live in IndexedDB. Adapters only:
@@ -125,12 +126,7 @@ const FEATHERLESS_MODELS = [{ apiName: "zai-org/GLM-5.3-Flash", displayName: "GL
 handlers.set("get-language-model-providers", () => [FEATHERLESS, LOCAL]);
 handlers.set("get-language-models", ({ providerId }) => (providerId === "openrouter" ? OPENROUTER_MODELS : providerId === "featherless" ? FEATHERLESS_MODELS : providerId === "local" ? LOCAL_MODELS : []));
 handlers.set("get-language-models-by-providers", () => ({ featherless: FEATHERLESS_MODELS, local: LOCAL_MODELS }));
-handlers.set("validate-provider-api-key", async ({ provider, apiKey }) => {
-  if (provider !== "openrouter") return { ok: true };
-  const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { authorization: "Bearer " + apiKey } });
-  if (!r.ok) throw new Error("OpenRouter did not accept this key (" + r.status + ")");
-  return { ok: true };
-});
+handlers.set("validate-provider-api-key", input => validateProviderKey(input));
 
 // ---- apps and files. A file is stored under "<appId>:<path>"; the app record carries no files,
 // get-app lists them. Every edit seals a version: the address of the project state.
