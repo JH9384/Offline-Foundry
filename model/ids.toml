@@ -194,3 +194,9 @@ id = "FA-20"
 level = "build"
 suite = "storage-commit-boundary"
 statement = "Host storage requests report success only after transaction completion and refuse aborted or invalid operations"
+
+[[id]]
+id = "FA-21"
+level = "build"
+suite = "atomic-project-creation"
+statement = "Project creation commits its files, objects, initial version and chat atomically with transaction-local identifiers"

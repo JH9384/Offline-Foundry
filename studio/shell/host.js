@@ -1,3 +1,4 @@
+import { loadProjectScaffold, prepareNewProject, createStoredProject, createStoredChat } from "./project-creation.mjs";
 import { storageRequest } from "./storage-request.mjs";
 import { executeWorkWithGuest } from "./work-codec.mjs";
 import { validateProviderKey } from "./provider-key-validation.mjs";
@@ -161,26 +162,19 @@ async function seal(appId, message) {
 }
 let scaffold = null;
 async function loadScaffold() {
-  if (scaffold) return scaffold;
-  const list = await (await fetch(new URL("scaffold/files.json", BASE))).json();
-  const files = {};
-  await Promise.all(list.concat(["AI_RULES.md"]).map(async (p) => { const r = await fetch(new URL("scaffold/" + p, BASE)); if (r.ok) files[p] = await r.text(); }));
-  return (scaffold = files);
+  if (!scaffold) scaffold = await loadProjectScaffold(new URL("scaffold/", BASE));
+  return scaffold;
 }
 handlers.set("list-apps", async () => ({ apps: (await all("apps")).map(withDates) }));
 handlers.set("get-app", async (id) => { const a = await get("apps", id); if (!a) throw new Error("no app " + id); return { ...withDates(a), files: await filesOf(id), frameworkType: "vite", supabaseProjectName: null, vercelTeamSlug: null }; });
 handlers.set("check-app-name", async ({ appName }) => ({ exists: (await all("apps")).some((a) => a.name === appName) }));
 handlers.set("preview-app-folder-name", async ({ appName }) => ({ folderName: appName }));
 handlers.set("create-app", async ({ name, initialChatMode }) => {
-  const id = await nextId("apps");
-  const now = new Date().toISOString();
-  const app = { id, name, path: name, createdAt: now, updatedAt: now, ...nulls };
-  await put("apps", id, app);
-  for (const [p, src] of Object.entries(await loadScaffold())) await put("files", id + ":" + p, src);
-  const oid = await seal(id, "Init Hologram app");
-  const chatId = await nextId("chats");
-  await put("chats", chatId, { id: chatId, appId: id, title: name, createdAt: now, messages: [], initialCommitHash: oid, dbTimestamp: null, chatMode: initialChatMode || "build", modelSelection: null, referencedApps: [] });
-  return { app: withDates(app), chatId };
+  await coreReady;
+  const prepared = await prepareNewProject({ name, initialChatMode, files: await loadScaffold() }, { core, derive: kappa });
+  const created = await createStoredProject(await dbReady, prepared, nulls);
+  emit("version-created", { appId: created.app.id, oid: created.oid });
+  return { app: withDates(created.app), chatId: created.chatId };
 });
 handlers.set("read-app-file", async ({ appId, filePath }) => { const c = await get("files", appId + ":" + filePath); if (c === undefined) throw new Error("no file " + filePath); return c; });
 handlers.set("edit-app-file", async ({ appId, filePath, content }) => { await put("files", appId + ":" + filePath, content); await seal(appId, "Edit " + filePath); return { success: true, warning: null }; });
@@ -269,9 +263,13 @@ handlers.set("forge:import", async (input) => {
   for (const [k, bytes] of objects) writes.push(["objects", k, bytes]);
   const db = await dbReady;
   await new Promise((res, rej) => {
-    const t = db.transaction(["apps", "chats", "files", "objects", "refs", "versions"], "readwrite");
-    for (const [store, key, value] of writes) t.objectStore(store).put(value, key);
-    t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error("the import was aborted"));
+    let t;
+    const refuse = () => rej(Object.assign(new Error("Project storage failed"), { code: "projectStorageFailed" }));
+    try {
+      t = db.transaction(["apps", "chats", "files", "objects", "refs", "versions"], "readwrite");
+      t.oncomplete = res; t.onerror = refuse; t.onabort = refuse;
+      for (const [store, key, value] of writes) { if (store === "apps" || store === "chats") t.objectStore(store).add(value, key); else t.objectStore(store).put(value, key); }
+    } catch { if (t) { try { t.abort(); } catch {} } refuse(); }
   });
   return { apps, objects: objects.size, refused };
 });
@@ -327,7 +325,7 @@ handlers.set("get-chats", async (appId) => (await all("chats")).filter((c) => ap
 handlers.set("get-chat", async (id) => { const c = await get("chats", id); if (!c) throw new Error("no chat " + id); return { ...c, chatMode: c.chatMode || "build", referencedApps: c.referencedApps || [], messages: (c.messages || []).map((x) => ({ ...x, createdAt: x.createdAt || now() })) }; });
 const chatRow = (c) => ({ id: c.id, appId: c.appId, title: c.title, createdAt: new Date(c.createdAt || Date.now()), chatMode: c.chatMode || "build", isFavorite: !!c.isFavorite });
 handlers.set("get-chat-metadata", async (id) => { const c = await get("chats", id); return c ? chatRow(c) : null; });
-handlers.set("create-chat", async (appId) => { const id = await nextId("chats"); await put("chats", id, { id, appId, title: "New chat", createdAt: now(), messages: [], initialCommitHash: null, dbTimestamp: null, chatMode: "build", modelSelection: null, referencedApps: [] }); return id; });
+handlers.set("create-chat", async (appId) => createStoredChat(await dbReady, appId, now()));
 handlers.set("update-chat", async ({ chatId, title }) => { const c = await get("chats", chatId); if (c && title) c.title = title; if (c) await put("chats", chatId, c); });
 handlers.set("delete-chat", async (id) => { await del("chats", id); });
 // The sidebar's search: a chat matches by title or by the text of one of its messages, and the line
@@ -988,8 +986,7 @@ const originalPut = put;
 handlers.set("__seal-files", null); handlers.delete("__seal-files");
 const rawEdit = handlers.get("edit-app-file");
 handlers.set("edit-app-file", async (input) => { await originalPut("objects", await kappa(enc.encode(input.content)), enc.encode(input.content)); return rawEdit(input); });
-const rawCreate = handlers.get("create-app");
-handlers.set("create-app", async (input) => { for (const src of Object.values(await loadScaffold())) { const b = enc.encode(src); await originalPut("objects", await kappa(b), b); } return rawCreate(input); });
+
 
 
 // ---- publish: a version becomes a Hologram application. The View is the project's built page with

@@ -466,5 +466,23 @@ definition{
   result: String,
   body: "The browser host's single-store transaction helper captures the request result but returns success only after IndexedDB transaction completion. A later abort or error cannot become success. Opening the transaction, invoking its synchronous operation, obtaining the request and reading its result all fail closed. Synchronous exceptions and request or transaction errors abort queued writes. Abort, missing request, completion without request success and storage failures use storageTransactionFailed with a fixed public message; exception contents and stored values are not exposed. Undefined delete results are valid after commit. The host IPC boundary maps this failure to handlerFailed. This is the shared host helper's transaction acknowledgement boundary, not atomicity of multi-transaction journeys, durable storage beyond browser guarantees, quota availability, authorization, or cross-device persistence."
 }
+
+inductive{
+  name: ProjectCreationError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: projectScaffoldFailed, fields: []},
+    {name: projectPreparationFailed, fields: []},
+    {name: projectStorageFailed, fields: []}
+  ]
+}
+
+definition{
+  name: projectCreationBoundary,
+  parameters: [],
+  result: String,
+  body: "New browser projects prepare all file objects and the initial snapshot before storage writes. The generated core remains the authority for snapshot preimage bytes; the existing BLAKE3 implementation derives object identities. Inputs are copied before asynchronous hashing. Names are nonempty and at most 255 UTF16 units; portable relative file paths exclude empty, dot and parent segments, backslash, colon and control characters. At most 1000 exact UTF8 files, 16 MiB per file, 64 MiB total and a 1 MiB snapshot are accepted. Scaffold loading requires a unique valid manifest and every named file including AI_RULES.md, with redirects refused, credentials omitted, fatal UTF8 decoding, a 64 KiB manifest and one 30-second header/body deadline; failures never cache a partial scaffold. A single IndexedDB write transaction allocates app and chat IDs from the current store keys and commits the app, files, file objects, snapshot object, main reference, initial version and initial chat together. Concurrent creations serialize allocation within that transaction. Chat-only creation also allocates in its transaction and requires an existing app. Import uses insert-only app/chat writes, so a stale allocated ID refuses the transaction instead of replacing an existing record. Completion is acknowledged only after commit; abort leaves previous data unchanged. Scaffold, preparation and storage errors are fixed-message ProjectCreationError values, mapped to handlerFailed by IPC. This establishes local creation atomicity and complete requested scaffold retrieval, not authenticated scaffold provenance, global project identity, atomic later edits or imports beyond collision refusal, storage durability beyond IndexedDB, or complete application generation."
+}
 \end{semanticmodule}
 \end{lexlean}

@@ -24,6 +24,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
 
+## atomic-project-creation
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-21` | `build` | Project creation commits its files, objects, initial version and chat atomically with transaction-local identifiers |
+
 ## authoring-projection
 
 | ID | Level | Statement |
