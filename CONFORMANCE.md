@@ -42,6 +42,12 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-07` | `build` | The generated guest decodes bounded composition requests and returns the model admission result |
 
+## exact-representation
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-14` | `build` | Byte representations verify original, payload, decoder specification and optional basis identities before returning exact reconstructed bytes |
+
 ## feature-composition
 
 | ID | Level | Statement |

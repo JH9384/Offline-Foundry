@@ -7,6 +7,7 @@
 // the preview worker, and the app run machine (build in the tab, serve at the version's address).
 // The chat stream is the next slice.
 
+import { packBytes, unpackBytes, RepresentationError } from "./exact-representation.mjs";
 import { admitWithGuest } from "./composition-codec.mjs";
 import { readBoundRules, saveBoundRules } from "./rules-source.mjs";
 import { restoreSnapshot } from "./snapshot-restore.mjs";
@@ -663,6 +664,13 @@ async function codebaseOf(appId) {
 // can say proved only after Lean attested the current rules, and publish only proved rules. The
 // state lives at refs["prism:<appId>"].
 const kernelReady = import(new URL("kernel.js", BASE).href).then(() => self.ForgeKernel.load((p) => fetch(new URL(p, BASE))));
+async function representationCommand(operation, input, reconstruct = false) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== (reconstruct ? "basis,bytes,identity" : "basis,bytes")) return { ok: false, code: "invalidRepresentation" };
+  try { return { ok: true, value: await (reconstruct ? operation(input.bytes, input.identity, input.basis) : operation(input.bytes, input.basis)) }; }
+  catch (error) { if (error instanceof RepresentationError) return { ok: false, code: error.code }; throw error; }
+}
+handlers.set("forge:pack-bytes", input => representationCommand(packBytes, input));
+handlers.set("forge:unpack-bytes", input => representationCommand(unpackBytes, input, true));
 handlers.set("forge:compose", async (input) => {
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== "features,policy") return { ok: false, code: "malformedComposition", error: "Composition requires policy and features" };
   return admitWithGuest(await kernelReady, input.policy, input.features);

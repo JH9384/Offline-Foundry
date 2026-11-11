@@ -152,3 +152,9 @@ id = "FA-13"
 level = "build"
 suite = "work-ownership"
 statement = "The Prism work model reserves capacity before execution and preserves spending and checkpoints across suspension with owner and revision checks"
+
+[[id]]
+id = "FA-14"
+level = "build"
+suite = "exact-representation"
+statement = "Byte representations verify original, payload, decoder specification and optional basis identities before returning exact reconstructed bytes"

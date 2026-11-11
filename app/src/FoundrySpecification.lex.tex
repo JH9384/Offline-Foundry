@@ -368,5 +368,50 @@ definition{
   result: String,
   body: "Commands with imported renderer contracts must validate input before invoking any handler. The owned renderer bridge publishes the actual imported input and output schemas separately. An imported command carries at most one argument; omitted input is undefined. The adapter clones input before validation so caller mutation cannot change pending effects, rejects nontransferable values, and passes the schema's parsed value including declared defaults and transformations to the handler. Missing input validators for contracted outputs and throwing or malformed validators refuse without effects. Invalid arguments use invalidInput and the imported validation error category; missing or failed validators use inputContractUnavailable or inputValidatorFailed and internal. Refusals include the channel but never arguments, schema diagnostics or exception contents. Output validation still runs independently and never replaces successful handler output. Absent handlers remain unsupportedChannel. Legacy channels without imported input or output schemas retain their declared legacy behavior; their input is not claimed validated. This boundary checks representation, not permission, entity ownership, transaction isolation or full journey completeness."
 }
+
+inductive{
+  name: RepresentationError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: invalidRepresentation, fields: []},
+    {name: identityMismatch, fields: []},
+    {name: missingBasis, fields: []},
+    {name: basisMismatch, fields: []},
+    {name: unsupportedDecoder, fields: []},
+    {name: representationTooLarge, fields: []},
+    {name: decodeFailed, fields: []},
+    {name: representationCancelled, fields: []},
+    {name: representationTimedOut, fields: []}
+  ]
+}
+
+definition{
+  name: representationBoundary,
+  parameters: [],
+  result: String,
+  body: "The byte-representation adapter accepts at most 2 MiB of original or basis bytes and a 4 MiB JSON archive. RFC1950 deflate encodes either original bytes or their bytewise XOR with an equal-length basis. Reconstruction checks typed raw-byte SHA256 identities for original, compressed payload, decoder specification and basis, exact output length, and bounded decompression before returning bytes. Representation identity hashes the entire serialized archive and reconstruction requires its separately supplied expected identity. Missing or wrong bases fail explicitly. The decoder identity identifies the specified transformation, not the browser executable or toolchain. Accounting reports payload, archive and basis bytes separately; reconstructionBytes sums archive and basis and excludes the shared native decoder implementation. Compression ratio, optimality, application equivalence and complete production dependency closure are not claimed. The host exposes forge:pack-bytes and forge:unpack-bytes with explicit basis and bytes fields, plus the expected representation identity for unpacking. These pure byte operations neither write storage nor perform network requests."
+}
+
+structure{
+  name: ByteIdentity,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: kind, type: String},
+    {name: canonicalization, type: String},
+    {name: algorithm, type: String},
+    {name: version, type: Nat},
+    {name: digest, type: String},
+    {name: byteLength, type: Nat}
+  ]
+}
+
+definition{
+  name: representationDecoderSpecification,
+  parameters: [],
+  result: String,
+  body: "foundry/deflate-xor/1: RFC1950 inflate; without basis return inflated bytes; with basis require equal lengths and XOR corresponding bytes; verify exact original length and SHA256"
+}
 \end{semanticmodule}
 \end{lexlean}
