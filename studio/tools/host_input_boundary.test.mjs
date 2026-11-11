@@ -17,6 +17,7 @@ test("missing or broken input contracts refuse before effects", async () => {
   const handler = () => assert.fail("unexpected effect");
   for (const schema of [undefined, null, {}, { safeParse: true }]) refused(await invokeHost(channel, [], handler, output, { schema }), "inputContractUnavailable");
   refused(await invoke([], handler, { safeParse() { throw Error("private"); } }), "inputValidatorFailed");
+  refused(await invoke([], handler, { get safeParse() { throw Error("private"); } }), "inputValidatorFailed");
   refused(await invoke([], handler, { safeParse: () => ({ success: true }) }), "inputValidatorFailed");
   refused(await invoke([], handler, { safeParse: () => ({ success: true, get data() { throw Error("private"); } }) }), "inputValidatorFailed");
 });

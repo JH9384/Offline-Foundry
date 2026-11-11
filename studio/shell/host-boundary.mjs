@@ -13,9 +13,13 @@ export async function invokeHost(channel, args, handler, schema, inputContract =
     return refusal("unsupportedChannel", channel, "not_found", "This capability is unavailable in the browser");
   }
   if (inputContract !== null) {
-    if (!inputContract.schema || typeof inputContract.schema.safeParse !== "function") {
-      return refusal("inputContractUnavailable", channel, "internal", "The browser input contract is unavailable");
-    }
+    let inputSchema;
+    try {
+      inputSchema = inputContract.schema;
+      if (!inputSchema || typeof inputSchema.safeParse !== "function") {
+        return refusal("inputContractUnavailable", channel, "internal", "The browser input contract is unavailable");
+      }
+    } catch { return refusal("inputValidatorFailed", channel, "internal", "The browser input validator failed"); }
     if (!Array.isArray(args) || args.length > 1) {
       return refusal("invalidInput", channel, "validation", "The command arguments do not match their contract");
     }
@@ -23,7 +27,7 @@ export async function invokeHost(channel, args, handler, schema, inputContract =
     try { input = structuredClone(args[0]); }
     catch { return refusal("invalidInput", channel, "validation", "The command cannot be transferred"); }
     try {
-      const parsed = inputContract.schema.safeParse(input);
+      const parsed = inputSchema.safeParse(input);
       if (parsed?.success !== true) {
         return refusal("invalidInput", channel, "validation", "The command arguments do not match their contract");
       }
