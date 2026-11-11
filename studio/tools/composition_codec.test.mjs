@@ -10,6 +10,7 @@ test("codec matches independent generated-guest acceptance vector bytes", () => 
   assert.equal(hex(encodeComposition(policy, [feature])), vectors.find(v => v.name === "single").request);
   assert.equal(hex(encodeComposition(policy, [])), vectors.find(v => v.name === "empty").request);
   assert.equal(hex(encodeComposition({ ...policy, cpu: 1 }, [feature])), vectors.find(v => v.name === "cpu").request);
+  for (const vector of vectors.filter(v => v.policy)) assert.equal(hex(encodeComposition(vector.policy, vector.features)), vector.request, vector.name);
 });
 test("scalar encoding refuses coercion, fractions, negatives and overflow", () => {
   for (const cpu of [undefined, null, "1", -1, 1.5, Infinity, NaN, 2 ** 32]) assert.throws(() => encodeComposition({ ...policy, cpu }, [feature]), { code: "malformedComposition" });
@@ -43,7 +44,7 @@ test("invalid guest responses and runtime failures refuse", async () => {
 test("the actual guest model carries the full wire corpus and routes through semantic admission", () => {
   const kernel = fs.readFileSync(new URL("../../app/src/ForgeKernel.lex.tex", import.meta.url), "utf8");
   const protocol = fs.readFileSync(new URL("../../app/src/CompositionProtocol.lex.tex", import.meta.url), "utf8");
-  assert.equal(vectors.length, 8);
+  assert.equal(vectors.length, 20);
   assert.match(kernel, /CompositionProtocol::dispatch/);
   assert.match(protocol, /FeatureComposition::admitComposition/);
   assert.match(kernel, /requestMaximum := \(16392 : UInt32\)/);
