@@ -371,6 +371,17 @@ const chatAppId = (input) => {
 const normalizedChat = (c) => ({ ...c, appId: chatAppId(c.appId), chatMode: c.chatMode || "build",
   referencedApps: Array.isArray(c.referencedApps) ? c.referencedApps : [],
   messages: Array.isArray(c.messages) ? c.messages.map(x=>({...x, createdAt: x.createdAt || now()})) : [] });
+// Persist only a verified legacy identity correction; never rewrite file versions or
+// stored messages while repairing the renderer's chat identity contract.
+async function repairChatIdentity(c) {
+  const id = chatAppId(c.appId);
+  if (c.appId !== id) {
+    const corrected = { ...c, appId: id };
+    await put("chats", c.id, corrected);
+    return corrected;
+  }
+  return c;
+}
 const chatRow = (c) => {
   const chat = normalizedChat(c);
   return { id: chat.id, appId: chat.appId, title: chat.title, createdAt: new Date(chat.createdAt || Date.now()),
@@ -381,7 +392,7 @@ handlers.set("get-chats", async (appId) => {
   const rows = [];
   for (const c of await all("chats")) {
     try {
-      const row = chatRow(c);
+      const row = chatRow(await repairChatIdentity(c));
       if (filter == null || row.appId === filter) rows.push(row);
     } catch (error) { console.error("[host] invalid stored chat identity", c?.id, error); }
   }
@@ -389,9 +400,10 @@ handlers.set("get-chats", async (appId) => {
 });
 handlers.set("get-chat", async (id) => { const c = await get("chats", id);
   if (!c) throw new Error("no chat " + id);
-  return normalizedChat(c);
+  return normalizedChat(await repairChatIdentity(c));
 });
-handlers.set("get-chat-metadata", async (id) => { const c = await get("chats", id); return c ? chatRow(c) : null; });
+handlers.set("get-chat-metadata", async (id) => { const c = await get("chats", id);
+  return c ? chatRow(await repairChatIdentity(c)) : null; });
 handlers.set("create-chat", async (input) => {
   const appId = chatAppId(input);
   if (!(await get("apps", appId))) throw new Error("chat app does not exist: " + appId);
@@ -919,7 +931,9 @@ window.__prism = { rulesAfterTurn, approveRules, rulesOf, nextPhase, check: pris
 
 async function chatTurn(chatId, intent) {
   const m = chatMachineOf(chatId);
-  const chat = await get("chats", chatId);
+  const storedChat = await get("chats", chatId);
+  if (!storedChat) throw new Error("no chat " + chatId);
+  const chat = await repairChatIdentity(storedChat);
   const appId = chat.appId;
   const ref = intent.invocationRef;
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
