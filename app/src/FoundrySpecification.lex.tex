@@ -181,5 +181,23 @@ theorem{
   proof: reflexivity{},
   axioms: []
 }
+
+inductive{
+  name: ProjectionError,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: missingProjection, fields: []},
+    {name: unreadableProjection, fields: []},
+    {name: divergedProjection, fields: []}
+  ]
+}
+
+definition{
+  name: authoringBoundary,
+  parameters: [],
+  result: String,
+  body: "The authoring front end deterministically constructs every canonical Studio module and its ordered export roots. Check mode compares all expected bytes without creating, repairing or rewriting output, reports every missingProjection, unreadableProjection or divergedProjection by path, and fails if any comparison fails. Canonical sources remain what LexLean consumes. Source conformance executes the actual checker against independent mutations of each module, export roots, newline encoding and authoring declarations; a changed declaration requires explicit regeneration before acceptance."
+}
 \end{semanticmodule}
 \end{lexlean}
