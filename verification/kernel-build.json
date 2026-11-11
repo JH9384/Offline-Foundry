@@ -1,0 +1,15 @@
+{
+  "schema": "prism/remote-build/1",
+  "repository": "UOR-Foundation/foundry",
+  "sha": "775fa3a16852b6e76b287f7a9f3807843f5fcc43",
+  "run_id": 43007577514,
+  "run_url": "https://github.com/UOR-Foundation/foundry/actions/runs/43007577514",
+  "workflow_ref": "UOR-Foundation/foundry/.github/workflows/build.yml@refs/heads/prism/build/composition-closed-fixtures",
+  "event": "push",
+  "ref": "refs/heads/prism/build/composition-closed-fixtures",
+  "project": "app",
+  "build": "eb33909742d8f7718cffd8f622ed597e3564400982d44e17e2f4bbfe17ab10ce",
+  "holo": "Forge kernel.holo",
+  "fingerprint": "b6b44b8c90c46f8aa138c52d34fac8dbb6a14bcaa864aef0ebbf5db29587dfca",
+  "holo_sha256": "99af77c426735d19a1b467457c037a60aae05596454ba0aefb69320be5ae5c01"
+}
