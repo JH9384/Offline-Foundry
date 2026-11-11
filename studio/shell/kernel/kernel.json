@@ -1,12 +1,12 @@
 {
  "spec": "hologram-forge/kernel/1",
  "application": "Forge kernel",
- "source": "https://raw.githubusercontent.com/UOR-Foundation/foundry/59d9ba94f450bee3a2a468a00e51f889ce7f5f78/studio/shell/kernel/kernel.holo",
- "digest": "blake3:8bac054c120cd91f6cc25c70ad0035ed06ab6a80c4c963c2e8d8bacf1bf19ce0",
+ "source": "https://raw.githubusercontent.com/UOR-Foundation/foundry/6d721f5632c6d09d85b66b8eb3403e4f849f0330/studio/shell/kernel/kernel.holo",
+ "digest": "blake3:4e9d80d52a73916bcdf9163902b31a520e4e42eaad227b087fda0e1a7c5e7cac",
  "guest": {
   "path": "kernel/guest.wasm",
-  "sha256": "b23a985ffb9f394a8b12ca8d39e7ce8a8ba72fe7aa61ae8214d9d1f43bbcce44",
-  "bytes": 18625
+  "sha256": "3d5dd03f7dc50bb427006f0fb7ba30bc848d600664302df7edeb89c6e909ccd7",
+  "bytes": 18649
  },
  "limits": {
   "request": 32776,
@@ -14,6 +14,26 @@
   "guestAllocation": 32784
  },
  "vectors": [
+  [
+   "ZHJhZnRpbmcgcmV3b3Jk",
+   "ZHJhZnRpbmc="
+  ],
+  [
+   "Y2hlY2tlZCByZXdvcmQ=",
+   "Y2hlY2tlZA=="
+  ],
+  [
+   "cHJvdmluZyByZXdvcmQ=",
+   "cHJvdmluZw=="
+  ],
+  [
+   "cHJvdmVkIHJld29yZA==",
+   "cHJvdmVk"
+  ],
+  [
+   "cHVibGlzaGVkIHJld29yZA==",
+   "cHVibGlzaGVk"
+  ],
   [
    "d29yayAwMDAwMDAwMGZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZg==",
    "b2sgZmZmZmZmZmYwMDAwMDAwMGZmZmZmZmZmMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwZmZmZmZmZmYwMDAwMDAwMA=="

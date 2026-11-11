@@ -9,7 +9,7 @@ import { applyOps, createEditor } from "../shell/live/edit.mjs";
 import { assertGenerationActive } from "../shell/generation-patch.mjs";
 const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
 const initial = JSON.parse(fs.readFileSync(new URL("./fixtures/live/rsvp.json", import.meta.url)));
-const key = spec => live.kappaOfValue(live.logicOf(prism.checkSpec(spec).spec));
+const key = spec => { const checked = prism.checkSpec(spec).spec; return live.kappaOfValue({ name: checked.name, logic: live.logicOf(checked) }); };
 function fn(name, end, env) {
   const start = host.indexOf(`async function ${name}(`);
   assert.ok(start >= 0 && host.indexOf(end, start) > start);
@@ -39,12 +39,22 @@ test("checked wording changes retain a matching proof but not a current publicat
   assert.equal(batch.options.source, source); assert.equal(result.source.reference, "new");
   assert.ok(batch.patch.writes.some(w => w.path === "prism/spec.json"));
   assert.ok(batch.patch.writes.some(w => w.path === "src/lib/prism.ts"));
+  for (const stale of [false, true]) {
+    let trust;
+    const refresh = fn("refreshLive", "// ---- the one write path", {
+      get: async () => JSON.stringify(stale ? initial : spec, null, 2) + "\n", rulesOf: async () => saved,
+      enc: new TextEncoder(), kappa: async bytes => live.kappaOfValue([...bytes]), pushLive: (_, __, value) => { trust = value; },
+    });
+    await refresh(1); assert.equal(trust, stale ? "draft" : "proved");
+  }
 });
 test("changed logic drops proof and returns to checked", async () => {
   const spec = structuredClone(initial); spec.rules[0].then = "none"; spec.properties = []; spec.examples = [];
   assert.equal(prism.checkSpec(spec).ok, true);
-  const { saved } = await revise(spec, proved());
-  assert.equal(saved.phase, "checked"); assert.equal(saved.proof, null); assert.notEqual(saved.logicKappa, key(initial));
+  for (const candidate of [spec, { ...initial, name: "renamed-module" }]) {
+    const { saved } = await revise(candidate, proved());
+    assert.equal(saved.phase, "checked"); assert.equal(saved.proof, null); assert.notEqual(saved.logicKappa, key(initial));
+  }
 });
 test("cached identity cannot lend a proof from a different checked spec", async () => {
   const before = proved(); before.spec = { ...before.spec, otherwise: "none" };
@@ -83,6 +93,6 @@ test("the signed installed guest supports reword alongside composition and work"
   const guest = await self.ForgeKernel.load(async path => new Response(fs.readFileSync(new URL("../shell/" + path, import.meta.url))));
   assert.ok(guest.vectors >= 114);
   for (const phase of ["drafting", "checked", "proving", "proved", "published"]) assert.equal(await guest.ask(phase + " reword"), phase);
-  assert.match(await guest.ask("compose "), /^error /);
-  assert.match(await guest.ask("work "), /^error /);
+  assert.equal(await guest.ask("compose "), "malformedComposition");
+  assert.equal(await guest.ask("work "), "invalidWorkRequest");
 });

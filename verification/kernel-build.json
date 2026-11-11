@@ -1,15 +1,15 @@
 {
   "schema": "prism/remote-build/1",
   "repository": "UOR-Foundation/foundry",
-  "sha": "d3a3bbae7d33098d6da3720464317dd82117ab7d",
-  "run_id": 43017603564,
-  "run_url": "https://github.com/UOR-Foundation/foundry/actions/runs/43017603564",
-  "workflow_ref": "UOR-Foundation/foundry/.github/workflows/build.yml@refs/heads/prism/build/work-protocol",
+  "sha": "686c09b89757fa3a924dd71bd17e53dd43509a73",
+  "run_id": 43033504480,
+  "run_url": "https://github.com/UOR-Foundation/foundry/actions/runs/43033504480",
+  "workflow_ref": "UOR-Foundation/foundry/.github/workflows/build.yml@refs/heads/prism/build/current-main-integration",
   "event": "push",
-  "ref": "refs/heads/prism/build/work-protocol",
+  "ref": "refs/heads/prism/build/current-main-integration",
   "project": "app",
-  "build": "82b27538c1da2cb660c6d4da4cb06f190ad2ec8fdac2435a11aa0d5eb31e97ab",
+  "build": "17c82cd7cfc5e3afdceec7974eb0bf32a0351e4f046e62c17ea7f820848204b8",
   "holo": "Forge kernel.holo",
-  "fingerprint": "8bac054c120cd91f6cc25c70ad0035ed06ab6a80c4c963c2e8d8bacf1bf19ce0",
-  "holo_sha256": "22f6782a4f0b36b2b50415ea053a1f6f2b635d2295f5743e15f03c8e0ad2ad99"
+  "fingerprint": "4e9d80d52a73916bcdf9163902b31a520e4e42eaad227b087fda0e1a7c5e7cac",
+  "holo_sha256": "c1da2933403ff457fded52a6a21a3d9c4d5164783b2881bd63a0d5570f3ab9da"
 }

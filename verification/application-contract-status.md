@@ -73,10 +73,11 @@ not substituted for this gate.
 | Storage commit acknowledgement | #49 | 43024719709, passed |
 | Atomic project creation | #50 | 43025790830, passed |
 | Atomic explicit edits | #51 | 43027167718, passed |
+| Atomic generation batches | #52 | 43030478856, passed |
 
 ## Review disposition
 
-PRs #22–32, #34, #35, #37–39, #41, #42, #45 and #48–51 passed their recorded full gates and are ready for review. Author completeness reviews are not independent approval. This branch retains FA-01 through FA-22 and adds FA-23 generation batches; its full feature gate is recorded separately at its revision.
+PRs #22–32, #34, #35, #37–39, #41, #42, #45 and #48–52 passed their recorded full gates and are ready for review. Author completeness reviews are not independent approval. This branch retains FA-01 through FA-23 and adds FA-24 current-main integration; its full feature gate is recorded separately at its revision.
 No PR merge into main, deployment, factory migration, or whole-application
 completion is claimed.
 
@@ -97,3 +98,10 @@ FA-17 replaces the installed archive with the signed work-capable guest built at
 worker contexts. Independent build 43020838621 reproduces the complete archive
 byte for byte, with verified provenance; this does not qualify the complete Studio
 release or its remaining production dependency closure.
+
+FA-24 installs the combined guest from signed build 43033504480, source
+`686c09b89757fa3a924dd71bd17e53dd43509a73`, preserving composition/work and
+adding current main reword behavior. All 114 embedded, 26 composition, 30 work
+and five reword cases pass in document/worker contexts. New component
+reproduction and full feature CI are pending; the earlier reproduction receipt
+remains evidence for the earlier work-protocol artifact only.
