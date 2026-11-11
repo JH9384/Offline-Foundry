@@ -24,8 +24,9 @@ function program(configName, rewrite) {
   if (rewrite) {
     const get = host.getSourceFile.bind(host);
     host.getSourceFile = (file, lang, onError, fresh) => {
-      if (slash(file).startsWith(src) && /\.tsx$/.test(file) && !slash(file).includes("/components/ui/")) {
+      if (slash(file).startsWith(src) && /\.tsx$/.test(file)) {
         const text = ts.sys.readFile(file);
+        if (text !== undefined && slash(file).includes("/components/ui/")) return ts.createSourceFile(file, screenSource(file, text), lang, true);
         if (text !== undefined) {
           const r = toRadix(screenSource(file, text), slash(path.relative(here, file)));
           if (!REPLACED.has(slash(path.relative(here, file)))) problems.push(...r.problems);

@@ -51,8 +51,10 @@ const hologramUi: Plugin = {
   // components with Base UI's props, are rewritten for the kit's, which are Radix (hologram.radix.mjs).
   transform(code, id) {
     const file = id.replace(/\\/g, "/").split("?")[0];
-    if (!file.startsWith(src) || !/\.tsx$/.test(file) || file.includes("/components/ui/")) return null;
-    const r = toRadix(screenSource(file, code), path.relative(__dirname, file));
+    if (!file.startsWith(src) || !/\.tsx$/.test(file)) return null;
+    const shell = screenSource(file, code);
+    if (file.includes("/components/ui/")) return shell === code ? null : { code: shell, map: null };
+    const r = toRadix(shell, path.relative(__dirname, file));
     if (r.problems.length) this.error("not rewritten for Radix:\n" + r.problems.join("\n"));
     return r.code === code ? null : { code: r.code, map: null };
   },

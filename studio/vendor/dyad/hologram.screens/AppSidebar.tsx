@@ -16,9 +16,9 @@ import {
   Store,
   type LucideIcon,
 } from "lucide-react";
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useMatchRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 
 import logo from "../../assets/logo.svg";
 import { selectedAppIdAtom } from "@/atoms/appAtoms";
@@ -29,6 +29,14 @@ import { useChats } from "@/hooks/useChats";
 import { useLoadApps } from "@/hooks/useLoadApps";
 import { useOpenApp } from "@/hooks/useOpenApp";
 import { useSelectChat } from "@/hooks/useSelectChat";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -64,10 +72,20 @@ const NAV: Nav[] = [
 const RECENT_APPS = 8;
 const RECENT_CHATS = 6;
 
-// Matched by the router, which knows the base the shell is served under.
+// The path inside the base the shell is served under.
+function usePath() {
+  const router = useRouter();
+  const pathname = useLocation({ select: (l) => l.pathname });
+  const base = (router.options.basepath ?? "").replace(/\/$/, "");
+  return (pathname.startsWith(base) ? pathname.slice(base.length) : pathname) || "/";
+}
+
+// Matched by the router; the home page only on its own path (the router also matches it under the app's
+// routes, which are its children).
 function useIsActive() {
   const matchRoute = useMatchRoute();
-  return (to: string, exact?: boolean) => !!matchRoute({ to, fuzzy: !exact });
+  const path = usePath();
+  return (to: string, exact?: boolean) => (to === "/" ? path === "/" : !!matchRoute({ to, fuzzy: !exact }));
 }
 
 export function AppSidebar() {
@@ -222,22 +240,51 @@ const TITLES: [string, string][] = [
   ["/plugins", "Plugins"],
   ["/settings", "Settings"],
 ];
+const LIBRARY: Record<string, string> = { themes: "Themes", prompts: "Prompts", media: "Media" };
 
-// The site header: the sidebar's trigger and where you are, as in dashboard-01. Its right end is left
-// clear for the appearance switch the page shell keeps at the top right.
-export function SiteHeader() {
+// Where you are, as a trail: the section, then the page inside it (an app, a plugin, a provider, a part of
+// the library). The section links back, so no page needs a back link of its own.
+function useTrail(): { title: string; to?: string }[] {
   const isActive = useIsActive();
   const selectedAppId = useAtomValue(selectedAppIdAtom);
   const { apps } = useLoadApps();
   const app = apps.find((a) => a.id === selectedAppId);
-  const inApp = isActive("/chat", true) || isActive("/app-details", true);
-  const title = inApp && app ? app.name : (TITLES.find(([p]) => isActive(p))?.[1] ?? "Home");
+  const rest = usePath().split("/").filter(Boolean);
+  if (isActive("/chat", true) || isActive("/app-details", true)) return app ? [{ title: "Apps", to: "/apps" }, { title: app.name }] : [{ title: "Apps", to: "/apps" }];
+  if (isActive("/providers/$provider", true)) return [{ title: "Settings", to: "/settings" }, { title: decodeURIComponent(rest[1] ?? "") }];
+  const section = TITLES.find(([p]) => isActive(p));
+  if (!section) return [{ title: "Home" }];
+  const sub = rest[1] ? (section[0] === "/library" ? LIBRARY[rest[1]] : decodeURIComponent(rest[1])) : null;
+  return sub ? [{ title: section[1], to: section[0] }, { title: sub }] : [{ title: section[1] }];
+}
+
+// The site header: the sidebar's trigger and the trail, as in dashboard-01. Its right end is left clear for
+// the appearance switch the page shell keeps at the top right.
+export function SiteHeader() {
+  const trail = useTrail();
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b pr-14 transition-[width,height] ease-linear">
       <div className="flex w-full min-w-0 items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
-        <h1 className="truncate text-base font-medium">{title}</h1>
+        <Breadcrumb className="min-w-0">
+          <BreadcrumbList className="flex-nowrap">
+            {trail.map((step, i) => (
+              <Fragment key={i}>
+                {i > 0 && <BreadcrumbSeparator />}
+                <BreadcrumbItem className="min-w-0">
+                  {step.to ? (
+                    <BreadcrumbLink asChild>
+                      <Link to={step.to}>{step.title}</Link>
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage className="truncate text-base font-medium">{step.title}</BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            ))}
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
     </header>
   );

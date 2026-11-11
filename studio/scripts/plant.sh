@@ -18,6 +18,7 @@
 #   ./scripts/plant.sh kitfile   # add a component of our own to the vendored registry: the components gate must refuse
 #   ./scripts/plant.sh rolled    # a screen imports Base UI itself: the renderer's build must refuse the bundle
 #   ./scripts/plant.sh rewrite   # a screen calls a ui component in a way the Radix rewrite cannot convert: the typecheck must refuse
+#   ./scripts/plant.sh passage   # Dyad changes a passage the shell patches: the shell's screens must refuse rather than skip it
 # `hole` runs the Contract gate, which bundles the vendored contracts with the renderer's own esbuild,
 # so run it where those dependencies were installed for this platform -- otherwise esbuild refuses to
 # start and the gate looks like it fired when it never ran.
@@ -129,7 +130,13 @@ EOF
     sed -i 's#<TooltipTrigger render={<div className="flex" />}>#<TooltipTrigger render={wrap()}>#' vendor/dyad/src/components/chat/AttachmentsList.tsx
     expect_fail bash -c 'cd vendor/dyad && node hologram.typecheck.mjs'
     cp /tmp/plant-attachments.tsx vendor/dyad/src/components/chat/AttachmentsList.tsx ;;
-  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|kitfile|rolled|rewrite" >&2; exit 2 ;;
+  passage)
+    # An upstream edit to the layout the shell puts in the sidebar's inset: the patch must not silently miss.
+    cp vendor/dyad/src/app/layout.tsx /tmp/plant-layout.tsx
+    sed -i 's/<SubscriptionStatusBanner \/>/<SubscriptionStatusBanner compact \/>/' vendor/dyad/src/app/layout.tsx
+    expect_fail bash -c 'cd vendor/dyad && node hologram.typecheck.mjs'
+    cp /tmp/plant-layout.tsx vendor/dyad/src/app/layout.tsx ;;
+  *) echo "usage: $0 words|grant|bytes|shell|publish|evidence|composer|brand|token|hand|parse|hole|live|shadcn|kitfile|rolled|rewrite|passage" >&2; exit 2 ;;
 esac
 restore
 echo "restored"
