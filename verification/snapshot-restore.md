@@ -8,7 +8,7 @@ Previously, restore verified only the snapshot address, deleted working files,
 skipped missing referenced objects, and advanced the reference. A damaged object
 store could therefore turn a restore into silent data loss. The browser adapter
 now verifies the complete immediate file closure before opening one IndexedDB
-transaction for files and the main reference. The existing generated core still
+transaction for files, the main reference and invalidation of cached rule/proof state. The existing generated core still
 admits the snapshot address. Both checkout and revert use this adapter.
 
 The boundary checks canonical addresses, exact snapshot shape, unique portable
@@ -37,3 +37,10 @@ other-project isolation and CI reachability. This is an author review, not an
 independent approval. The feature reconstructs stored text snapshots; it does
 not establish parent-history closure, compression optimality, concurrent-edit
 merging or whole-application release acceptance.
+
+Completeness review also found cached proof status surviving checkout. A browser
+regression failed with `stale proof cache survived restore` before the adapter
+was changed. Successful restore now removes only this project's cached rules
+in the same transaction; abort preserves that cache and other projects' proof
+state is untouched. In-flight publication and broader edit/proof concurrency
+remain separate lifecycle obligations.

@@ -6,4 +6,4 @@ Feature: snapshot-restore
     When the user restores that snapshot
     Then each snapshot and file identity and length is checked before writing
     And missing or corrupt dependencies leave the working project unchanged
-    And one transaction replaces the files and main reference or rolls both back
+    And one transaction replaces the files and main reference and clears stale proof state or rolls all changes back
