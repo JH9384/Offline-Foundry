@@ -190,25 +190,46 @@ jobs:
         run: ./scripts/lane.sh
       - name: Byte identity corpus and shell hash check
         run: python3 tools/corpus.py
-      - name: The site's included keys, from repository secrets, never from the tree
-        # OPENROUTER_WARMUP_KEY answers while a visitor's local model loads; FEATHERLESS_SITE_KEY is the shared
-        # Featherless key every visitor without their own uses. Both are public once served.
-        if: ${{ env.KEY != '' || env.FEATHERLESS != '' }}
-        env:
-          KEY: ${{ secrets.OPENROUTER_WARMUP_KEY }}
-          FEATHERLESS: ${{ secrets.FEATHERLESS_SITE_KEY }}
-        run: python3 -c "import json,os;json.dump({'key':os.environ['KEY'],'model':'qwen/qwen3.8-flash','featherless':os.environ['FEATHERLESS']},open('shell/warmup.json','w'))"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
       - name: Every shell script parses the way the browser parses it
         run: node tools/shell_parse.mjs
+      - name: Acquire and verify pinned browser compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/forge-browser-deps"
+          mkdir -p "$dir"
+
+          npm pack esbuild-wasm@0.25.5 \
+            --pack-destination "$dir" \
+            --ignore-scripts \
+            --silent
+
+          echo "824737c69de21cd122e197d4e565a79f5ab646b89a3343eb624e77531d7f31ce  $dir/esbuild-wasm-0.25.5.tgz" | sha256sum -c -
+
+          mkdir "$dir/package"
+          tar -xzf "$dir/esbuild-wasm-0.25.5.tgz" \
+            -C "$dir/package" \
+            --strip-components=1
+
+          test -s "$dir/package/esm/browser.min.js"
+          test -s "$dir/package/esbuild.wasm"
+          test -s "$dir/package/LICENSE.md"
+
+          echo "FORGE_ESBUILD_WASM_DIR=$dir/package" >> "$GITHUB_ENV"
+
       - name: The vendored renderer, built beside the shell as the homepage (no Electron, no src/pro)
         run: cd vendor/dyad && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --engine-strict=false --force --no-audit --no-fund --loglevel=error && npx vite build --config vite.shell.config.mts --base /foundry/ --outDir dist --emptyOutDir && python3 ../../scripts/stamp_shell.py
       - name: The host answers the renderer's own contracts (the renderer's node_modules are installed by now)
         run: node tools/contract_shapes.mjs --check
       - name: The served site names nothing outside this repository
         run: node tools/self_contained.mjs shell
+      - name: Audit the complete sovereign Forge release
+        run: python3 tools/release_gate.py
+      - name: Verify release gate rejects invalid deliveries
+        run: python3 tools/release_gate_negative.py
       - name: Keep Forge's site, deployed at the root
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -219,6 +240,7 @@ jobs:
 
   deploy:
     name: publish Forge at the root and its Prism page under app/
+    if: ${{ false }} # Release authorization: DEFER
     needs: [build, forge]
     runs-on: ubuntu-24.04
     timeout-minutes: 10

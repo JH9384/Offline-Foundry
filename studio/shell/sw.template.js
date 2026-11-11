@@ -20,7 +20,8 @@
 //     empty capability baseline: its grant names no host, so the kernel admits no network and its
 //     files are served in a CSP sandbox with an opaque origin that reaches no other host and none of
 //     this origin's stores.
-const CLOSURE = "__CLOSURE__";   // written by the projector; a new shell is a new worker
+const CLOSURE = "__CLOSURE__";
+const DELIVERY = "__DELIVERY__";   // written by the projector; a new shell is a new worker
 const BASE = new URL(self.registration.scope).pathname;
 
 // The kernel decides what an untrusted document may do: its capability gate is proved by Lean
@@ -36,21 +37,107 @@ async function readManifest() {
   return r.json();
 }
 
+
+// Delivery gate: both content identities are pinned into this worker.
+const CACHE_NAME = "shell-" + CLOSURE + "-" + DELIVERY;
+
+async function sha256(bytes) {
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash),
+    x => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashRows(rows) {
+  const canonical = rows.map(r => ({
+    bytes: r.bytes, path: r.path, sha256: r.sha256
+  }));
+  return sha256(new TextEncoder().encode(JSON.stringify(canonical)));
+}
+
+function validateRows(rows) {
+  if (!Array.isArray(rows)) throw new Error("invalid file inventory");
+  const seen = new Set();
+  for (const r of rows) {
+    if (!r || typeof r.path !== "string" ||
+        !r.path || r.path.startsWith("/") ||
+        r.path.split("/").includes("..") ||
+        r.path.split("/").includes(".") ||
+        r.path.includes("?") || r.path.includes("#") ||
+        !Number.isSafeInteger(r.bytes) || r.bytes < 0 ||
+        !/^[0-9a-f]{64}$/.test(r.sha256) ||
+        seen.has(r.path)) {
+      throw new Error("invalid or duplicate delivery path");
+    }
+    seen.add(r.path);
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
-    const m = await readManifest();
-    if (m.closure !== CLOSURE) throw new Error("manifest closure does not match this worker");
-    const cache = await caches.open("shell-" + CLOSURE);
-    // Fetch every shell file fresh at install: the HTTP cache must not hand an older byte into a
-    // closure whose digest says otherwise.
-    await cache.addAll(m.files.map((f) => f.path).concat(["manifest.json", "provenance.json"]).map((p) => new Request(p, { cache: "reload" })));
-    await self.skipWaiting();
+    const mResponse = await fetch("manifest.json", { cache: "no-store" });
+    const dResponse = await fetch("delivery.json", { cache: "no-store" });
+    const pResponse = await fetch("provenance.json", { cache: "no-store" });
+
+    if (!mResponse.ok || !dResponse.ok || !pResponse.ok)
+      throw new Error("release evidence missing");
+
+    const m = await mResponse.clone().json();
+    const d = await dResponse.clone().json();
+    const p = await pResponse.clone().json();
+
+    validateRows(m.files);
+    validateRows(d.files);
+
+    if (m.closure !== CLOSURE ||
+        await hashRows(m.files) !== CLOSURE ||
+        d.schema !== "hologram-forge/delivery/1" ||
+        d.shell_closure !== CLOSURE ||
+        d.delivery_sha256 !== DELIVERY ||
+        await hashRows(d.files) !== DELIVERY ||
+        p.browser_projection_sha256 !== CLOSURE) {
+      throw new Error("release identity mismatch");
+    }
+
+    const all = [...m.files, ...d.files];
+    validateRows(all);
+
+    const cache = await caches.open(CACHE_NAME);
+
+    try {
+      // Verify each network response before admitting it to the cache.
+      for (const row of all) {
+        const response = await fetch(
+          new Request(row.path, { cache: "reload" })
+        );
+        if (!response.ok) throw new Error("missing: " + row.path);
+
+        const bytes = await response.arrayBuffer();
+
+        if (bytes.byteLength !== row.bytes ||
+            await sha256(bytes) !== row.sha256)
+          throw new Error("integrity failure: " + row.path);
+
+        await cache.put(row.path, new Response(bytes, {
+          status: response.status,
+          headers: response.headers
+        }));
+      }
+
+      await cache.put("manifest.json", mResponse);
+      await cache.put("delivery.json", dResponse);
+      await cache.put("provenance.json", pResponse);
+
+      await self.skipWaiting();
+    } catch (error) {
+      await caches.delete(CACHE_NAME);
+      throw error;
+    }
   })());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    const keep = "shell-" + CLOSURE;
+    const keep = CACHE_NAME;
     for (const name of await caches.keys()) if (name.startsWith("shell-") && name !== keep) await caches.delete(name);
     await self.clients.claim();
   })());
@@ -207,7 +294,13 @@ self.addEventListener("fetch", (event) => {
     if (path.startsWith("ui/") && event.request.mode === "navigate") { event.respondWith((async () => (await caches.match(BASE + "ui/index.html")) || fetch(new Request(BASE + "ui/index.html")))()); return; }
     // The renderer's files under assets/ keep fixed names outside the closure: always revalidated
     // with the origin (a conditional request, 304 when unchanged), never served stale from the HTTP cache.
-    if (path.startsWith("assets/")) { event.respondWith(fetch(event.request, { cache: "no-cache" }).catch(() => caches.match(event.request))); return; }
+    if (path.startsWith("assets/")) {
+      event.respondWith((async () => {
+        const hit = await caches.match(event.request, { ignoreSearch: true });
+        return hit || fetch(event.request, { cache: "no-cache" });
+      })());
+      return;
+    }
     // The hash list is the staleness oracle: the page compares the closure it was projected with
     // against the one this origin serves now, so it is never answered from a cache while the network
     // can answer. Offline, the cached copy is the truth.

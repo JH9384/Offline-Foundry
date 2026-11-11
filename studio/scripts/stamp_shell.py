@@ -6,7 +6,7 @@ under shell/assets/, writes shell/404.html as a copy of the homepage so Pages an
 of the renderer's routes with the app (the router reads the URL), and stages the renderer's scaffold with a file list,
 which the host creates apps from. Run after the Vite build: python3 scripts/stamp_shell.py
 """
-import json, pathlib, re, shutil
+import json, os, pathlib, re, shutil
 
 root = pathlib.Path(__file__).resolve().parent.parent
 dist = root / "vendor" / "dyad" / "dist" / "assets"
@@ -44,3 +44,94 @@ app.write_text(app.read_text(encoding="utf-8").replace("<BrowserRouter>", "<Brow
 files = sorted(str(p.relative_to(dst)).replace("\\", "/") for p in (dst / "src").rglob("*") if p.is_file())
 (dst / "files.json").write_text(json.dumps(files), encoding="utf-8", newline="\n")
 print(f"staged {len(files)} scaffold files")
+
+
+
+# Locally packaged browser runtimes. The pinned compiler is supplied
+# explicitly by the build environment; no runtime CDN is permitted.
+runtime = root / "shell" / "runtime"
+monaco = root / "vendor" / "dyad" / "node_modules" / "monaco-editor"
+compiler = pathlib.Path(os.environ.get(
+    "FORGE_ESBUILD_WASM_DIR",
+    str(root / "vendor" / "dyad" / "node_modules" / "esbuild-wasm")
+))
+
+required = [
+    monaco / "min" / "vs" / "loader.js",
+    monaco / "min" / "vs" / "editor" / "editor.main.js",
+    monaco / "LICENSE",
+    compiler / "esm" / "browser.min.js",
+    compiler / "esbuild.wasm",
+    compiler / "LICENSE.md",
+]
+for file in required:
+    if not file.is_file():
+        raise SystemExit(f"Missing runtime dependency: {file}")
+
+if runtime.exists():
+    shutil.rmtree(runtime)
+
+shutil.copytree(monaco / "min" / "vs", runtime / "monaco" / "vs")
+shutil.copy2(monaco / "LICENSE", runtime / "monaco" / "LICENSE")
+
+(runtime / "compiler").mkdir(parents=True)
+shutil.copy2(
+    compiler / "esm" / "browser.min.js",
+    runtime / "compiler" / "browser.min.js"
+)
+shutil.copy2(
+    compiler / "esbuild.wasm",
+    runtime / "compiler" / "esbuild.wasm"
+)
+shutil.copy2(
+    compiler / "LICENSE.md",
+    runtime / "compiler" / "LICENSE.md"
+)
+
+print("Staged local Monaco and esbuild browser runtimes")
+
+# The renderer is now part of an independently hashed delivery closure.
+import hashlib, subprocess, sys
+
+rows = []
+for folder in ("assets", "scaffold", "runtime"):
+    for path in sorted((root / "shell" / folder).rglob("*")):
+        if path.is_file():
+            data = path.read_bytes()
+            rows.append({
+                "path": path.relative_to(root / "shell").as_posix(),
+                "bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest()
+            })
+
+fallback = root / "shell" / "404.html"
+data = fallback.read_bytes()
+rows.append({
+    "path": "404.html",
+    "bytes": len(data),
+    "sha256": hashlib.sha256(data).hexdigest()
+})
+rows.sort(key=lambda r: r["path"])
+
+canonical = json.dumps(
+    rows, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+).encode()
+
+digest = hashlib.sha256(canonical).hexdigest()
+manifest = json.loads((root / "shell" / "manifest.json").read_text())
+record = {
+    "schema": "hologram-forge/delivery/1",
+    "shell_closure": manifest["closure"],
+    "delivery_sha256": digest,
+    "files": rows,
+}
+(root / "shell" / "delivery.json").write_text(
+    json.dumps(record, indent=2) + "\n", encoding="utf-8"
+)
+
+worker = (root / "shell" / "sw.template.js").read_text()
+worker = worker.replace("__CLOSURE__", manifest["closure"])
+worker = worker.replace("__DELIVERY__", digest)
+(root / "shell" / "sw.js").write_text(worker, encoding="utf-8")
+
+print(f"delivery closure: {digest}")

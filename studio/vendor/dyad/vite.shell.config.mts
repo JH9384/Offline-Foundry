@@ -26,6 +26,8 @@ const picker = path.resolve(__dirname, "hologram.ModelPicker.tsx");
 const githubIntegration = path.resolve(__dirname, "hologram.GitHubIntegration.tsx");
 const importDialog = path.resolve(__dirname, "hologram.ImportAppDialog.tsx");
 const contracts = path.resolve(__dirname, "hologram.contracts.ts").split(path.sep).join("/");
+const sovereignTelemetry = path.resolve(__dirname, "hologram.telemetry.ts");
+const sovereignTelemetryReact = path.resolve(__dirname, "hologram.telemetry.react.tsx");
 const theme = fs.readFileSync(path.resolve(__dirname, "hologram.theme.css"), "utf8");
 const arbitrary: Record<string, string> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "hologram.arbitrary.json"), "utf8"));
 
@@ -33,6 +35,8 @@ const hologramWords: Plugin = {
   name: "hologram-words",
   enforce: "pre",
   resolveId(id, importer) {
+    if (id === "posthog-js/react") return sovereignTelemetryReact;
+    if (id === "posthog-js") return sovereignTelemetry;
     const from = importer ? importer.replace(/\\/g, "/") : "";
     if (id.endsWith("assets/logo.svg") && from.startsWith(src)) return mark;
     // Two providers answer here, the device and OpenRouter, so the model picker is ours: a flat list
@@ -63,6 +67,22 @@ const hologramWords: Plugin = {
     }
     if (!/\.(tsx?|jsx?|json|md)$/.test(file)) return null;
     let out = code;
+    if (file.endsWith("/components/chat/monaco.ts")) {
+      const start = "  loader.init().then((monaco) => {";
+      if (!out.includes(start)) throw new Error("Monaco initialization missing");
+      out = out.replace(
+        start,
+        '  loader.config({ paths: { vs: new URL("../runtime/monaco/vs/", import.meta.url).href } });\n' + start
+      );
+    }
+
+    if (file.endsWith("/renderer.tsx")) {
+      out = out.replace(/"phc_[A-Za-z0-9]+"/g, '"sovereign-disabled"');
+      out = out.replace(
+        'api_host: "https://us.i.posthog.com"',
+        'api_host: "about:blank"'
+      );
+    }
     if (/\bDyad\b/.test(out)) out = out.replace(/\bDyad\b/g, "Hologram");
     if (file.endsWith("/pages/home.tsx")) out = out.replace('className="text-4xl font-semibold tracking-tight text-foreground"', 'className="font-display text-5xl font-semibold text-foreground"');
     // Three controls the product does without: the setup pill under the home composer (providers are

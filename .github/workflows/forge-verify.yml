@@ -1,0 +1,120 @@
+name: Forge Independent Verification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forge-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Formal, delivery and browser verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    defaults:
+      run:
+        working-directory: studio
+
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+
+      - name: Run formal verification
+        run: ./scripts/lane.sh
+
+      - name: Verify byte corpus
+        run: python3 tools/corpus.py
+
+      - name: Install renderer dependencies
+        run: |
+          cd vendor/dyad
+          ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci \
+            --ignore-scripts \
+            --engine-strict=false \
+            --force \
+            --no-audit \
+            --no-fund \
+            --loglevel=error
+
+      - name: Acquire pinned browser compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIR="$RUNNER_TEMP/forge-browser-deps"
+          mkdir -p "$DIR"
+
+          npm pack esbuild-wasm@0.25.5 \
+            --pack-destination "$DIR" \
+            --ignore-scripts \
+            --silent
+
+          echo "824737c69de21cd122e197d4e565a79f5ab646b89a3343eb624e77531d7f31ce  $DIR/esbuild-wasm-0.25.5.tgz" \
+            | sha256sum -c -
+
+          mkdir "$DIR/package"
+          tar -xzf "$DIR/esbuild-wasm-0.25.5.tgz" \
+            -C "$DIR/package" \
+            --strip-components=1
+
+          test -s "$DIR/package/esbuild.wasm"
+          test -s "$DIR/package/esm/browser.min.js"
+          test -s "$DIR/package/LICENSE.md"
+
+          echo "FORGE_ESBUILD_WASM_DIR=$DIR/package" >> "$GITHUB_ENV"
+
+      - name: Build renderer for GitHub Pages
+        run: |
+          cd vendor/dyad
+          npx --no-install vite build \
+            --config vite.shell.config.mts \
+            --base /foundry/ \
+            --outDir dist \
+            --emptyOutDir
+
+      - name: Assemble verified delivery
+        run: python3 scripts/stamp_shell.py
+
+      - name: Audit complete release
+        run: python3 tools/release_gate.py
+
+      - name: Test invalid release rejection
+        run: python3 tools/release_gate_negative.py
+
+      - name: Verify browser script syntax
+        run: node tools/shell_parse.mjs
+
+      - name: Verify renderer contracts
+        run: node tools/contract_shapes.mjs --check
+
+      - name: Check self-contained delivery
+        run: node tools/self_contained.mjs shell
+
+      - name: Install Chromium
+        run: cd vendor/dyad && npx --no-install playwright install --with-deps chromium
+
+      - name: Browser acceptance and tamper rejection
+        run: node tools/browser_release.mjs

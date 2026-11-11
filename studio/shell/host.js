@@ -397,7 +397,7 @@ function publish(appId, patch) {
 }
 let esbuildReady = null;
 async function esbuild() {
-  if (!esbuildReady) esbuildReady = import("https://cdn.jsdelivr.net/npm/esbuild-wasm@0.25.5/esm/browser.min.js").then(async (m) => { await m.initialize({ wasmURL: "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.25.5/esbuild.wasm" }); return m; });
+  if (!esbuildReady) esbuildReady = import("./runtime/compiler/browser.min.js").then(async (m) => { await m.initialize({ wasmURL: new URL("runtime/compiler/esbuild.wasm", BASE).href }); return m; });
   return esbuildReady;
 }
 // The grant a preview is served under. The worker asks the kernel's gate (proved by Lean) before it
@@ -1282,8 +1282,17 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.j
   const key = "holo.closure.reloaded";
   try {
     const names = await caches.keys();
-    const running = (names.find((n) => n.startsWith("shell-")) || "").slice("shell-".length);
+    const shellCaches = names
+      .filter((name) => /^shell-[0-9a-f]{64}(?:-[0-9a-f]{64})?$/.test(name));
     const published = (await (await fetch(new URL("manifest.json", BASE), { cache: "no-store" })).json()).closure;
+    const matchingCaches = shellCaches.filter(
+      (name) => name === `shell-${published}` ||
+        name.startsWith(`shell-${published}-`)
+    );
+    const runningCache = matchingCaches[0] || shellCaches[0] || "";
+    const running = runningCache
+      .slice("shell-".length)
+      .split("-")[0];
     if (!running || !published || running === published) { sessionStorage.removeItem(key); return; }
     if (sessionStorage.getItem(key) === published) { console.warn("[host] this page runs shell", running.slice(0, 12), "while", published.slice(0, 12), "is published; the worker could not take over"); return; }
     sessionStorage.setItem(key, published);
