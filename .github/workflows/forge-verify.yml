@@ -144,6 +144,9 @@ jobs:
           shasum -a 256 "$RUNNER_TEMP/offline-foundry-shell.tar.gz" > "$RUNNER_TEMP/offline-foundry-shell.tar.gz.sha256"
           test -s "$RUNNER_TEMP/offline-foundry-shell.tar.gz"
 
+      - name: Check local installer against verified archive (dry-run only)
+        run: python3 tools/install_verified_shell.py "$RUNNER_TEMP/offline-foundry-shell.tar.gz"
+
       - name: Upload verified offline shell artifact (not deployment)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
