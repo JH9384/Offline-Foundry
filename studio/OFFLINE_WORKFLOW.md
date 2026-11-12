@@ -55,6 +55,33 @@ renderer and assembly steps first; never bypass the release gate.
    browser data, moving machines or changing the browser origin. Browser IndexedDB and
    service-worker caches are scoped to the origin.
 
+## Installing the CI-verified shell locally
+
+Download the `offline-foundry-shell-<commit>` artifact for a successful
+**Forge Independent Verification** run into an empty directory. It contains
+`offline-foundry-shell.tar.gz` and its paired `.sha256` file.
+
+From the `studio/` directory, verify and inspect without changing your active
+shell:
+
+```bash
+python3 tools/install_verified_shell.py "$HOME/Downloads/offline-foundry-verified/offline-foundry-shell.tar.gz"
+```
+
+Once the dry run prints `Staged release audit: PASS`, stop the running
+`serve_offline.mjs` process and explicitly install:
+
+```bash
+python3 tools/install_verified_shell.py "$HOME/Downloads/offline-foundry-verified/offline-foundry-shell.tar.gz" --install
+python3 tools/release_gate.py
+```
+
+The installer checks the archived checksum and every recorded shell asset,
+copies the old shell to a timestamped backup outside the repository, stages the
+replacement, audits it again, and rolls back the installed shell on failure.
+It **does not clear IndexedDB, browser caches, project files, Git worktrees or
+runtime model data**. It does not change production authorization.
+
 ## Mac Studio local model binding (explicit opt-in)
 
 The browser's model picker is not an OMP CLI connection or an automatic inventory
