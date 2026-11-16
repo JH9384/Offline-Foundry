@@ -21,8 +21,8 @@ fn publication_identity_fa_05() {
         String::from_utf8_lossy(&output.stderr)
     );
     for required in [
-        "# tests 8",
-        "# pass 8",
+        "# tests 6",
+        "# pass 6",
         "# fail 0",
         "# cancelled 0",
         "# skipped 0",

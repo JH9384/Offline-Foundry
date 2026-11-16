@@ -3,17 +3,13 @@
 //     file with its SHA-256; the cache is named by the closure digest, so a new release is a new
 //     cache and a stale worker never serves a mixed shell. Only shell caches are ever dropped; the
 //     previews cache and the engine's part cache belong to the page.
-//  2. The endpoint on this origin: v1/chat/completions and v1/models are answered by the open page,
-//     which routes the request, runs the model or serves the seal, and encodes every byte through
-//     the verified core. The worker only carries the request to a window client over a
-//     MessageChannel and streams its frames back.
-//  3. Previews and the capability gate: each project's preview is served under <base>p/<kappa>/
+//  2. Previews and the capability gate: each project's preview is served under <base>p/<kappa>/
 //     from the previews cache the host fills after every in-tab build, in a CSP sandbox with an
 //     opaque origin, so model-written code never reaches this origin's keys or stores. Whether it is
 //     served at all, and which hosts its policy names, is the kernel's answer: the capability gate
 //     Lean proves (kernel.js). Every decision is appended to the audit store, hologram-live's audit
 //     row shape.
-//  4. Published applications: a .holo the page verified through PrismPM's validator in the core is
+//  3. Published applications: a .holo the page verified through PrismPM's validator in the core is
 //     unpacked into the holo cache under <base>holo/<kappa>/ and served from there on any device;
 //     a missing entry hands the URL to the runner page, which finds the bytes in the store or asks
 //     for the file; <base>holo/<kappa>.holo downloads the bytes. A published application carries the
@@ -22,14 +18,15 @@
 //     this origin's stores.
 const CLOSURE = "__CLOSURE__";   // written by the projector; a new shell is a new worker
 const BASE = new URL(self.registration.scope).pathname;
+const matchShell = async (request, options) => (await caches.open("shell-" + CLOSURE)).match(request, options);
 
 // The kernel decides what an untrusted document may do: its capability gate is proved by Lean
 // (FK-05 to FK-09 in UOR-Foundation/foundry). kernel.js checks the guest against its pin and replays
 // every acceptance vector before the first question; until then, and if that fails, nothing
 // untrusted is served.
-importScripts("kernel.js");
+importScripts("kernel.js", "shell-cache.js");
 let kernelLoad = null;
-const kernel = () => (kernelLoad ??= ForgeKernel.load(async (p) => (await caches.match(BASE + p)) || fetch(BASE + p, { cache: "no-store" })).catch((error) => { kernelLoad = null; throw error; }));
+const kernel = () => (kernelLoad ??= ForgeKernel.load(async (p) => (await matchShell(BASE + p)) || fetch(BASE + p, { cache: "no-store" })).catch((error) => { kernelLoad = null; throw error; }));
 
 async function readManifest() {
   const r = await fetch("manifest.json", { cache: "no-store" });
@@ -38,12 +35,13 @@ async function readManifest() {
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
-    const m = await readManifest();
-    if (m.closure !== CLOSURE) throw new Error("manifest closure does not match this worker");
-    const cache = await caches.open("shell-" + CLOSURE);
-    // Fetch every shell file fresh at install: the HTTP cache must not hand an older byte into a
-    // closure whose digest says otherwise.
-    await cache.addAll(m.files.map((f) => f.path).concat(["manifest.json", "provenance.json"]).map((p) => new Request(p, { cache: "reload" })));
+    const entries = await ShellClosure.prepare(self.registration.scope, CLOSURE);
+    try {
+      const cache = await caches.open("shell-" + CLOSURE);
+      for (const [url, response] of entries) await cache.put(url, response);
+    } catch {
+      throw Object.assign(new Error("Shell installation refused: shellClosureUnavailable"), { code: "shellClosureUnavailable" });
+    }
     await self.skipWaiting();
   })());
 });
@@ -68,33 +66,6 @@ self.addEventListener("activate", (event) => {
     }
   })();
 });
-
-// ---- the endpoint
-const ENDPOINT = new Set(["v1/chat/completions", "v1/models"]);
-async function serveFromPage(request, path) {
-  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  // Any page of the shell can hold the engine; the homepage answers when one is open, the chat app when it is alone.
-  const shell = clients.filter((c) => c.url.startsWith(self.registration.scope) && !/^(p|holo)\//.test(new URL(c.url).pathname.slice(BASE.length)));
-  const page = shell.find((c) => !/^ui\//.test(new URL(c.url).pathname.slice(BASE.length))) || shell[0];
-  if (!page) return new Response(JSON.stringify({ error: { message: "open the page and leave it open", type: "server_error" } }), { status: 503, headers: { "content-type": "application/json" } });
-  const body = request.method === "POST" ? await request.text() : "";
-  const channel = new MessageChannel();
-  const headers = new Headers();
-  let resolveHead; const head = new Promise((r) => (resolveHead = r));
-  const stream = new ReadableStream({
-    start(controller) {
-      channel.port1.onmessage = ({ data }) => {
-        if (data.head) { resolveHead(data.head); return; }
-        if (data.frame != null) controller.enqueue(new TextEncoder().encode(data.frame));
-        if (data.done) controller.close();
-      };
-    },
-  });
-  page.postMessage({ endpoint: path, method: request.method, body }, [channel.port2]);
-  const h = await head;
-  for (const [k, v] of Object.entries(h.headers || {})) headers.set(k, v);
-  return new Response(stream, { status: h.status || 200, headers });
-}
 
 // ---- previews and the capability gate
 const openDb = () => new Promise((res, rej) => { const r = indexedDB.open("hologram-forge", 2); r.onupgradeneeded = () => { const d = r.result; for (const s of ["settings", "apps", "chats", "files", "objects", "refs", "versions", "audit"]) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s); if (!d.objectStoreNames.contains("seals")) { const st = d.createObjectStore("seals", { keyPath: "id" }); st.createIndex("kind", "kind"); st.createIndex("promptKappa", "promptKappa"); } }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
@@ -122,6 +93,16 @@ async function principalOf(e) {
 // endpoints it allows enter the policy. No record means no grant: the kernel refuses to serve.
 const SANDBOX = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-presentation allow-orientation-lock";
 const ENDPOINT_FORM = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(:[0-9]{1,5})?$/;
+function previewGrantValid(record, id) {
+  const endpoints = record?.network?.endpoints;
+  if (!Array.isArray(endpoints)) return false;
+  if (endpoints.length === 0 && record?.previewConsent?.purpose !== "portable-build") return true;
+  if (record?.previewConsent?.purpose === "portable-build") {
+    const {expires,grantedAt} = record.previewConsent, at = Date.now();
+    if (!Number.isFinite(expires) || !Number.isFinite(grantedAt) || at < grantedAt || at >= expires || expires > grantedAt + 120000) return false;
+  }
+  return record?.previewConsent?.profile === "foundry/preview-consent/1" && record.previewConsent.id === id && /^blake3:[0-9a-f]{64}$/.test(record.previewConsent.source);
+}
 function policyOf(endpoints) {
   const named = (head) => (endpoints.length ? head + " " + endpoints.join(" ") : head);
   return [SANDBOX, "default-src 'none'", named("script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: data:"), named("style-src 'unsafe-inline' blob: data:"),
@@ -132,19 +113,34 @@ const flag = (b) => (b ? "yes" : "no");
 async function gate(origin, effect, record, granted, denied) {
   return (await (await kernel()).ask(`gate ${origin} ${effect} ${flag(record)} ${flag(granted)} ${flag(denied)}`)) === "allow";
 }
-// The policy for one untrusted document, or null when the kernel refuses to serve it.
-async function policyFor(kind, id) {
+// What each app was let reach, for the user's own record on this device (shell/telemetry): the kernel's
+// decisions here, as they are made, handed to one open page of the shell. That page asks the kernel before
+// it keeps them (`telemetry store`, FK-25); nothing here keeps or sends them anywhere else. With no page
+// open there is no record, which loses a count and never a decision.
+const nowMicros = () => Date.now() * 1000;
+async function noteGate(kind, id, decisions) {
+  try {
+    const shell = (await self.clients.matchAll({ type: "window" })).filter((c) => c.url.startsWith(self.registration.scope) && !/^(p|holo|app)\//.test(new URL(c.url).pathname.slice(BASE.length)));
+    const page = shell.find((c) => !/^ui\//.test(new URL(c.url).pathname.slice(BASE.length))) || shell[0];
+    if (page && decisions.length) page.postMessage({ type: "telemetry/gate", id: kind + ":" + id, installed: kind === "holo", decisions });
+  } catch (e) {}
+}
+// The policy for one untrusted document, or null when the kernel refuses to serve it. Each decision is
+// added to `decisions` in the words the Telemetry model counts: notOpened, allowed or blocked, with the site.
+async function policyFor(kind, id, decisions = []) {
   const origin = kind === "p" ? "preview" : "published";
   const record = await grants(id);
   const network = (record && record.network) || {};
   const denied = new Set(Array.isArray(network.denied) ? network.denied : []);
-  const served = await gate(origin, "serve", !!record, !!(record && record.serve === true), false);
+  const served = await gate(origin, "serve", !!record, !!(record && record.serve === true && (kind !== "p" || previewGrantValid(record, id))), false);
   await audit({ principal: kind + ":" + id, operation: "kernel.gate.serve", resource: id, outcome: served ? "granted" : "refused" });
-  if (!served) return null;
+  if (!served) { decisions.push({ kind: "notOpened", at: Date.now() * 1000 }); return null; }
   const allowed = [];
   for (const endpoint of Array.isArray(network.endpoints) ? network.endpoints : []) {
     if (typeof endpoint !== "string" || !ENDPOINT_FORM.test(endpoint)) continue;
-    if (await gate(origin, "fetch", true, true, denied.has(endpoint))) allowed.push(endpoint);
+    const yes = await gate(origin, "fetch", true, true, denied.has(endpoint));
+    if (yes) allowed.push(endpoint);
+    decisions.push({ kind: yes ? "allowed" : "blocked", at: Date.now() * 1000, site: endpoint });
   }
   return policyOf(allowed);
 }
@@ -153,10 +149,19 @@ function untrusted(response, policy) {
   headers.set("content-security-policy", policy);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
-async function serveUntrusted(kind, id, hit) {
+// `opening` is true for the page an app opens with, so an app's own files are not each counted as an opening.
+async function serveUntrusted(kind, id, hit, opening = true) {
   let policy;
-  try { policy = await policyFor(kind, id); } catch (error) {
+  const decisions = [];
+  try { policy = await policyFor(kind, id, decisions); } catch (error) {
+    if (opening) noteGate(kind, id, [{ kind: "notOpened", at: nowMicros() }]);
     return new Response("not served: the kernel did not verify (" + error.message + ")", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
+  if (opening) {
+    // What the app was served: the bytes of its page on this device.
+    let size = 0;
+    if (policy) try { size = Number(hit.headers.get("content-length")) || (await hit.clone().blob()).size; } catch (e) {}
+    noteGate(kind, id, policy ? [{ kind: "opened", at: nowMicros(), value: size }, ...decisions] : decisions);
   }
   if (!policy) return new Response("not served: no grant to serve " + id, { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
   return untrusted(hit, policy);
@@ -179,7 +184,7 @@ async function serveHolo(request, path) {
   if (file.endsWith("/")) file += "index.html";
   const cache = await caches.open("holo");
   const hit = await cache.match(BASE + "holo/" + id + "/" + file);
-  if (hit) return serveUntrusted("holo", id, hit);
+  if (hit) return serveUntrusted("holo", id, hit, file === "index.html" || request.mode === "navigate");
   if (file === "index.html" || !file.includes(".")) {
     const runner = (await caches.match("holo.html")) || (await fetch(new Request(BASE + "holo.html", { cache: "no-store" })).catch(() => null));
     if (runner && runner.ok) return new Response(await runner.text(), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
@@ -190,8 +195,8 @@ async function serveHolo(request, path) {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin === self.location.origin) {
+    if (!url.pathname.startsWith(BASE)) return;
     const path = url.pathname.slice(BASE.length);
-    if (ENDPOINT.has(path)) { event.respondWith(serveFromPage(event.request, path)); return; }
     if (path.startsWith("holo/")) { event.respondWith(serveHolo(event.request, path)); return; }
     if (path.startsWith("p/")) {
       const id = path.split("/")[1];
@@ -205,22 +210,28 @@ self.addEventListener("fetch", (event) => {
     if (event.request.method !== "GET") return;
     // app/ is the Forge kernel's Prism page, a separate site with its own worker: never answered here.
     if (path === "app" || path.startsWith("app/")) return;
-    // The chat app under ui/ routes on the client: every navigation there is its one page, from the closure first.
-    if (path.startsWith("ui/") && event.request.mode === "navigate") { event.respondWith((async () => (await caches.match(BASE + "ui/index.html")) || fetch(new Request(BASE + "ui/index.html")))()); return; }
-    // The renderer's files under assets/ keep fixed names outside the closure: always revalidated
-    // with the origin (a conditional request, 304 when unchanged), never served stale from the HTTP cache.
-    if (path.startsWith("assets/")) { event.respondWith(fetch(event.request, { cache: "no-cache" }).catch(() => caches.match(event.request))); return; }
+    // Renderer and scaffold bytes come from this worker's verified version, even offline.
+    if (path.startsWith("assets/") || path.startsWith("scaffold/") || path.startsWith("editor/") || path.startsWith("compiler/")) {
+      event.respondWith((async () => (await (await caches.open("shell-" + CLOSURE)).match(event.request, { ignoreSearch: true })) || new Response("File absent from the active shell", { status: 404 }))()); return;
+    }
     // The hash list is the staleness oracle: the page compares the closure it was projected with
     // against the one this origin serves now, so it is never answered from a cache while the network
     // can answer. Offline, the cached copy is the truth.
-    if (path === "manifest.json" || path === "provenance.json") { event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request, { ignoreSearch: true }))); return; }
+    if (path === "manifest.json" || path === "provenance.json") { event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => matchShell(event.request, { ignoreSearch: true }))); return; }
     event.respondWith((async () => {
-      const hit = await caches.match(event.request, { ignoreSearch: true });
+      const hit = await matchShell(event.request, { ignoreSearch: true });
       if (hit) return hit;
+      // Pages maps unknown renderer routes to its HTML fallback. Keep those navigations
+      // on this closure too; a route allowlist would drift when a newer renderer adds one.
+      // Subapps, engine/API and resource namespaces keep their existing ownership.
+      const separate = /^(?:app|ui|p|holo|v1|engine|assets|scaffold|editor|compiler|live|q|kernel|prism|prism-code|fonts|wallpapers)(?:\/|$)/.test(path);
+      if (event.request.mode === "navigate" && !separate) {
+        return (await matchShell(BASE + "index.html")) || new Response("Document absent from the active shell", { status: 404 });
+      }
       try {
         return await fetch(event.request);
       } catch (error) {
-        if (event.request.mode === "navigate") return (await caches.match("index.html")) || (await caches.match("./"));
+        if (event.request.mode === "navigate") return (await matchShell(BASE + "index.html")) || (await matchShell(BASE));
         throw error;
       }
     })());
@@ -232,11 +243,12 @@ self.addEventListener("fetch", (event) => {
     // A frame this worker still controls under p/ or holo/: the kernel's gate decides each request.
     const record = await grants(who.id);
     const network = (record && record.network) || {};
-    const granted = Array.isArray(network.endpoints) && network.endpoints.includes(url.origin);
+    const granted = Array.isArray(network.endpoints) && network.endpoints.includes(url.origin) && (who.kind !== "p" || previewGrantValid(record, who.id));
     const denied = Array.isArray(network.denied) && network.denied.includes(url.origin);
     let allowed = false;
     try { allowed = await gate(who.kind === "p" ? "preview" : "published", "fetch", !!record, granted, denied); } catch (error) { allowed = false; }
     await audit({ principal: who.kind + ":" + who.id, operation: "kernel.gate.fetch", resource: url.origin, outcome: allowed ? "granted" : "refused" });
+    noteGate(who.kind, who.id, [{ kind: allowed ? "allowed" : "blocked", at: nowMicros(), site: url.origin }]);
     if (allowed) return fetch(event.request);
     return new Response("refused by capabilities: " + url.origin, { status: 403, headers: { "content-type": "text/plain" } });
   })());

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import fs from "node:fs";
+import * as lexlean from "../shell/live/lexlean.mjs";
 import { stageGenerationPatch, assertGenerationActive } from "../shell/generation-patch.mjs";
 const source = { name: "app", reference: "blake3:" + "a".repeat(64), files: [["a", "old"], ["b", "other"]], dependencies: [] };
 const tags = (extra = {}) => ({ writes: [], deletes: [], renames: [], deps: [], ...extra });
@@ -28,11 +29,21 @@ test("identical writes are no-ops and pre-cancellation is typed", () => {
 });
 test("the host binds generation source signal and committed results", () => {
   const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
-  assert.ok(host.includes("codebaseOf(appId, projectSource)"));
-  assert.ok(host.includes("prism.deviceRequest(intent.prompt, capturedSpec)"));
-  assert.ok(host.includes("current?.specKappa === await kappa(enc.encode(capturedSpec))"));
-  assert.ok(host.includes("applyDyadTags(appId, tags, { signal: abort.signal, source: projectSource, onCommit })"));
-  assert.ok(host.includes("rulesAfterTurn(appId, full, tags.writes.map((w) => w.path), { signal: abort.signal, source: applied.source, onCommit })"));
+  assert.ok(host.includes("applyPrismTags(appId, tags, { signal: abort.signal, source: projectSource, onCommit })"));
+  // Code a model writes is never applied; the rules are read against the applied source.
+  assert.ok(host.includes("const tags = { ...wrote, writes: [], deletes: [], renames: [], deps: [] };"));
+  // What is applied is the reader's turn as read: its lines are the app's notation.
+  assert.ok(host.includes("const turn = full;"));
+  assert.ok(host.includes("rulesAfterTurn(appId, turn, [], { signal: abort.signal, source: applied.source, onCommit })"));
+  assert.ok(!host.includes("lexlean.partialFromTurn(full)") && !host.includes("pushApp(appId, writing.text"));
   assert.ok(host.includes("Committed project changes were retained."));
+  // A first turn opens the live frame before the app has rules; the renderer's start for that app must
+  // settle on the frame, never wait on a build that yields to it (seen on the live site: "Preparing
+  // preview" for good, from the home composer).
+  // An app still made of its scaffold is projected too, so a new app's start never builds code (or asks to
+  // reach other sites for it) before its rules arrive.
+  assert.ok(host.includes("if (liveShown.has(appId) || await projected(appId)) {"));
+  assert.ok(host.includes("const projected = async (appId) => (await hasRules(appId)) || (await scaffoldOnly(appId));"));
+  assert.ok(host.includes('if (liveShown.has(appId)) { await showLive(appId).catch(() => {}); publish(appId, { phase: "ready", operation: null, lastSettlement: { operationId: encodedEvent.operationId || messageId, kind: "run", outcome: "succeeded" } }); return; }'));
   assert.ok(!host.includes('if (updatedFiles) commit = await seal('));
 });

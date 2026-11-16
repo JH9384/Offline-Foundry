@@ -7,7 +7,7 @@ template contract checker in `app/`.
 | `just` recipe | Enforces | ID classes |
 | --- | --- | --- |
 | `just fmt-check` | the diff is reviewable | --- |
-| `just model` | R1, R4, R5 and the bootstrap trust root, in one `xtask validate` | `CM-01` |
+| `just model` | R1, R4, R5, the bootstrap trust root and reuse by address, in one `xtask validate` | `CM-01` |
 | `just template-check` | immutable SDK selection and template drift, checked by the SDK | --- |
 | `just lint` | Clippy at `-D warnings`, every target, every optional feature | --- |
 | `just test` | the workspace suite, including the R3 meta-gate | `CM-02`, `CM-03` |
@@ -31,6 +31,8 @@ or test is added without the other two.
 | `contract_tc_01` | `Conformant` drops the `bootstrap` conjunct, or `dispatch` answers on `true` instead of `conformant` | both rejected |
 | `prismpm verify` | an acceptance vector set without the exact guest-allocation boundary | rejected (PP2009) |
 | `audit-bootstrap` | a floating/copied action, mutable SDK tag, changed universal file, narrowed boundary, shallow/credential-retaining checkout, copied project renderer, omitted standards lock, acceptance bypass, deploy-job signing privilege, incomplete release lifecycle, or a bootstrap that drops a native architecture from main or tags, cancels or replaces a main run, or skips runs by path, condition or matrix exclusion | all rejected |
+| `audit-prism` | a new non-Prism file (`studio/tools/planted.mjs`); 800 lines added to the gate's own source, `xtask/src/audit.rs`, beyond what the change removed; a shallow clone that hides the parent | all rejected: `1 new non-Prism file(s): studio/tools/planted.mjs`; `non-Prism implementation grew by 93 lines (483631 to 483724); grown: xtask/src/audit.rs +1203`; `the clone is shallow, so the parent commit, the ratchet's ceiling, cannot be read`. Comment and blank lines added to `studio/shell/host.js` pass |
+| `audit-reuse` | a push or pull-request trigger with no path filter, no `hashFiles` address and no stated exemption: `try-codespace.yml` without its `paths-ignore` on push, and on pull request; `pages.yml` with its keys no longer hashing files; `build.yml` with an empty exemption | all rejected |
 
 ### Forge kernel capability gate, FK-05 to FK-09
 
@@ -323,6 +325,64 @@ shrank once the script set its width (CLS 0.009 on Luhn check, fixed by
 setting the first width in the hashed stylesheet), and `app.mjs` crossed the
 unminified-JavaScript allowance (2,458 bytes against 2,048, fixed by moving
 the spec into `site/spec.mjs`, loaded on first open, and shortening comments).
+
+## Only Prism is implemented
+
+Rule: Foundry is a Prism model, so behavior is written in LexLean and built by
+PrismPM. Every other language that executes is non-Prism implementation, and it
+may only shrink. `audit-prism` (`xtask/src/audit.rs`, part of `xtask validate`)
+is the shrink-only ratchet of `afflom/rule30` (Python may not grow) and
+`afflom/verdant-resonance` (hand-written modules may not grow), over every
+non-Prism language at once: `.rs`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.mjs`,
+`.cjs`, `.jsx`, `.css`, `.scss`, `.c`, `.h`, `.cpp`, `.html`, `.py`, `.sh`,
+`.bash`, `.awk` and host `.lean`. It counts tracked lines that are neither blank
+nor comments, so a comment that says why costs nothing. Prism output that a
+Prism lock binds byte for byte is Prism's and is not counted while its bytes
+equal the lock: the frame `frame.lock` pins to the template, and the Prism id
+`identity/stitch.lock` generates from stitch's model. A lock binds only when it names its upstream (`source` in
+`frame.lock`, `repository` in `stitch.lock`). Since `UOR-Foundation/template#91`
+the frame list includes `frame/` and `identity/`, so a template re-pin no longer
+counts against the ratchet; the gate's code is the template's, kept identical
+here.
+
+The ceiling is measured, not recorded: it is the commit's first parent. A pull
+request or merge queue run checks out a merge whose first parent is the base
+branch, and main's first parent is the previous main, so a removal lowers the
+ceiling as it merges, nothing is regenerated, and no file can raise it. Refused:
+a non-Prism file the parent lacks, and net growth in non-Prism lines. A shallow
+clone fails rather than passing without its ceiling.
+
+Baseline when the gate landed, measured on main at `c7ad40f`: 483,631 lines in
+2,897 files. The change that added it removed Hollama, the second chat app, and
+four unreferenced tools, leaving 482,924 lines in 2,808 files. The Quality
+facet carries it as "Only Prism is implemented", measure "Non-Prism growth",
+threshold 0.
+
+## Work runs only on what changed
+
+Rule: time and compute go to the change; everything else is referenced by
+its content address. `audit-reuse` (`xtask/src/reuse.rs`, part of `xtask
+validate`) holds every workflow that a push or pull request starts to one of
+three declarations: a path filter under every such trigger; an address, a
+cache key computed with `hashFiles(...)` and restored through `actions/cache`;
+or `# reuse-exempt: <reason>` for a workflow whose every run is an explicit
+request to redo the work. It checks that the declaration exists, not that a
+key names every input; that argument is written beside each key.
+
+Applied with it: `pages.yml` addresses the Prism page and Forge's site and
+republishes them unchanged when their inputs are; `try-page.yml` and
+`try-codespace.yml` skip `studio/` and `v2/`, which they do not read, on main
+as well as on pull requests; `build.yml` states its exemption.
+`bootstrap.yml` is universal policy and already addresses its proof on pull
+requests; reusing it on main is proposed to the template.
+
+Planted in the pinned SDK image (`cd3b47d7…`): the push trigger of
+`try-codespace.yml` without its `paths-ignore` made `xtask validate` fail with
+"try-codespace.yml runs on every push without a path filter, an address (a
+hashFiles cache key) or a stated `# reuse-exempt:` reason". Restored byte for
+byte, it passed. `redone_work_plants_are_rejected` rejects four plants and
+`every_workflow_declares_its_reuse` passes for every workflow; all 21 `xtask`
+tests passed and formatting was clean.
 
 ## A newer frame may add a file
 

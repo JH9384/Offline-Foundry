@@ -1,53 +1,102 @@
 // Proved rules for the apps Forge builds. An app that decides something (a tier, an eligibility, a
 // grade) carries a Prism spec, prism/spec/1, beside its code. This module does what prism-code does
 // with it, in the tab: checks it (prism/spec.mjs, prism-code's checker), renders its LexLean model
-// (prism/render.mjs, prism-code's renderer), and asks Lean to prove every guarantee on the hosted
-// verifier, the same call `prism_prove` makes. It also writes the app's rule module,
+// (prism/render.mjs, prism-code's renderer), and has Lean's kernel prove every guarantee in this tab
+// (`prove`, below). It also writes the app's rule module,
 // src/lib/prism.ts: the spec as data and one small interpreter, replayed against every acceptance
 // vector before it is written. What Lean proves is the rules; the module is tested against them.
 import { SpecError, validateSpec, unreachableRules, counterexample, describeConditions, requestLimits, decodeRequest, respond } from "./prism/spec.mjs";
 import { names, renderModel, renderProofs, acceptanceVectors, renderSpecDocument } from "./prism/render.mjs";
+import { readSpecFile } from "./prism/spec-file.mjs";
+
+/**
+ * The seal of a spec: the UOR content address of its canonical bytes, which the app's model
+ * carries, so a built app can be held to the JSON it was built from. Taken from the spec itself,
+ * never from how prism/spec.json happens to be written, because the address is of the canonical
+ * form either way.
+ */
+const sealOf = (spec) => readSpecFile(spec).specAddress;
 import { TEMPLATE_EXAMPLE, appJson, conformanceText, featureText, idsToml, lexleanLockText, rustTestText, suiteOf } from "./prism/template.mjs";
+import { toLexLean, draftOf } from "./live/lexlean.mjs";
+import { checkObligations } from "./live/obligations.mjs";
+import { tableKernel } from "./live/table.mjs";
+import { PROMPT_RULES, facetLine, parsePromptTag, facetsOf } from "./prism/builder/route.mjs";
+// The app's prompt parts, read and projected where the rules are (host.js rulesAfterTurn).
+export { parsePromptTag, facetsOf };
+import { verdictWithGuest, verdictAddressWords, verdictAxiomSet } from "./in-tab-verdict-codec.mjs";
+
+// prism-code's checker (prism/spec.mjs, byte for byte) keeps a spec to 24 rules, because its proofs are one
+// linear_arithmetic theorem per guarantee over the whole first-match chain. Past that, Forge checks the
+// guarantees itself, by local obligations (live/obligations.mjs), or the table when a rule is not a box,
+// and never offers the rules for proof until LexLean can prove them locally (UOR-Foundation/PrismPM#605).
+export const PROVE_RULES_MAX = 24;
 
 // prism/render.mjs names bytes in hex through Node's Buffer; this is the one use it makes of it.
 if (!globalThis.Buffer) globalThis.Buffer = { from: (bytes) => ({ toString: (encoding) => { if (encoding !== "hex") throw new Error("only hex"); return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""); } }) };
 
 const enc = new TextEncoder();
-const HOSTED = "https://mcp.uor.foundation/";
-const PROTOCOL = "2026-07-28";
-const PROFILE = "prism-app";
 
 // ---- what the model is told
-export const SPEC_RULES = `# Proved rules
-When the app decides an answer from a few inputs (a price tier, an eligibility, a grade, a risk level), state its rules as a Prism spec, so Lean can prove them, and make the screen use them.
-- Before the files, write one <dyad-spec> block of JSON: name (kebab-case), title, purpose (one sentence), fields (1 to 8, each {"name","kind":"number"|"choice","min","max","values","means"}), outcomes (lower-case words), rules (in order, the first that matches decides; each {"when":[{"field","op","value"}],"then","why"}), otherwise, otherwiseWhy, properties (what must never or always happen; each {"kind":"never"|"always","when","then","why"}), examples ([{"request":"<field values separated by spaces>","response"}]), limits (a list of sentences).
-- op is "is" or "is not" for a choice field, and "<", "<=", ">", ">=", "=" or "!=" for a number field, against a whole number or {"field":"<other number field>"}. Numbers are whole and not negative.
-- Forge draws the app's screen from the spec, live, as you write it. Write no files for an app with a spec: no page, no component, never src/lib/prism.ts or prism/spec.json.
-- Write the keys in this order, so the screen assembles top down as you write: name, title, purpose, view, fields, outcomes, meanings (optional, {"<outcome>": "what it means for the user"}), rules, otherwise, otherwiseWhy, properties, examples, limits.
-- view (optional) sets the screen's words and order: {"blocks":[...]}, each block one of {"kind":"heading","text"}, {"kind":"text","text"}, {"kind":"input","field","label"}, {"kind":"answer","label"}, {"kind":"guarantees"}, {"kind":"rules"}, {"kind":"examples"}. Without it the screen shows the title, purpose, one input per field, the answer, the guarantees, the rules and the examples.
-- To change one part of the spec (a word, an answer, one rule), write a patch instead of the whole spec: <dyad-spec-patch>[{"op":"set","path":["rules",2,"then"],"value":"none"}]</dyad-spec-patch>. Ops are set, insert (into a list, at an index) and remove; a path names keys and list indices in the spec as you wrote it. When the user points at something on the screen, its paths are given with the request.
-- To change the rules or the screen wholesale, write a whole new <dyad-spec> block. When the app decides nothing (a landing page, a gallery), write no spec and write its files.
-Example: <dyad-spec>{"name":"parking-fee","title":"Parking fee tier","purpose":"Decide the fee tier from hours parked and vehicle type.","fields":[{"name":"hours","kind":"number","min":0,"max":24,"means":"hours parked"},{"name":"vehicle","kind":"choice","values":["car","motorcycle","truck"],"means":"vehicle type"}],"outcomes":["free","standard","premium"],"rules":[{"when":[{"field":"hours","op":"=","value":0}],"then":"free","why":"nothing was parked"},{"when":[{"field":"vehicle","op":"is","value":"truck"}],"then":"premium","why":"a truck takes two bays"}],"otherwise":"standard","otherwiseWhy":"a car or motorcycle pays the standard rate","properties":[{"kind":"never","when":[{"field":"hours","op":"=","value":0}],"then":"premium","why":"no one pays for zero hours"}],"examples":[{"request":"0 truck","response":"free"},{"request":"3 car","response":"standard"}]}</dyad-spec>`;
+// The rules are written as one JSON spec (prism/spec/1), the app's only input. Forge renders the app's
+// canonical LexLean module from it (shell/live/lexlean.mjs toLexLean), the same module from the same
+// JSON, and Lean proves the guarantees. A model never writes LexLean for a decision app: it is the
+// one step that is not deterministic, so it is kept to the smallest thing that says what the app does.
+const PARKING = {
+  name: "parking-fee", title: "Parking Fee", purpose: "Decide the fee tier from hours parked and vehicle.",
+  fields: [{ name: "hours", kind: "number", min: 0, max: 24 }, { name: "vehicle", kind: "choice", values: ["car", "motorcycle", "truck"] }],
+  outcomes: ["free", "standard", "premium"],
+  rules: [{ when: [{ field: "hours", op: "=", value: 0 }], then: "free" }, { when: [{ field: "vehicle", op: "is", value: "truck" }], then: "premium" }, { when: [{ field: "hours", op: ">", value: 12 }], then: "premium" }],
+  otherwise: "standard",
+  properties: [{ kind: "never", when: [{ field: "hours", op: "=", value: 0 }], then: "premium" }],
+  examples: [{ request: "0 truck", response: "free" }, { request: "13 car", response: "premium" }, { request: "2 car", response: "standard" }],
+};
+export const SPEC_EXAMPLE = JSON.stringify(PARKING);
+/** The example's canonical module in the draft form, without its theorems: what the module reader is held to. */
+export const MODULE_EXAMPLE = draftOf(toLexLean(PARKING)).replace(/\n\ntheorem\{[\s\S]*?\n\}(?=\n)/g, "").trim() + "\n";
+export const SPEC_RULES = `# You write the app's spec as JSON, and nothing else
+Every app here is one JSON spec: its inputs, its answers, its rules and its guarantees. Forge writes the app's LexLean module, its code and its screen from the spec, the same every time, and Lean proves the guarantees. You never write code, files or dependencies: Forge does not apply them. You never write LexLean. To build or change an app, write its spec; to change only one part, write a patch. If a request decides nothing, say in one sentence what the app could decide, and write that spec.
+- Write one <dyad-spec> block holding the whole spec as one JSON object, and no other text inside it. Keys: "title"; "purpose" (one sentence); "fields" (1 to 8, in the order a request gives them; each {"name": a lower-case word, "kind": "number" with whole "min" and "max", or "choice" with "values", two to 32 lower-case words}); "outcomes" (the answer words, lower case; "invalid" is reserved); "rules" (1 to 24, in order, the first that matches decides; each {"when": [{"field", "op", "value"}], "then": an outcome}); "otherwise" (the outcome when no rule matches); "properties" (what must never or always happen, each a guarantee Lean proves for every request: {"kind": "never" or "always", "when": [...], "then": an outcome}); "examples" (a few requests with their answers: {"request": "the field values separated by spaces", "response"}).
+- A condition's "op" is "is" or "is not" for a choice field, with one of its values; and "<", "<=", ">", ">=", "=" or "!=" for a number field, with a whole number or another number field as {"field": "<name>"}. All of a rule's conditions must hold. Numbers are whole, never fractions.
+- Think about which rules and guarantees the app needs, not about syntax. State the guarantees the request implies: what must never be answered, and what must always be.
+- To change one part (a word, an answer, one rule), or to set the screen's words or order, write a patch on the spec: <dyad-spec-patch>[{"op":"set","path":["rules",2,"then"],"value":"none"}]</dyad-spec-patch>. Ops are set, insert and remove; \`view\` ({"blocks":[...]}, each one of {"kind":"heading","text"}, {"kind":"text","text"}, {"kind":"input","field","label"}, {"kind":"answer","label"}, {"kind":"guarantees"}, {"kind":"rules"}, {"kind":"examples"}), \`purpose\` (one sentence) and \`meanings\` ({"<answer>": "what it tells the user"}, one key per answer; fields have no meanings) are set this way. When the user points at something on the screen, its paths are given with the request.
+- To change the rules, write the whole spec again in a new <dyad-spec> block, starting from the current spec when one is given.
+- An app that must keep what it is given between requests (a list that grows, entries that are kept) cannot be written yet. Say so in one sentence, and write the spec of what it could decide.
+Example: <dyad-spec>${SPEC_EXAMPLE}</dyad-spec>` + PROMPT_RULES;
 
-// ---- the device. The on-device model holds about 3,000 tokens and writes at most 900, so it is asked
-// for the one thing it can write well, the rules, and Forge draws the screen from them (screenSource).
-const DEVICE_RULES = `You write the rules of a small decision app as JSON. Reply with one <dyad-spec> block and nothing else.
-Keys: "title"; "purpose" (one sentence); "fields" (1 to 8; each {"name": a lower-case word, "kind": "number" with "min" and "max", or "choice" with "values"}); "outcomes" (the answer words); "rules" (in order, the first that matches decides; each {"when": [{"field", "op", "value"}], "then"}); "otherwise"; "properties" (what must never or always happen; each {"kind": "never" or "always", "when": [...], "then"}); "examples" (each {"request": "the field values separated by spaces", "response"}).
-"op" is "is" or "is not" for a choice field, and "<", "<=", ">", ">=" or "=" for a number field. Numbers are whole.
-Example:
-<dyad-spec>{"title":"Parking fee tier","purpose":"Decide the fee tier from hours parked and vehicle.","fields":[{"name":"hours","kind":"number","min":0,"max":24},{"name":"vehicle","kind":"choice","values":["car","motorcycle","truck"]}],"outcomes":["free","standard","premium"],"rules":[{"when":[{"field":"hours","op":"=","value":0}],"then":"free"},{"when":[{"field":"vehicle","op":"is","value":"truck"}],"then":"premium"}],"otherwise":"standard","properties":[{"kind":"never","when":[{"field":"hours","op":"=","value":0}],"then":"premium"}],"examples":[{"request":"0 truck","response":"free"},{"request":"3 car","response":"standard"}]}</dyad-spec>`;
-export function deviceRequest(prompt, currentSpec) {
-  const ask = currentSpec ? `The app's rules now:\n${JSON.stringify(JSON.parse(currentSpec))}\n\nWrite the whole new rules for this change: ${prompt}` : prompt;
-  // /no_think: the rules model is a Qwen3, which otherwise reasons aloud until its 900 tokens are gone.
-  return [{ role: "system", content: DEVICE_RULES + "\nWrite each rule once. Write at most 4 examples. /no_think" }, { role: "user", content: ask + " /no_think" }];
+// ---- the one thing a model may write
+// Every model, on the device or in the cloud, writes the app's JSON spec and nothing else. LexLean a
+// model writes is never read: the module is Forge's own rendering of the spec, so the same JSON is the
+// same app on every device, and the app's seal is the address of that JSON.
+/** Whether a model's turn carries LexLean, closed or still open. */
+export const wroteLexLean = (text) => String(text || "").includes("<prism-lexlean>");
+/** A model's turn without the LexLean it wrote. */
+export const withoutLexLean = (text) => String(text || "").replace(/<prism-lexlean>[\s\S]*?(<\/prism-lexlean>|$)/g, "");
+
+/**
+ * What a model is shown of a decision app: its current spec, as the JSON it writes, or that there is
+ * none. Never the LexLean module, which Forge renders from the spec.
+ */
+export function specContext(specText) {
+  let spec = null;
+  try { spec = specText ? JSON.parse(specText) : null; } catch {}
+  if (!spec) return "This app has no spec yet. Write it from my request.";
+  return "The app's current spec:\n<dyad-spec>" + JSON.stringify(spec).replaceAll("<", "\\u003c") + "</dyad-spec>";
 }
+
+/** What a model is shown of the app: its current module, in the draft form it writes, or that there is none. */
+export function moduleContext(source) {
+  if (!source) return "This app has no LexLean module yet. Write it from my request.";
+  return "The app's current LexLean module:\n<prism-lexlean>\n" + draftOf(source.replace(/\n\ntheorem\{[\s\S]*?\n\}(?=\n)/g, "")).trim() + "\n</prism-lexlean>";
+}
+export const CODE_REFUSED = "**Code not applied.** The app's code and screen are drawn from its LexLean module; files a model writes are not used.";
+
 // What the device wrote, without a reasoning block the model may still open.
 export const withoutThinking = (text) => (text || "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
 
 // The screen Forge writes when the rules check and no page uses them yet: a form with one input per
 // field, answered by decide(). It reads everything from the rules module, so it never goes stale.
 export function screenSource() {
-  return `// Written by Prism AI Foundry: a form for the app's rules. The answer comes from decide(), the rules Lean proves.
+  return `// Written by Prism Foundry: a form for the app's rules. The answer comes from decide(), the rules Lean proves.
 import { useState } from "react";
 import { decide, FIELDS, SPEC } from "@/lib/prism";
 
@@ -136,8 +185,49 @@ export function repairJson(text) {
   for (let k = cuts.length - 1; k >= 0; k--) { const got = attempt(out.slice(0, cuts[k].at) + cuts[k].closers); if (got) return got; }
   return null;
 }
-// The card stands in its own paragraphs, whatever the model wrote around the tag.
-export const withCard = (text, card) => (text || "").replace(TAG, card ? "\n\n" + card + "\n\n" : "");
+// What the chat shows of an answer. The module is the app's source, not something to read in the chat:
+// while it streams it shows as one line counting its declarations, and after the turn the card stands in
+// its place (in the last module's place, when a repair wrote it again); a patch shows as nothing, its result
+// is on the card. The answer itself (the model's text) is kept whole for reading the module and patches.
+const MODULE_ENDS = ["</prism-lexlean>", "\\end{prism-lexlean}", "\\end{lexlean}"];
+export function shownText(text, card = null) {
+  // The model's reasoning (shown as <think>…) names the tag in passing: it is shown as it is.
+  const t = text || "", think = /^<think>[\s\S]*?(<\/think>|$)/.exec(t);
+  if (think) return think[0] + (think[1] ? shownText(t.slice(think[0].length), card) : "");
+  let out = "", rest = t;
+  for (;;) {
+    const at = rest.indexOf("<prism-lexlean>");
+    if (at < 0) { out += rest; break; }
+    out += rest.slice(0, at);
+    const body = rest.slice(at);
+    let end = -1;
+    const close = body.indexOf("</prism-lexlean>");
+    if (close >= 0) end = close + 16;
+    else for (const m of MODULE_ENDS.slice(1)) { const k = body.lastIndexOf(m); if (k >= 0) end = Math.max(end, k + m.length); }
+    const block = end >= 0 ? body.slice(0, end) : body;
+    // An app written in the app notation is lines, not declarations: Forge writes the module from them.
+    const lines = /^<prism-lexlean>\s*app\s/.test(block) && !block.includes("\\begin{") ? block.replace(/<\/?prism-lexlean>/g, "").split("\n").filter((l) => l.trim()).length : 0;
+    const n = lines || (block.match(/\b(definition|structure)\{/g) || []).length;
+    out += end >= 0 ? `\u0000${lines ? "L" : ""}${n}\u0000` : lines ? `\n\n_Writing the app: ${n} line${n === 1 ? "" : "s"} so far…_\n\n` : `\n\n_Writing the app's LexLean module: ${n} declaration${n === 1 ? "" : "s"} so far…_\n\n`;
+    if (end < 0) break;
+    rest = body.slice(end);
+  }
+  const marks = [...out.matchAll(/\u0000(L?)(\d+)\u0000/g)];
+  marks.forEach((m, i) => { out = out.replace(m[0], i === marks.length - 1 ? (card ? "\n\n" + card + "\n\n" : m[1] ? `\n\n_The app, written in ${m[2]} line${m[2] === "1" ? "" : "s"}. Forge is writing its LexLean module from them._\n\n` : `\n\n_The app's LexLean module: ${m[2]} declarations._\n\n`) : ""); });
+  // The spec is the app's source, not something to read in the chat: one line while it streams, and the
+  // card (or one line) in its place once it is whole.
+  out = out.replace(/<dyad-spec>[\s\S]*?<\/dyad-spec>/g, card ? "\n\n" + card + "\n\n" : "\n\n_The app's spec, written as JSON._\n\n").replace(/<dyad-spec>[\s\S]*$/, "\n\n_Writing the app's spec…_\n\n");
+  // The app's prompt parts are shown through the card's full-model line, not as JSON.
+  out = out.replace(/<dyad-spec-patch>[\s\S]*?(<\/dyad-spec-patch>|$)/g, "").replace(/<prism-prompt>[\s\S]*?(<\/prism-prompt>|$)/g, "").replace(/\n{3,}/g, "\n\n");
+  // A tag still arriving (`<pri…`) is not shown until it is whole.
+  const tail = /<[a-z-]*$/.exec(out);
+  return tail && ("<prism-lexlean>".startsWith(tail[0]) || "<dyad-spec-patch>".startsWith(tail[0]) || "<dyad-spec>".startsWith(tail[0]) || "<prism-prompt>".startsWith(tail[0])) ? out.slice(0, tail.index) : out;
+}
+// The card stands in its own paragraphs, whatever the model wrote around the tag or the module.
+export const withCard = (text, card) => {
+  const t = text || "";
+  return /<prism-lexlean>|<dyad-spec>/.test(t) ? shownText(t, card) : t.replace(TAG, card ? "\n\n" + card + "\n\n" : "");
+};
 export const isApproval = (prompt) => /^\s*\/?(yes,?\s*)?approve(d)?(\s+(the\s+)?(rules|guarantees|spec))?\s*[.!]?\s*$/i.test(prompt || "");
 // "publish" builds the proved app with the Prism SDK and puts it live; no model is asked.
 export const isPublish = (prompt) => /^\s*\/?(yes,?\s*)?(publish|ship)(\s+(it|the\s+app|now))?\s*[.!]?\s*$/i.test(prompt || "");
@@ -187,17 +277,18 @@ function prismDecide(spec, values) {
 
 // The same two functions, as the live frame runs them (shell/live/frame.js): one interpreter wherever an
 // answer is shown.
-export const INTERPRETER = prismAnswer.toString() + "\n" + prismDecide.toString() + "\n";
+export { prismAnswer, prismDecide };
+export const INTERPRETER_PARTS = Object.freeze([prismAnswer.toString(), prismDecide.toString()]);
+export const INTERPRETER = INTERPRETER_PARTS.join("\n") + "\n";
 
 function moduleSource(spec, vectors) {
-  return `// Generated by Prism AI Foundry from prism/spec.json. Do not edit: change the rules in the chat.
+  return `// Generated by Prism Foundry from prism/spec.json. Do not edit: change the rules in the chat.
 // Lean proves the guarantees about these rules. This module answers with the same rules; Forge
 // replayed all ${vectors} acceptance vectors through it before writing it.
 export const SPEC = ${JSON.stringify(spec, null, 2)};
-${prismAnswer.toString()}
-${prismDecide.toString()}
+${INTERPRETER_PARTS[0]}
+${INTERPRETER_PARTS[1]}
 export const FIELDS = SPEC.fields;
-export const OUTCOMES = SPEC.outcomes;
 /** The answer for one set of field values: an outcome word, or "invalid". */
 export function decide(values) { return prismDecide(SPEC, values); }
 /** The answer for one request line, the field values separated by spaces. */
@@ -223,7 +314,10 @@ function lowerAnswers(input) {
   for (const r of Array.isArray(spec.rules) ? spec.rules : []) if (r) r.then = low(r.then);
   for (const p of Array.isArray(spec.properties) ? spec.properties : []) if (p) p.then = low(p.then);
   for (const e of Array.isArray(spec.examples) ? spec.examples : []) if (e) e.response = low(e.response);
-  if (spec.meanings && typeof spec.meanings === "object") spec.meanings = Object.fromEntries(Object.entries(spec.meanings).map(([k, v]) => [low(k), v]));
+  // A meaning keyed by the answer's LexLean name (measured: GLM wrote `answerA` for answer `a`) is that
+  // answer's meaning; only a key that names no answer either way is left for the checker to refuse.
+  const answerWord = (k) => { const m = /^answer([A-Z][\w]*)$/.exec(k); return m ? m[1].replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase() : null; };
+  if (spec.meanings && typeof spec.meanings === "object") spec.meanings = Object.fromEntries(Object.entries(spec.meanings).map(([k, v]) => [Array.isArray(spec.outcomes) && !spec.outcomes.includes(low(k)) && spec.outcomes.includes(answerWord(k)) ? answerWord(k) : low(k), v]));
   // A choice is respelled the same way, in its field, in every condition on that field, and in every
   // example request that names it.
   const choices = new Map();
@@ -247,10 +341,38 @@ function lowerAnswers(input) {
   return { spec, respelled };
 }
 
+/** A spec over prism-code's rule limit, checked by Forge: obligations first, the table for every request. */
+function checkLarge(input, notes) {
+  const pad = (i) => String(i + 1).padStart(3, "0");
+  const spec = { examples: [], limits: [], ...input, rules: input.rules.map((r, i) => ({ id: `REQ-${pad(i)}`, ...r })), properties: (input.properties || []).map((p, i) => ({ id: `INV-${pad(i)}`, ...p })) };
+  const issues = [];
+  const ob = checkObligations(spec);
+  let how;
+  if (ob.ok && ob.holds) how = `${ob.total} local obligations, each keyed by what it depends on`;
+  else {
+    // A break the obligations report, or rules they do not cover, is settled exactly, request by request.
+    const K = tableKernel(), table = K.build(spec);
+    if (table.reason) return { ok: false, issues: [`More than ${PROVE_RULES_MAX} rules, and ${table.reason}, so Forge cannot check every request.`] };
+    how = `every one of its ${table.size.toLocaleString()} requests`;
+    K.check(spec, table).forEach((c, i) => { if (!c.ok) issues.push(`${spec.properties[i].id} does not hold: \`${c.request}\` answers ${c.outcome}.`); });
+  }
+  const vectors = acceptanceVectors(spec);
+  let failed = 0;
+  for (const v of vectors) {
+    let text;
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(v.bytes); } catch { if (v.response !== "invalid") failed++; continue; }
+    if (prismAnswer(spec, text) !== v.response) failed++;
+  }
+  if (failed) issues.push(`The rule module disagrees with ${failed} of ${vectors.length} acceptance vectors. This is a Forge bug.`);
+  notes.push(`${spec.rules.length} rules, more than prism-code's ${PROVE_RULES_MAX}: every guarantee was checked by ${how}.`);
+  return { ok: issues.length === 0, spec, issues, notes, vectors: vectors.length, module: issues.length ? null : moduleSource(spec, vectors.length) };
+}
+
 export function checkSpec(raw) {
   const issues = [], notes = [];
   const lowered = lowerAnswers(raw);
   let input = lowered.spec;
+  if (Array.isArray(input.rules) && input.rules.length > PROVE_RULES_MAX) return checkLarge(input, notes);
   const words = [...lowered.respelled].filter(([a, b]) => b && a !== b);
   if (words.length) notes.push("Forge respelled " + words.map(([a, b]) => `\`${a}\` as \`${b}\``).join(", ") + ", the form Prism words take.");
   // `limits` is a list; a model that writes one sentence means a list of one.
@@ -300,94 +422,356 @@ export function checkSpec(raw) {
   return { ok: issues.length === 0, spec, issues, notes, vectors: vectors.length, module: issues.length ? null : moduleSource(spec, vectors.length) };
 }
 
-// ---- the proof: the LexLean project prism-code sends, proved on the hosted verifier
+// ---- shell files, as text
 async function shellText(path) {
   const r = await fetch(new URL(path, import.meta.url));
   if (!r.ok) throw new Error(path + " answered " + r.status);
   return (await r.text()).replace(/\r\n/g, "\n");
 }
-export async function projectFiles(spec, axioms = {}) {
-  const n = names(spec);
-  const files = [
-    { path: "src/Foundation/Bytes.lex.tex", content: await shellText("./prism/lex/Foundation/Bytes.lex.tex") },
-    { path: "src/Foundation/View/Text/V1/Model.lex.tex", content: await shellText("./prism/lex/Foundation/View/Text/V1/Model.lex.tex") },
-    { path: `src/${n.module}.lex.tex`, content: renderModel(spec, { axioms }) },
-  ];
-  const proofs = renderProofs(spec, { axioms });
-  if (proofs) files.push({ path: `src/${n.proofs}.lex.tex`, content: proofs });
-  return files;
-}
 
-let rpcId = 0;
-const meta = (tasks) => ({
-  "io.modelcontextprotocol/protocolVersion": PROTOCOL,
-  "io.modelcontextprotocol/clientInfo": { name: "hologram-forge", version: "1" },
-  "io.modelcontextprotocol/clientCapabilities": tasks ? { extensions: { "io.modelcontextprotocol/tasks": {} } } : {},
-});
-function answerOf(text) {
-  try { return JSON.parse(text); } catch {}
-  let found = null;
-  for (const line of text.split("\n")) if (line.startsWith("data:")) { const e = JSON.parse(line.slice(5)); if ("id" in e) found = e; }
-  return found;
+// ---- the proof of a rule app: Lean's kernel, in this tab
+// A rule app answers through the Forge kernel's RuleJudge, on the words `ruleWordsOf` writes. Lean proved, once for
+// every app, that RuleJudge as LexLean compiles it answers no in-bounds request that breaks a guarantee
+// `wordsCheck` passes (studio/proof/PrismLive/Regions.lean, `ruleJudge_sound`). An app's proof is then that theorem
+// applied to its words: Lean's kernel, compiled to WebAssembly and run in a worker with that library resident,
+// evaluates `wordsCheck` and judges the term. Nothing is sent anywhere, and the Forge kernel guest gives the verdict
+// (InTabKernel.verdictCode) from what the tab derived.
+const OPS = { "<": 0, "<=": 1, ">": 2, ">=": 3, is: 4, "=": 4, "is not": 5, "!=": 5 };
+/** The words RuleJudge decides an app's requests with, before the request's own: what a published app sends. */
+export function ruleWordsOf(spec) {
+  const outcomes = [...new Set([spec.otherwise, ...spec.rules.map((r) => r.then)])], at = (n) => spec.fields.findIndex((f) => f.name === n);
+  const cond = (c) => { const f = spec.fields[at(c.field)]; if (!f || typeof c.value === "object" || !(c.op in OPS)) throw new Error("it compares two fields, and the rule judge compares a field with a value"); return [at(c.field), OPS[c.op], f.kind === "choice" ? f.values.indexOf(c.value) : Number(c.value)]; };
+  const words = [1, spec.fields.length, ...spec.fields.flatMap((f) => (f.kind === "choice" ? [0, f.values.length - 1] : [f.min ?? 0, f.max ?? 0xffffffff])), outcomes.indexOf(spec.otherwise), spec.rules.length, ...spec.rules.flatMap((r) => [r.when.length, outcomes.indexOf(r.then), ...r.when.flatMap(cond)])];
+  // A guarantee about an answer no rule gives names the next number: no rule answers it.
+  const guarantees = spec.properties.map((p) => ({ always: p.kind === "always", when: p.when.map(cond), outcome: outcomes.includes(p.then) ? outcomes.indexOf(p.then) : outcomes.length }));
+  return { words, outcomes, guarantees, choices: spec.fields.map((f) => (f.kind === "choice" ? f.values : null)) };
 }
-async function rpc(method, name, params) {
-  const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": PROTOCOL, "mcp-method": method };
-  if (name) headers["mcp-name"] = name;
-  const body = JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params });
-  for (let attempt = 0; ; attempt++) {
-    let status = 0, text = "";
-    try { const r = await fetch(HOSTED, { method: "POST", headers, body }); status = r.status; text = await r.text(); }
-    catch (e) { if (attempt < 2) { await new Promise((r) => setTimeout(r, 10000)); continue; } throw new Error("the verifier did not answer"); }
-    if ([502, 503, 504].includes(status) && attempt < 2) { await new Promise((r) => setTimeout(r, 10000)); continue; }
-    const answer = answerOf(text);
-    if (!answer) throw new Error(`the verifier answered ${method} with HTTP ${status} and no message`);
-    if (answer.error) throw new Error(`the verifier refused ${method}: ${answer.error.message || JSON.stringify(answer.error)}`);
-    return answer.result;
-  }
-}
-const callTool = (tool, args, tasks = false) => rpc("tools/call", tool, { name: tool, arguments: args, _meta: meta(tasks) });
-
-/** Ask Lean to prove the spec's guarantees. Resolves { ok, record, seconds } or { ok: false, error }. */
-export async function prove(spec, { onWait = () => {} } = {}) {
-  const t0 = Date.now();
-  const axioms = {};
-  for (let round = 1; round <= 6; round++) {
-    const files = await projectFiles(spec, axioms);
-    const entrypoints = files.map((f) => f.path);
-    const written = await callTool("lexlean_draft_write", { profile: PROFILE, files });
-    const draft = written && written.structuredContent && written.structuredContent.draft;
-    if (!draft || written.isError) return { ok: false, error: "the verifier did not take the draft" };
-    let task = await callTool("lexlean_verify", { project: draft, files: entrypoints }, true);
-    if (!task || !task.taskId) return { ok: false, error: "the verifier did not start the proof" };
-    const taskId = task.taskId;
-    while (task.status === "working") {
-      if (Date.now() - t0 > 15 * 60 * 1000) return { ok: false, error: "the proof did not end in 15 minutes" };
-      await new Promise((r) => setTimeout(r, Math.max(1000, Math.min(task.pollIntervalMs || 5000, 10000))));
-      task = await rpc("tasks/get", taskId, { taskId, _meta: meta(true) });
-      onWait(Math.round((Date.now() - t0) / 1000));
+const AXIOMS = ["propext", "Quot.sound"];
+const sha256Hex = async (bytes) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+function leanWorker(self) {
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  const sha256 = async (b) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", b))].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const said = [];
+  let m = null, lib = null, at = null;
+  const run = (entry, bytes) => {
+    said.length = 0; m.FS.writeFile("/in.ndjson", bytes);
+    let exit;
+    try { exit = m.ccall(entry, "number", ["string"], ["/in.ndjson"]); } catch (e) { exit = 3; said.push("trap: " + (e && e.message ? e.message : e)); }
+    m.FS.unlink("/in.ndjson");
+    const axioms = {}, rest = [];
+    for (const line of said) { const a = /^axioms ([^:]+): ?(.*)$/.exec(line); if (a) axioms[a[1]] = a[2] ? a[2].split(", ") : []; else rest.push(line); }
+    return { exit, axioms: exit === 0 ? axioms : {}, output: rest.join("\n").slice(-400) };
+  };
+  // The library's names, terms and levels by index (lean4export's format), so a suffix names what it already holds.
+  const read = (text) => {
+    const t = { names: [""], name: new Map([["", 0]]), expr: [], exprAt: new Map(), level: new Map(), types: new Map(), next: [1, 0, 1] };
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      const o = JSON.parse(line);
+      if ("in" in o) { const pre = t.names[(o.str || o.num).pre]; const full = (pre ? pre + "." : "") + (o.str ? o.str.str : o.num.i); t.names[o.in] = full; t.name.set(full, o.in); t.next[0] = Math.max(t.next[0], o.in + 1); }
+      else if ("il" in o) { const { il, ...node } = o; t.level.set(JSON.stringify(node), il); t.next[2] = Math.max(t.next[2], il + 1); }
+      else if ("ie" in o) { const { ie, ...node } = o; t.expr[ie] = node; t.exprAt.set(JSON.stringify(node), ie); t.next[1] = Math.max(t.next[1], ie + 1); }
+      else if (o.thm || o.def) { const d = o.thm || o.def; t.types.set(d.name, d.type); }
     }
-    if (task.status !== "completed") return { ok: false, error: `the proof ended ${task.status}` };
-    const state = task.result && task.result.structuredContent && task.result.structuredContent.state;
-    let body = null;
-    try { body = JSON.parse((task.result.content && task.result.content[0] && task.result.content[0].text) || "null"); } catch {}
-    if (state === "failed") {
-      const diagnostics = (body && body.diagnostics) || [];
-      // An axiom set the renderer guessed wrong: Lean names the set it observed, as prism-code corrects it.
-      const fixes = diagnostics.map((d) => /`([^`]+)` violates its (?:exact|none) axiom policy: observed (\[[^\]]*\])/.exec(d.message || "")).filter(Boolean);
-      if (fixes.length && fixes.length === diagnostics.length) { for (const m of fixes) axioms[m[1].split(".").pop()] = m[2]; continue; }
-      return { ok: false, error: (diagnostics[0] && diagnostics[0].message) || "Lean refused the proof", diagnostics };
-    }
-    if (state !== "verified" || !body || !body.attestation_id) return { ok: false, error: "the verifier answered without an attestation" };
-    const proved = new Set(body.modules || []);
-    const modules = entrypoints.map((p) => p.replace(/^src\//, "").replace(/\.lex\.tex$/, "").split("/").join("."));
-    const absent = modules.filter((m) => !proved.has(m));
-    if (absent.length) return { ok: false, error: "the verifier did not verify " + absent.join(", ") };
-    const seconds = Math.round((Date.now() - t0) / 1000);
-    return { ok: true, seconds, axioms: { ...axioms }, record: { schema: "prism/hosted-verification/1", server: HOSTED, profile: PROFILE, draft, entrypoints, verified_at: new Date().toISOString(), attestation_id: body.attestation_id, semantic_id: body.semantic_id || null, source_id: body.source_id || null, modules: [...proved], properties: spec.properties.map((p) => p.id), seconds } };
+    return t;
+  };
+  // What a suffix of the library is written with: names, levels and terms by index, new ones after the library's.
+  const writer = () => {
+    const out = [], own = new Map(), ownExpr = [], ownAt = new Map();
+    let [nextName, nextExpr, nextLevel] = lib.next;
+    const term = (node) => { const k = JSON.stringify(node), have = lib.exprAt.get(k) ?? ownAt.get(k); if (have !== undefined) return have; const e = nextExpr++; ownExpr[e] = node; ownAt.set(k, e); out.push(JSON.stringify({ ...node, ie: e })); return e; };
+    const node = (e) => lib.expr[e] ?? ownExpr[e];
+    const name = (full) => { let pre = 0, path = ""; for (const part of full.split(".")) { path = path ? path + "." + part : part; const have = lib.name.get(path) ?? own.get(path); if (have !== undefined) { pre = have; continue; } const n = nextName++; own.set(path, n); out.push(JSON.stringify({ in: n, str: { pre, str: part } })); pre = n; } return pre; };
+    const known = (full) => { const n = lib.name.get(full); if (n === undefined) throw new Error("the library does not hold " + full); return n; };
+    const C = (full, us = []) => term({ const: { name: known(full), us } });
+    const app = (f, ...args) => args.reduce((fn, arg) => term({ app: { arg, fn } }), f);
+    const nat = (n) => term({ natVal: String(n) });
+    const one = lib.level.get(JSON.stringify({ succ: 0 })) ?? (() => { const l = nextLevel++; out.push(JSON.stringify({ il: l, succ: 0 })); return l; })();
+    const list = (T, xs) => xs.reduceRight((tail, x) => app(C("List.cons", [0]), T, x, tail), app(C("List.nil", [0]), T));
+    const declare = (kind, full, type, value) => { const n = name(full); out.push(JSON.stringify(kind === "def" ? { def: { all: [n], hints: { regular: 1 }, levelParams: [], name: n, safety: "safe", type, value } } : { thm: { all: [n], levelParams: [], name: n, type, value } })); return term({ const: { name: n, us: [] } }); };
+    return { out, own, term, node, name, known, C, app, nat, one, list, declare };
+  };
+  // A stateful app's declarations, written locally nameless ({c, us} {a} {lam} {pi} {v} {n} {s}; a level is 0 or 1).
+  const written = (decls) => {
+    const { out, own, term, name, one, declare } = writer();
+    const expr = (x, scope) => {
+      if (x.v !== undefined) { const i = scope.lastIndexOf(x.v); if (i < 0) throw new Error("unbound " + x.v); return term({ bvar: scope.length - 1 - i }); }
+      if (x.c) { const n = lib.name.get(x.c) ?? own.get(x.c); if (n === undefined) throw new Error("the library does not hold " + x.c); return term({ const: { name: n, us: x.us.map((u) => (u ? one : 0)) } }); }
+      if (x.a) { const fn = expr(x.a[0], scope); return term({ app: { arg: expr(x.a[1], scope), fn } }); }
+      if (x.lam || x.pi) { const [v, ty, body] = x.lam || x.pi, b = { binderInfo: "default", body: expr(body, [...scope, v]), name: name(v), type: expr(ty, scope) }; return term(x.lam ? { lam: b } : { forallE: b }); }
+      if (x.n !== undefined) return term({ natVal: String(x.n) });
+      if (x.s !== undefined) return term({ strVal: x.s });
+      throw new Error("not a term: " + JSON.stringify(x).slice(0, 80));
+    };
+    for (const d of decls) declare(d.kind, d.name, expr(d.type, []), expr(d.value, []));
+    return out.join("\n") + "\n";
+  };
+  // One guarantee's proof, written over the library: the app's words and the guarantee as data, `wordsCheck` on them
+  // judged by evaluation (Eq.refl true), and `ruleJudge_sound` applied to that.
+  const suffix = (i, words, g) => {
+    const { out, term, node, name, known, C, app, nat, one, list, declare } = writer();
+    // A theorem's statement with its first binders taken by closed terms.
+    const instantiate = (type, args) => {
+      let body = type;
+      for (let k = 0; k < args.length; k++) body = node(body).forallE.body;
+      const memo = new Map(), go = (e, depth) => {
+        const key = e + ":" + depth; if (memo.has(key)) return memo.get(key);
+        const x = node(e); let r = e;
+        if ("bvar" in x) r = x.bvar < depth ? e : x.bvar - depth < args.length ? args[args.length - 1 - (x.bvar - depth)] : term({ bvar: x.bvar - args.length });
+        else if (x.app) r = term({ app: { arg: go(x.app.arg, depth), fn: go(x.app.fn, depth) } });
+        else if (x.forallE) r = term({ forallE: { ...x.forallE, type: go(x.forallE.type, depth), body: go(x.forallE.body, depth + 1) } });
+        else if (x.lam) r = term({ lam: { ...x.lam, type: go(x.lam.type, depth), body: go(x.lam.body, depth + 1) } });
+        else if (x.letE) r = term({ letE: { ...x.letE, type: go(x.letE.type, depth), value: go(x.letE.value, depth), body: go(x.letE.body, depth + 1) } });
+        else if (x.proj) r = term({ proj: { ...x.proj, struct: go(x.proj.struct, depth) } });
+        memo.set(key, r); return r;
+      };
+      return go(body, 0);
+    };
+    const K = "PrismLive.Kernel.", Nat = C("Nat"), Bool = C("Bool"), at = "Tab.g" + i + ".";
+    const cond = ([field, op, value]) => app(C(K + "Cond.mk"), nat(field), nat(op), nat(value));
+    const P = declare("def", at + "words", app(C("List", [0]), Nat), list(Nat, words.map(nat)));
+    const p = declare("def", at + "guarantee", C(K + "Property"), app(C(K + "Property.mk"), C(g.always ? "Bool.true" : "Bool.false"), list(C(K + "Cond"), g.when.map(cond)), nat(g.outcome)));
+    const T = C("Bool.true");
+    const checked = declare("thm", at + "checked", app(C("Eq", [one]), Bool, app(C(K + "wordsCheck"), P, p), T), app(C("Eq.refl", [one]), Bool, T));
+    declare("thm", at + "holds", instantiate(lib.types.get(known(K + "ruleJudge_sound")), [P, p, checked]), app(C(K + "ruleJudge_sound"), P, p, checked));
+    return out.join("\n") + "\n";
+  };
+  async function open({ manifest, glue, wasm, library }) {
+    const [g, w, l] = await Promise.all([sha256(glue), sha256(wasm), sha256(library)]), b = manifest.binding;
+    if (g !== manifest.glue.sha256 || w !== manifest.wasm.sha256 || l !== manifest.library.sha256) return { ok: false, refusal: "the kernel, its loader or its library is not the pinned one" };
+    // The library is entered unchecked: sound only for one this kernel has judged whole (the binding).
+    if (!b || b.kernel !== w || b.loader !== g || b.library !== l) return { ok: false, refusal: "no record that this kernel judged this library whole" };
+    const url = URL.createObjectURL(new Blob([glue], { type: "text/javascript" }));
+    try { m = await (await import(url)).default({ instantiateWasm: (imports, done) => { WebAssembly.instantiate(wasm, imports).then((r) => done(r.instance, r.module)); return {}; }, print: (s) => said.push(s), printErr: (s) => said.push(s) }); } finally { URL.revokeObjectURL(url); }
+    if (m.ccall("checker_ready", "number", [], []) !== 0) return { ok: false, refusal: "the kernel did not start" };
+    const bytes = new Uint8Array(library), loaded = run("load_library", bytes);
+    if (loaded.exit !== 0) return { ok: false, refusal: "the kernel refused the library: " + loaded.output };
+    lib = read(dec.decode(bytes)); at = { kernel: w, library: l };
+    return { ok: true };
   }
-  return { ok: false, error: "the axiom sets did not settle" };
+  async function prove({ id, words, guarantees }) {
+    const texts = guarantees.map((g, i) => suffix(i, words, g));
+    const judged = texts.map((t, i) => { const r = run("check_suffix", enc.encode(t)); return { accepted: r.exit === 0, axioms: r.axioms["Tab.g" + i + ".holds"] || null, output: r.output }; });
+    const evidence = { ...at, bundle: await sha256(enc.encode(texts.join(""))), statement: await sha256(enc.encode(JSON.stringify(["prism/in-tab-statement/3", words, guarantees]))) };
+    return { op: "prove", id, judged, evidence };
+  }
+  // A stateful app's theorems, each judged with the app's definitions it reaches.
+  async function module({ id, defs, theorems }) {
+    const texts = theorems.map((t) => written([...defs, t]));
+    const judged = texts.map((text, i) => { const r = run("check_suffix", enc.encode(text)); return { accepted: r.exit === 0, axioms: r.axioms[theorems[i].name] || null, output: r.output }; });
+    return { op: "module", id, judged, evidence: { ...at, bundle: await sha256(enc.encode(texts.join(""))) } };
+  }
+  self.onmessage = async ({ data }) => {
+    try { self.postMessage(data.op === "open" ? { op: "open", ...(await open(data)) } : data.op === "module" ? await module(data) : await prove(data)); }
+    catch (e) { self.postMessage({ op: data.op, id: data.id, ok: false, refusal: "the proof worker failed: " + (e && e.message ? e.message : e) }); }
+  };
 }
-
+// One worker for the page, opened on first use from the pinned files (kernel/lean/manifest.json). Each is shipped
+// gzipped and named by the SHA-256 of its bytes; the worker checks every address before the kernel runs.
+let lean = null;
+async function openLean() {
+  const LEAN = new URL("./kernel/lean/", import.meta.url);
+  const bytes = async (file) => { const r = await fetch(new URL(file, LEAN)); if (!r.ok) throw new Error(file + " answered " + r.status); const b = new Uint8Array(await r.arrayBuffer()); return b[0] === 0x1f && b[1] === 0x8b ? new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer() : b.buffer; };
+  const manifest = await (await fetch(new URL("manifest.json", LEAN))).json();
+  const [glue, wasm, library] = await Promise.all([manifest.glue, manifest.wasm, manifest.library].map((f) => bytes(f.file)));
+  const worker = new Worker(URL.createObjectURL(new Blob(["(" + leanWorker + ")(self)"], { type: "text/javascript" })), { type: "module" });
+  let id = 0;
+  const ask = (message) => new Promise((resolve, reject) => {
+    const mine = message.op === "open" ? undefined : ++id;
+    const on = ({ data }) => { if (data.op === message.op && data.id === mine) { worker.removeEventListener("message", on); resolve(data); } };
+    worker.addEventListener("message", on);
+    worker.addEventListener("error", (e) => reject(new Error("the proof worker failed: " + (e.message || "it did not start"))), { once: true });
+    worker.postMessage({ ...message, id: mine });
+  });
+  const opened = await ask({ op: "open", manifest, glue, wasm, library });
+  if (!opened.ok) { worker.terminate(); throw new Error(opened.refusal); }
+  return { manifest, prove: (words, guarantees) => ask({ op: "prove", words, guarantees }), module: (defs, theorems) => ask({ op: "module", defs, theorems }) };
+}
+/** Lean's kernel proves the spec's guarantees in this tab. Resolves { ok, record, seconds, axioms } or { ok: false, error }. */
+export async function prove(spec, { guest, beforeSubmit = () => {} } = {}) {
+  const t0 = Date.now(), no = (error) => ({ ok: false, error });
+  let read;
+  try { read = ruleWordsOf(spec); } catch (e) { return no("Lean's kernel in this tab cannot read these rules: " + e.message); }
+  let k, r;
+  try { k = await (lean ||= openLean()); beforeSubmit(); r = await k.prove(read.words, read.guarantees); }
+  catch (e) { lean = null; return no(String((e && e.message) || e)); }
+  if (!r.judged) return no(r.refusal || "the proof worker did not answer");
+  const accepted = r.judged.every((g) => g.accepted), observed = [...new Set(r.judged.flatMap((g) => g.axioms || []))].sort();
+  const word = (hex) => verdictAddressWords("sha256:" + hex);
+  const statement = await sha256Hex(enc.encode(JSON.stringify(["prism/in-tab-statement/3", read.words, read.guarantees])));
+  const verdict = await verdictWithGuest(guest, {
+    version: 1, hasBytes: 1, libraryPinned: word(k.manifest.library.sha256), libraryDerived: word(r.evidence.library),
+    // The proof is written here, not fetched: its one address is the worker's.
+    bundleNamed: word(r.evidence.bundle), bundleDerived: word(r.evidence.bundle), kernelPinned: word(k.manifest.wasm.sha256), kernelDerived: word(r.evidence.kernel),
+    specStatement: word(statement), checkedStatement: word(r.evidence.statement), axiomsDeclared: verdictAxiomSet(AXIOMS), axiomsObserved: verdictAxiomSet(observed),
+    leanRan: 1, leanAccepted: accepted ? 1 : 0, secondRan: 0, secondAccepted: 0,
+  });
+  if (!verdict.ok) return no("the kernel guest gave no verdict (" + verdict.code + ")");
+  const refused = spec.properties.filter((_, i) => !r.judged[i].accepted).map((p) => p.id);
+  if (verdict.verdict !== "proved") return no(refused.length ? "Lean's kernel refused " + refused.join(", ") : "the kernel guest said " + verdict.verdict);
+  const seconds = Math.round((Date.now() - t0) / 100) / 10;
+  return { ok: true, seconds, axioms: {}, record: { schema: "prism/in-tab-verification/1", verdict: verdict.verdict, verified_at: new Date().toISOString(), lean: k.manifest.lean, kernel: "sha256:" + r.evidence.kernel, library: "sha256:" + r.evidence.library, statement: "sha256:" + statement, bundle: "sha256:" + r.evidence.bundle, axioms: observed, properties: spec.properties.map((p) => p.id), seconds } };
+}
+// ---- the proof of a stateful app: its own module, as kernel terms, in this tab
+// The tab writes the app's module (its data form, live/app.mjs semanticData) as Lean terms with no elaborator: each
+// structure is the right-nested product of its fields, `if` is `ite (c = true)`, the operators are Nat's and Bool's
+// own functions. Each theorem is stated exactly as the module states it, over the definitions it reaches, and is proved
+// by one lemma Lean proved once for every app the notation writes (studio/proof, PrismLive.Tables) applied to this
+// app's terms, or by evaluation. Lean's kernel, in the worker, judges each theorem; nothing is sent anywhere.
+export function moduleTerms(data, library = []) {
+  const fail = (why) => { throw new Error(why); };
+  const C = (c, us = []) => ({ c, us }), A = (f, ...xs) => xs.reduce((g, x) => ({ a: [g, x] }), f), V = (v) => ({ v });
+  const local = new Map(data.declarations.map((d) => [d.name, d])), lib = new Map(library.map((d) => [d.name, d]));
+  const BOOL = { kind: "bool" }, NAT = { kind: "nat" }, ONE = (n) => n.length === 1;
+  let fresh = 0; const v = () => "x" + fresh++;
+  const struct = (member) => {
+    const d = (member.module ? lib.get(member.name) : local.get(member.name) || lib.get(member.name)) || fail("no structure " + member.name);
+    if (d.kind !== "structure" || d.type_parameters?.length || !d.fields.length) fail(member.name + " is not a plain structure");
+    const types = d.fields.map((f) => ty(f.type)), nest = (i) => (i === types.length - 1 ? types[i] : A(C("Prod", [0, 0]), types[i], nest(i + 1)));
+    return { d, types, nest };
+  };
+  const ty = (t) => ({ nat: () => C("Nat"), bool: () => C("Bool"), string: () => C("String"), bytes: () => C("ByteArray"), list: () => A(C("List", [0]), ty(t.element)), named: () => struct(t.member).nest(0) })[t.kind]?.() || fail("type " + t.kind);
+  const field = (t, name) => { const s = struct(t.member), k = s.d.fields.findIndex((f) => f.name === name); if (k < 0) fail("no field " + name); return { s, k, type: s.d.fields[k].type }; };
+  const project = (t, name, x) => {
+    const { s, k } = field(t, name), n = s.types.length;
+    for (let j = 0; j < k; j++) x = A(C("Prod.snd", [0, 0]), s.types[j], s.nest(j + 1), x);
+    return k < n - 1 ? A(C("Prod.fst", [0, 0]), s.types[k], s.nest(k + 1), x) : x;
+  };
+  const infer = (e, env) => {
+    switch (e.kind) {
+      case "nat": case "add": return NAT;
+      case "string": return { kind: "string" };
+      case "bool": case "and": case "or": case "beq": case "ble": case "blt": case "eq": return BOOL;
+      case "var": return (env.get(e.name) || fail("unbound " + e.name)).type;
+      case "record": return { kind: "named", member: e.type };
+      case "project": return field(infer(e.value, env), e.field).type;
+      case "if": return infer(e.then_value, env);
+      case "cons": return { kind: "list", element: infer(e.head, env) };
+      case "nil": return { kind: "list", element: e.element };
+      case "call": return (local.get(e.function.name) || fail("no definition " + e.function.name)).result;
+      case "primitive": return e.result;
+    }
+    return fail("the tab cannot state " + e.kind);
+  };
+  const reached = [];
+  const term = (e, env) => {
+    const t = (x) => term(x, env), op = { add: "Nat.add", beq: "Nat.beq", ble: "Nat.ble", blt: "Nat.blt", and: "Bool.and", or: "Bool.or" }[e.kind];
+    if (op) return A(C(op), t(e.left), t(e.right));
+    switch (e.kind) {
+      case "var": return env.get(e.name).term;
+      case "nat": return { n: e.value };
+      case "string": return { s: e.value };
+      case "bool": return C(e.value ? "Bool.true" : "Bool.false");
+      case "eq": return A(C("Eq", [1]), ty(infer(e.left, env)), t(e.left), t(e.right));
+      case "if": { const c = t(e.condition); return A(C("ite", [1]), ty(infer(e, env)), A(C("Eq", [1]), C("Bool"), c, C("Bool.true")), A(C("instDecidableEqBool"), c, C("Bool.true")), t(e.then_value), t(e.else_value)); }
+      case "record": {
+        const s = struct(e.type);
+        if (e.fields.length !== s.d.fields.length) fail("record shape");
+        const vals = s.d.fields.map((f) => t((e.fields.find((x) => x.field === f.name) || fail("record without " + f.name)).value));
+        const mk = (i) => (i === vals.length - 1 ? vals[i] : A(C("Prod.mk", [0, 0]), s.types[i], s.nest(i + 1), vals[i], mk(i + 1)));
+        return mk(0);
+      }
+      case "project": return project(infer(e.value, env), e.field, t(e.value));
+      case "cons": return A(C("List.cons", [0]), ty(infer(e.head, env)), t(e.head), t(e.tail));
+      case "nil": return A(C("List.nil", [0]), ty(e.element));
+      case "call": reach(e.function.name); return A(C("Tab.app." + e.function.name), ...e.arguments.map(t));
+      case "primitive":
+        if (e.arguments.length === 1 && e.operation === "length" && infer(e.arguments[0], env).kind === "bytes") return A(C("ByteArray.size"), t(e.arguments[0]));
+        if (e.arguments.length === 1 && e.operation === "utf8_encode") return A(C("String.toUTF8"), t(e.arguments[0]));
+    }
+    return fail("the tab cannot state " + e.kind + (e.operation ? " " + e.operation : ""));
+  };
+  // Binds parameters to terms; with no terms, to fresh variables, returned as binders.
+  const bind = (params, values) => {
+    const env = new Map(), binders = [];
+    params.forEach((p, i) => { if (values) env.set(p.name, { type: p.type, term: values[i] }); else { const x = v(); binders.push([x, ty(p.type)]); env.set(p.name, { type: p.type, term: V(x) }); } });
+    return { env, binders };
+  };
+  const over = (binders, kind, body) => binders.reduceRight((b, [x, T]) => ({ [kind]: [x, T, b] }), body);
+  const defs = [], done = new Set();
+  function reach(name) {
+    if (done.has(name)) return; done.add(name);
+    const d = local.get(name) || fail("no definition " + name);
+    if (d.kind !== "definition" || d.recursive_argument) fail(name + " is not a plain definition");
+    const { env, binders } = bind(d.parameters), value = term(d.body, env);
+    defs.push({ kind: "def", name: "Tab.app." + name, type: over(binders, "pi", ty(d.result)), value: over(binders, "lam", value) });
+  }
+  const callee = (e, env) => { const d = local.get(e.function.name); return { d, env: bind(d.parameters, e.arguments.map((a) => term(a, env))).env }; };
+  const rev = (stateType, f) => { const x = v(); return { lam: [x, ty(stateType), project(stateType, f, V(x))] }; };
+  const holds = (b) => A(C("Eq", [1]), C("Bool"), b, C("Bool.true"));
+  const mentions = (x, names) => JSON.stringify(x).match(/"v":"x\d+"/g)?.some((m) => names.includes(m)) || false;
+  // The proof that a guard tree is false, given h : bad = true, down to the leaf the bad case refutes.
+  const refute = (g, genv, bad, benv, h) => {
+    const badT = term(bad, benv);
+    if (g.kind === "and") {
+      const inLeft = leafIn(g.left, genv, bad, benv), side = inLeft ? g.left : g.right, h2 = v();
+      return A(C(inLeft ? "PrismLive.Tables.left" : "PrismLive.Tables.right"), badT, term(g.left, genv), term(g.right, genv), { lam: [h2, holds(badT), refute(side, genv, bad, benv, V(h2))] }, h);
+    }
+    if (bad.kind === "ble") return A(C("PrismLive.Tables.full"), term(bad.right, benv), term(bad.left, benv), h);
+    if (bad.kind === "or" && bad.right.kind === "ble" && bad.right.left.kind === "nat" && Number(bad.right.left.value) > 0) return A(C("PrismLive.Tables.outside"), term(bad.right.right, benv), { n: String(Number(bad.right.left.value) - 1) }, h);
+    return fail("the tab has no lemma for this guard");
+  };
+  const leafIn = (g, genv, bad, benv) => {
+    if (g.kind === "and") return leafIn(g.left, genv, bad, benv) || leafIn(g.right, genv, bad, benv);
+    if (bad.kind === "ble") return g.kind === "blt";
+    const names = JSON.stringify(term(bad, benv)).match(/"v":"x\d+"/g) || [];
+    return g.kind !== "blt" && mentions(term(g, genv), names);
+  };
+  const proof = (st, env) => {
+    if (st.kind === "eq" && st.right.kind === "bool" && st.right.value === false && st.left.kind === "call") {
+      const { d: F, env: fenv } = callee(st.left, env), b = F.body;
+      if (b.kind === "and" && b.right.kind === "blt" && b.right.right.kind === "project" && b.right.right.value.kind === "call") {
+        // bad && (rev s <? rev (act s ...)), where act is `if guards then t else s`
+        const s = b.right.left.value, T = infer(s, fenv), { d: act, env: aenv } = callee(b.right.right.value, fenv), h = v();
+        if (act.body.kind !== "if") fail(act.name + " is not guarded");
+        return A(C("PrismLive.Tables.refused"), ty(T), rev(T, b.right.right.field), term(s, fenv), term(act.body.then_value, aenv), term(b.left, fenv), term(act.body.condition, aenv),
+          { lam: [h, holds(term(b.left, fenv)), refute(act.body.condition, aenv, b.left, fenv, V(h))] });
+      }
+      if (b.kind === "and" && b.left.kind === "or" && b.right.kind === "or" && b.right.left.left.kind === "project" && b.right.left.left.value.kind === "call") {
+        // a press from another revision: its guarded step is `if seen =? rev s then x else s`
+        const seen = b.left.left.left, s = b.left.left.right.value, T = infer(s, fenv), { d: g, env: genv } = callee(b.right.left.left.value, fenv);
+        if (g.body.kind !== "if") fail(g.name + " is not guarded");
+        return A(C("PrismLive.Tables.stale"), ty(T), rev(T, b.left.left.right.field), term(s, fenv), term(g.body.then_value, genv), term(seen, fenv));
+      }
+    }
+    if (st.kind !== "eq") fail("the statement is not an equation");
+    return A(C("Eq.refl", [1]), ty(infer(st.left, env)), term(st.left, env));
+  };
+  const theorems = [], refused = [];
+  for (const th of data.theorems || []) {
+    try {
+      const { env, binders } = bind(th.parameters);
+      theorems.push({ kind: "thm", name: "Tab.app." + th.name, type: over(binders, "pi", term(th.statement, env)), value: over(binders, "lam", proof(th.statement, env)) });
+    } catch (e) { refused.push({ theorem: th.name, reason: e.message }); }
+  }
+  return { defs, theorems, refused };
+}
+/** Lean's kernel proves a stateful app's theorems in this tab. Resolves { ok, record, seconds, axioms } or { ok: false, error }. */
+export async function proveModule(source, data, library, { guest, beforeSubmit = () => {} } = {}) {
+  const t0 = Date.now(), no = (error) => ({ ok: false, error });
+  let terms;
+  try { terms = moduleTerms(data, library); } catch (e) { return no("Lean's kernel in this tab cannot read this module: " + e.message); }
+  if (terms.refused.length) return no("Lean's kernel in this tab cannot state " + terms.refused.map((r) => r.theorem + " (" + r.reason + ")").join(", "));
+  if (!terms.theorems.length) return no("the module states no theorems");
+  let k, r;
+  const failed = (e) => { lean = null; return { refusal: String((e && e.message) || e) }; };
+  try { k = await (lean ||= openLean()); } catch (e) { return no(failed(e).refusal); }
+  beforeSubmit(); r = await k.module(terms.defs, terms.theorems).catch(failed);
+  if (!r.judged) return no(r.refusal || "the proof worker did not answer");
+  const accepted = r.judged.every((g) => g.accepted), observed = [...new Set(r.judged.flatMap((g) => g.axioms || []))].sort();
+  const word = (hex) => verdictAddressWords("sha256:" + hex), statement = await sha256Hex(enc.encode(source));
+  const verdict = await verdictWithGuest(guest, {
+    version: 1, hasBytes: 1, libraryPinned: word(k.manifest.library.sha256), libraryDerived: word(r.evidence.library),
+    bundleNamed: word(r.evidence.bundle), bundleDerived: word(r.evidence.bundle), kernelPinned: word(k.manifest.wasm.sha256), kernelDerived: word(r.evidence.kernel),
+    specStatement: word(statement), checkedStatement: word(statement), axiomsDeclared: verdictAxiomSet(AXIOMS), axiomsObserved: verdictAxiomSet(observed),
+    leanRan: 1, leanAccepted: accepted ? 1 : 0, secondRan: 0, secondAccepted: 0,
+  });
+  if (!verdict.ok) return no("the kernel guest gave no verdict (" + verdict.code + ")");
+  const refused = terms.theorems.filter((_, i) => !r.judged[i].accepted).map((t) => t.name.replace("Tab.app.", ""));
+  if (verdict.verdict !== "proved") return no(refused.length ? "Lean's kernel refused " + refused.join(", ") : "the kernel guest said " + verdict.verdict);
+  const seconds = Math.round((Date.now() - t0) / 100) / 10;
+  return { ok: true, seconds, axioms: {}, record: { schema: "prism/in-tab-verification/1", verdict: verdict.verdict, verified_at: new Date().toISOString(), lean: k.manifest.lean, kernel: "sha256:" + r.evidence.kernel, library: "sha256:" + r.evidence.library, statement: "sha256:" + statement, bundle: "sha256:" + r.evidence.bundle, axioms: observed, theorems: terms.theorems.map((t) => t.name.replace("Tab.app.", "")), seconds } };
+}
 // ---- the build: the commit prism-code makes on a repository created from UOR-Foundation/template
 // prism-code builds an app on GitHub Actions by writing it into a template instance (journey/engine.mjs
 // writeTemplateApp, after journey/project.mjs writeApp); the template's pages and bootstrap workflows then
@@ -406,7 +790,7 @@ export async function templateCommit({ spec, axioms = {}, attestation = null, re
     if (file === "prismpm.toml") text = text.replace('project = "TextRequest"', `project = "${n.module}"`);
     project[file] = text;
   }
-  const model = renderModel(spec, { axioms });
+  const model = renderModel(spec, { axioms, specAddress: sealOf(spec) });
   const proofs = renderProofs(spec, { axioms });
   const sources = [`src/${n.module}.lex.tex`, ...(proofs ? [`src/${n.proofs}.lex.tex`] : [])];
   // writeTemplateApp: the app under app/, and every file the gate and the page read.
@@ -448,16 +832,123 @@ export function card(state) {
   lines.push(`- Otherwise: **${spec.otherwise}**${spec.otherwiseWhy ? ` *${spec.otherwiseWhy}*` : ""}`, "");
   lines.push(`Request: \`${spec.fields.map((f) => f.name).join(" ")}\` · answers: ${spec.outcomes.join(", ")}, or invalid`);
   if (spec.examples.length) lines.push("", `Examples: ${spec.examples.map((e) => `\`${e.request}\` → ${e.response}`).join(" · ")}`);
+  const facets = facetLine(state.facets);
+  if (facets) lines.push("", facets);
   if (state.notes && state.notes.length) lines.push("", ...state.notes.map((n) => "*" + n + "*"));
   if (state.issues && state.issues.length) lines.push("", "Not checked:", ...state.issues.map((i) => "- " + i), "", "Ask me to fix the rules.");
-  else if (state.phase === "checked") lines.push("", `Checked: consistent, ${spec.examples.length} examples pass, ${state.vectors} acceptance vectors replayed through the app's rule module.`, "", "Reply **approve** to have Lean prove the guarantees. The rules go to the hosted verifier, unlisted.");
+  else if (state.phase === "checked") lines.push("", `Checked: consistent, ${spec.examples.length} examples pass, ${state.vectors} acceptance vectors replayed through the app's rule module.`, "", "Reply **approve** to have Lean's kernel prove the guarantees in this tab. Nothing is sent anywhere.");
   return lines.join("\n");
 }
 export function provingMessage(spec) {
-  return `Proving ${spec.properties.length} guarantee${spec.properties.length === 1 ? "" : "s"} with Lean on the hosted verifier, usually two to four minutes. The preview keeps working meanwhile.`;
+  return `Proving ${spec.properties.length} guarantee${spec.properties.length === 1 ? "" : "s"} in this tab with Lean's kernel. Nothing is sent anywhere.`;
 }
 export function proofMessage(spec, result) {
-  if (result.ok) return `**Proved by Lean.** ${spec.properties.length} of ${spec.properties.length} guarantee${spec.properties.length === 1 ? "" : "s"} hold for every request, in ${result.seconds} s. Attestation \`${result.record.attestation_id.slice(0, 16)}…\`. Publishing now carries the rules and this proof.`;
+  if (result.ok) return `**Proved in this tab by Lean's kernel.** ${spec.properties.length} of ${spec.properties.length} guarantee${spec.properties.length === 1 ? " holds" : "s hold"} for every request the published app answers, in ${result.seconds} s. Lean ${result.record.lean.version}, kernel \`${result.record.kernel.slice(7, 19)}…\`, library \`${result.record.library.slice(7, 19)}…\`. No server took part.`;
   return `**Not proved.** ${result.error}. The rules are back to checked: ask me to change them, or reply **approve** to try again.`;
 }
 export { requestLimits };
+
+// The prism/spec/1 grammar a device model is held to while it writes an app's rules: one compact spec in a
+// <dyad-spec> block, keys in a fixed order (title, purpose, fields, outcomes, rules, otherwise, properties,
+// examples). A condition names a declared field, with an operator of that field's kind and, for a choice,
+// one of its values; every answer is one of the declared outcomes; an example's request is the fields in
+// order. The grammar fixes form, never meaning: which fields, rules and answers the request needs is the
+// model's, and the checker and the approval card still judge them.
+//   specGrammarCheck(text) -> "fail" (no spec starts with text), "partial" (some does), "done" (text is a whole spec)
+const END = { end: true }, FAIL = { fail: true };
+const NUM_OPS = ["<", "<=", ">", ">=", "=", "!="], CHOICE_OPS = ["is", "is not"];
+const RESERVED = new Set(["invalid", "never", "always"]);
+const isLow = (c) => c >= "a" && c <= "z", isDig = (c) => c >= "0" && c <= "9";
+
+export function specGrammarCheck(text) {
+  let i = 0;
+  const n = text.length;
+  const peek = () => { if (i >= n) throw END; return text[i]; };
+  const lit = (s) => { for (let k = 0; k < s.length; k++) { if (i >= n) throw END; if (text[i] !== s[k]) throw FAIL; i++; } };
+  const str = (ok, max, done) => {
+    lit('"'); let s = "";
+    for (;;) {
+      const c = peek();
+      if (c === '"') { if (!done(s)) throw FAIL; i++; return s; }
+      if (s.length >= max || !ok(c, s)) throw FAIL;
+      s += c; i++;
+    }
+  };
+  const oneOf = (list) => str((c, s) => list.some((w) => w.startsWith(s + c)), 64, (s) => list.includes(s));
+  const word = () => str((c, s) => (s ? isLow(c) || isDig(c) || c === "-" : isLow(c)), 24, (s) => s.length > 0 && !s.endsWith("-") && !RESERVED.has(s));
+  const name = () => str((c, s) => (s ? isLow(c) || isDig(c) : isLow(c)), 24, (s) => s.length > 0);
+  const prose = (max) => str((c) => c >= " " && c <= "~" && c !== "\\", max, (s) => s.trim().length > 0);
+  const int = () => {
+    let s = "";
+    for (;;) {
+      if (i >= n) throw END;
+      const c = text[i];
+      if (!isDig(c)) break;
+      if (s === "0" || s.length >= 6) throw FAIL;
+      s += c; i++;
+    }
+    if (!s) throw FAIL;
+    return +s;
+  };
+  const list = (item, min, max, empty = false) => {
+    if (empty && peek() === "]") { i++; return 0; }
+    let k = 0;
+    for (;;) {
+      item(); k++;
+      const c = peek();
+      if (c === ",") { if (k >= max) throw FAIL; i++; continue; }
+      if (c === "]") { if (k < min) throw FAIL; i++; return k; }
+      throw FAIL;
+    }
+  };
+  const fields = [], outcomes = [];
+  const field = () => {
+    lit('{"name":');
+    const nm = name();
+    if (fields.some((f) => f.name === nm)) throw FAIL;
+    lit(',"kind":');
+    const f = { name: nm, kind: oneOf(["number", "choice"]), values: [] };
+    if (f.kind === "number") { lit(',"min":'); f.min = int(); lit(',"max":'); f.max = int(); if (f.max < f.min) throw FAIL; }
+    else { lit(',"values":['); list(() => { const v = word(); if (f.values.includes(v)) throw FAIL; f.values.push(v); }, 2, 32); }
+    lit("}");
+    fields.push(f);
+  };
+  const cond = () => {
+    lit('{"field":');
+    const nm = oneOf(fields.map((g) => g.name));
+    const f = fields.find((x) => x.name === nm);
+    lit(',"op":');
+    oneOf(f.kind === "number" ? NUM_OPS : CHOICE_OPS);
+    lit(',"value":');
+    if (f.kind === "number") int(); else oneOf(f.values);
+    lit("}");
+  };
+  const answer = () => oneOf(outcomes);
+  // An example's request: each field's value in order, separated by single spaces.
+  const request = () => {
+    lit('"');
+    for (let k = 0; k < fields.length; k++) {
+      if (k) lit(" ");
+      const f = fields[k];
+      if (f.kind === "number") int();
+      else { let s = ""; for (;;) { const c = peek(); if (c === " " || c === '"') break; if (!f.values.some((v) => v.startsWith(s + c))) throw FAIL; s += c; i++; } if (!f.values.includes(s)) throw FAIL; }
+    }
+    lit('"');
+  };
+  try {
+    lit('<dyad-spec>{"title":'); prose(60);
+    lit(',"purpose":'); prose(200);
+    lit(',"fields":['); list(field, 1, 8);
+    lit(',"outcomes":['); list(() => { const w = word(); if (outcomes.includes(w)) throw FAIL; outcomes.push(w); }, 2, 16);
+    lit(',"rules":['); list(() => { lit('{"when":['); list(cond, 1, 8); lit(',"then":'); answer(); lit("}"); }, 1, 24);
+    lit(',"otherwise":'); answer();
+    lit(',"properties":['); list(() => { lit('{"kind":'); oneOf(["never", "always"]); lit(',"when":['); list(cond, 1, 8); lit(',"then":'); answer(); lit("}"); }, 1, 6, true);
+    lit(',"examples":['); list(() => { lit('{"request":'); request(); lit(',"response":'); answer(); lit("}"); }, 1, 4, true);
+    lit("}</dyad-spec>");
+    return i === n ? "done" : "fail";
+  } catch (e) {
+    if (e === END) return "partial";
+    if (e === FAIL) return "fail";
+    throw e;
+  }
+}

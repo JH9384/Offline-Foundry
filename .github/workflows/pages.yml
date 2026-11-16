@@ -2,6 +2,10 @@
 #   https://uor-foundation.github.io/foundry/      Foundry (studio/), the app builder
 #   https://uor-foundation.github.io/foundry/app/  the Foundry kernel's Prism page: `site/` with the holo
 #                                                that `just app` builds and verifies through the locked SDK
+#   https://uor-foundation.github.io/foundry/reuse/v2/reuse/opfs.html  the address-based reuse store,
+#                                                exercised over the browser's own OPFS (v2/reuse)
+#   https://uor-foundation.github.io/foundry/v2/index.html  Foundry v2: apps that are LexLean specs, run in
+#                                                the tab, with what Lean proved beside each (v2/site)
 # Project content, not universal policy: a repository may extend or replace it.
 #
 # It runs on every push to main, beside `bootstrap`, not after it: `just app`
@@ -35,10 +39,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   build:
     name: build and verify the holo, sign its provenance, assemble the page
@@ -50,19 +50,29 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    outputs:
+      address: ${{ steps.address.outputs.key }}
     steps:
       - name: Check out the exact event revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: The page's address, from every file it is built from (all but studio/)
+      - name: The page's address, from every file it is built from (all but studio/, v2/ and the other workflows)
+        # v2/ holds prototypes no step of this build reads (just app reads app/, bootstrap/, site/), so a
+        # change there publishes the page already verified for the same inputs instead of rebuilding it.
+        #
+        # The other workflow files are left out for the same reason: no step of this job reads one. The
+        # steps are this file's own, so this file stays in the key. Before this, a pull request that only
+        # added a test step to another workflow changed the address, and main built and proved the kernel again
+        # for 28 minutes before it could publish a stylesheet (run of 2248dcd, 2026-11-12). The patterns
+        # are read in order: the workflows are taken out, then this one is put back.
         id: address
         shell: bash
-        run: echo "key=prism-page-v1-${{ hashFiles('**', '!studio/**', '!.git/**') }}" >>"$GITHUB_OUTPUT"
+        run: echo "key=prism-page-v2-${{ hashFiles('**', '!studio/**', '!v2/**', '!.git/**', '!.github/workflows/**', '.github/workflows/pages.yml') }}" >>"$GITHUB_OUTPUT"
       - name: The page already built, verified and signed from these files, if there is one
         id: reuse
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: verified-page
           key: ${{ steps.address.outputs.key }}
@@ -195,16 +205,11 @@ jobs:
           ' "$FINGERPRINT" "$ATTESTATION_URL"
           node bootstrap/page.mjs site
           node bootstrap/precache.mjs site
-      - name: Lighthouse at 100 on mobile, before anything is deployed
-        if: steps.reuse.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --no-audit --no-fund --global @lhci/cli@0.15.1
-          lhci autorun --config=lighthouserc.json
+      # Lighthouse at 100 on mobile runs on the pull request that changes the page (prism-page.yml), where its
+      # author sees it, not here after the merge, where a slower page stopped every deploy until traced.
       - name: The screens' browser, kept by its version
         if: steps.reuse.outputs.cache-hit != 'true'
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-1.56.1-chromium-${{ runner.os }}-${{ runner.arch }}
@@ -232,7 +237,7 @@ jobs:
           node bootstrap/screens.mjs site screens
       - name: Keep the screens
         if: always() && steps.reuse.outputs.cache-hit != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: screens
           path: screens
@@ -243,15 +248,36 @@ jobs:
         run: cp -r site verified-page
       - name: Save the page under its address
         if: steps.reuse.outputs.cache-hit != 'true'
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: verified-page
           key: ${{ steps.address.outputs.key }}
       - name: Keep the Prism page, deployed under app/ beside Forge
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: prism-page
           path: ${{ steps.reuse.outputs.cache-hit == 'true' && 'verified-page' || 'site' }}
+          if-no-files-found: error
+      # One proof of one commit. This holo is the one Lean proved here, signed by this run; whatever else
+      # needs a proved kernel on this commit takes it from this artifact and verifies that signature
+      # instead of proving the same model again (kernel-pin.yml, bootstrap.yml). A commit whose page was
+      # reused carries the holo of the page it reused, which is the same holo: the page's address covers
+      # every file app/ is built from. The attestation rides along when this run is the one that proved it.
+      - name: Gather what this commit's proof produced
+        shell: bash
+        env:
+          PAGE: ${{ steps.reuse.outputs.cache-hit == 'true' && 'verified-page' || 'site' }}
+        run: |
+          set -euo pipefail
+          mkdir -p kernel-proof
+          cp "$PAGE/app.holo" "$PAGE/app.json" kernel-proof/
+          if [[ -s .prism-proof/attestation ]]; then cp .prism-proof/attestation kernel-proof/attestation; fi
+          ls -la kernel-proof
+      - name: Keep the kernel's holo, for whatever else this commit proves
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: kernel-holo
+          path: kernel-proof
           if-no-files-found: error
 
   forge:
@@ -259,6 +285,8 @@ jobs:
     if: github.repository != 'UOR-Foundation/template'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    outputs:
+      address: ${{ steps.forge-address.outputs.key }}
     defaults:
       run:
         working-directory: studio
@@ -268,55 +296,138 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Forge's address, from every file its build can read
+        # A superset of Forge's inputs: its gates read app/, bootstrap/ and the v2 engine sources.
+        # Other v2 prototypes remain excluded; changes to any consumed engine source invalidate reuse.
+        id: forge-address
+        shell: bash
+        working-directory: .
+        run: echo "key=forge-site-v1-${{ hashFiles('**', '!v2/**', '!.git/**', 'v2/shell/**', 'v2/loop/**', 'v2/probe-payment/data/**', 'v2/probe-payment/src/**', 'v2/hosted-check/**') }}" >>"$GITHUB_OUTPUT"
+      - name: Forge's site already built and gated from these files, if there is one
+        id: forge-reuse
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: verified-forge
+          key: ${{ steps.forge-address.outputs.key }}
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         with:
           targets: wasm32-unknown-unknown
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         with:
           python-version: "3.12"
-      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         with:
           path: |
             ~/.cache/hologram-forge-lane
             ~/.elan
           key: lane-${{ hashFiles('studio/PRISMPM_REV', 'studio/lean-toolchain') }}
-      - name: The lane, which projects the page from the verified core and builds the wasm the page loads
-        run: ./scripts/lane.sh
-      - name: Byte identity corpus and shell hash check
-        run: python3 tools/corpus.py
-      - name: The site's included keys, from repository secrets, never from the tree
-        # OPENROUTER_WARMUP_KEY answers while a visitor's local model loads; FEATHERLESS_SITE_KEY is the shared
-        # Featherless key every visitor without their own uses. Both are public once served.
-        if: ${{ env.KEY != '' || env.FEATHERLESS != '' }}
-        env:
-          KEY: ${{ secrets.OPENROUTER_WARMUP_KEY }}
-          FEATHERLESS: ${{ secrets.FEATHERLESS_SITE_KEY }}
-        run: python3 -c "import json,os;json.dump({'key':os.environ['KEY'],'model':'qwen/qwen3.8-flash','featherless':os.environ['FEATHERLESS']},open('shell/warmup.json','w'))"
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         with:
           node-version: "24"
-          # The renderer's 1,600 packages come from the runner's cache while its lockfile is unchanged.
           cache: npm
           cache-dependency-path: studio/vendor/dyad/package-lock.json
+      # The lockfile names every dependency byte, so the unpacked tree is addressed by the lockfile alone:
+      # npm ci then has nothing to do. The store setup-node keeps is the tarballs, not this tree.
+      - name: The locked dependency trees, at the address of the lockfiles that name them
+        id: modules
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            studio/runtime/node_modules
+            studio/vendor/dyad/node_modules
+          key: forge-modules-v1-${{ hashFiles('studio/runtime/package-lock.json', 'studio/vendor/dyad/package-lock.json') }}
+      - name: Install the locked browser compiler archive
+      # Always run, even when the unpacked trees are restored: stamp_shell.py reads the compiler's locked
+      # archive from npm's own store (npm pack --offline), and only this install puts it there.
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: npm ci --prefix runtime --ignore-scripts --no-audit --no-fund
+      # The bundle is what the renderer's own files compile to: its address is those files and the lockfile,
+      # nothing else. A change to the shell's stylesheet or scripts leaves it alone, and the build below is
+      # skipped for a bundle already compiled from these exact bytes. stamp_shell.py always runs: it stages
+      # the bundle beside the shell, which the closure check then verifies byte for byte.
+      - name: The renderer's bundle already compiled from these files, if there is one
+        id: bundle
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: studio/vendor/dyad/dist
+          key: forge-bundle-v1-${{ hashFiles('studio/vendor/dyad/**', '!studio/vendor/dyad/node_modules/**', '!studio/vendor/dyad/dist/**') }}
+      - name: The vendored renderer's dependencies
+        if: steps.forge-reuse.outputs.cache-hit != 'true' && steps.modules.outputs.cache-hit != 'true'
+        run: cd vendor/dyad && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --prefer-offline --ignore-scripts --engine-strict=false --force --no-audit --no-fund --loglevel=error
+      - name: The vendored renderer, built beside the shell as the homepage (no Electron, no src/pro)
+        if: steps.forge-reuse.outputs.cache-hit != 'true' && steps.bundle.outputs.cache-hit != 'true'
+        run: cd vendor/dyad && npx vite build --config vite.shell.config.mts --base /foundry/ --outDir dist --emptyOutDir
+      - name: The bundle staged beside the shell, with the scaffold and the editor's locked bytes
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: python3 scripts/stamp_shell.py
+      - name: The lane, which projects the page from the verified core and builds the wasm the page loads
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: ./scripts/lane.sh
+      - name: Independently verify staged editor bytes against the locked npm archive
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: python3 scripts/editor_assets.py --check && python3 scripts/compiler_assets.py --check
+      - name: Verify every staged renderer, scaffold and shell byte before acceptance
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: node tools/check_shell_closure.mjs
+      - name: Byte identity corpus and shell hash check
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: python3 tools/corpus.py
       - name: Every shell script parses the way the browser parses it
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         run: node tools/shell_parse.mjs
       - name: The build screen opens Dark, keeps its own choice, and leaves the home look alone
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         run: node tools/build_look.mjs
-      - name: The vendored renderer, built beside the shell as the homepage (no Electron, no src/pro)
-        run: cd vendor/dyad && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --prefer-offline --ignore-scripts --engine-strict=false --force --no-audit --no-fund --loglevel=error && npx vite build --config vite.shell.config.mts --base /foundry/ --outDir dist --emptyOutDir && python3 ../../scripts/stamp_shell.py
       - name: The host answers the renderer's own contracts (the renderer's node_modules are installed by now)
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         run: node tools/contract_shapes.mjs --check
       - name: The renderer preserves typed host refusals and recovers
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         run: node tools/renderer_boundary.mjs
-      - name: Every screen calls the kit's shadcn/ui components as Radix takes them (the build above refuses Base UI or a Dyad copy in the bundle)
+      - name: Every screen calls the kit's shadcn/ui components as Radix takes them (the build above refuses Base UI or an upstream copy in the bundle)
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         run: cd vendor/dyad && node hologram.typecheck.mjs
+      - name: The Experience gate, the stylesheet's hit area, durations and reduced-motion rule held to the kernel's answers
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: node tools/experience.mjs --check
+      - name: The Performance gate's static arm, the JS each route needs inside the kernel's budgets (FK-12, FK-15)
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        # Exact, from the build's chunk graph. The browser arm measures time, so it runs on the pull request that
+        # changes Forge (forge-perf.yml), not here, where a slower runner would stop the deploy for everyone.
+        run: node tools/perf_budget.mjs
       - name: The served site names nothing outside this repository
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
         run: node tools/self_contained.mjs shell
+      # The site carries no provider key. Keys written into warmup.json were public to every visitor (see
+      # PAGES-CONTAINMENT.md on containment/foundry-clean-pages-e7d); a visitor's own key, kept on their
+      # device, is the only key the page uses. A warmup.json anywhere in the site refuses the deploy.
+      - name: No provider key in the site
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          found=$(find shell -name warmup.json -print -quit)
+          if [[ -n $found ]]; then printf 'refused: %s would publish a provider key\n' "$found" >&2; exit 1; fi
+      - name: Keep Forge's site by its address, for the next run built from the same files
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        shell: bash
+        run: cp -r shell ../verified-forge
+      - name: Save Forge's site under its address
+        if: steps.forge-reuse.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: verified-forge
+          key: ${{ steps.forge-address.outputs.key }}
       - name: Keep Forge's site, deployed at the root
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: forge-site
-          path: studio/shell
+          path: ${{ steps.forge-reuse.outputs.cache-hit == 'true' && 'verified-forge' || 'studio/shell' }}
           include-hidden-files: true
           if-no-files-found: error
 
@@ -331,23 +442,152 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    # One publish at a time, and never an older revision over a newer one: builds now overlap, so a run
+    # whose commit is no longer main's head leaves the site to the run that built the head.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     steps:
+      - name: This revision is still the head of the branch it was pushed to
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+          head=$(git ls-remote "https://github.com/${{ github.repository }}" "${{ github.ref }}" | cut -f1)
+          if [[ $head == "${{ github.sha }}" ]]; then echo "publish=true" >>"$GITHUB_OUTPUT"; else echo "publish=false" >>"$GITHUB_OUTPUT"; echo "superseded by $head; that run publishes"; fi
       - name: Forge, at the root
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: forge-site
           path: out
       - name: The Prism page, under app/
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: prism-page
           path: out/app
-      - name: Configure Pages
-        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
-      - name: Upload the site
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
+      - name: The address-based reuse page's sources
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          path: src
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout: |
+            v2/reuse
+            v2/shell
+            v2/site
+            v2/hosted-check
+            v2/probe-payment/data
+            v2/probe-payment/src
+            v2/loop/answers
+            studio/shell/prism-code/src/blake3.mjs
+          sparse-checkout-cone-mode: false
+      - name: The address-based reuse page, under reuse/
+        if: steps.current.outputs.publish == 'true'
+        # Byte-for-byte copies in the repository's own layout, so the page's relative imports resolve
+        # unchanged: https://<owner>.github.io/foundry/reuse/v2/reuse/opfs.html. Forge's worker answers
+        # this path from the network, as it does any path it does not own.
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in v2/reuse/opfs.html v2/reuse/adapter/*.mjs v2/reuse/data/*.json v2/shell/interp.mjs studio/shell/prism-code/src/blake3.mjs; do
+            for g in src/$f; do rel=${g#src/}; mkdir -p "out/reuse/$(dirname "$rel")"; cp "$g" "out/reuse/$rel"; done
+          done
+          test -s out/reuse/v2/reuse/opfs.html
+          test -s out/reuse/v2/reuse/data/modules.json
+      - name: The Foundry v2 page, under v2/
+        if: steps.current.outputs.publish == 'true'
+        # v2/site/build.mjs copies the files the page serves, byte for byte, and reads the proof table
+        # from the specs. Its tests run first: a promise shown without its theorem, a link Forge's
+        # worker would swallow, or code past the first-load budget stops the deploy.
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test src/v2/site/test.mjs
+          node src/v2/site/build.mjs out/v2
+          test -s out/v2/index.html
+          test -s out/v2/site/apps.json
+      - name: Configure Pages
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+      - name: Upload the site
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          # v4 and later leave dotfiles out unless asked: the shell's closure lists .nojekyll, and the
+          # worker refuses to install a closure with a file missing, so without this no preview is served.
+          include-hidden-files: true
           path: out
       - name: Deploy
+        if: steps.current.outputs.publish == 'true'
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
+
+  live:
+    # After the deploy, not before it: the live site is checked as visitors get it (the worker installs,
+    # every app fixture streams, edits and undoes within its budgets); a miss reports, it never holds a
+    # deploy back. The same check runs on every pull request that changes Forge (forge-perf.yml).
+    name: every Prism app previews live within its budgets, on the deployed site
+    needs: [build, forge, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - name: Check out the deployed revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # What this check reads is the deployed site, and the deployed site is those two addresses: the page's
+      # and Forge's. The same two with the same browser have nothing new to show, so the check is kept by
+      # that address and a deploy of unchanged bytes costs nothing. A miss runs it in full.
+      - name: This exact site, in this exact browser, already previewed live
+        id: seen
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: studio/live-seen
+          key: live-seen-v1-playwright-1.56.1-${{ needs.build.outputs.address }}-${{ needs.forge.outputs.address }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.seen.outputs.cache-hit != 'true'
+        with:
+          node-version: "24"
+      - name: The browser, kept by its version
+        if: steps.seen.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.56.1-chromium-${{ runner.os }}-${{ runner.arch }}
+      - name: The browser
+        if: steps.seen.outputs.cache-hit != 'true'
+        run: |
+          npm install --no-audit --no-fund --global playwright@1.56.1
+          playwright install --with-deps chromium
+      - name: Every Prism app previews live within its budgets
+        if: steps.seen.outputs.cache-hit != 'true'
+        run: |
+          export PLAYWRIGHT_MODULE="$(npm root --global)/playwright/index.mjs"
+          bash scripts/live_e2e_all.sh "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" "$RUNNER_TEMP/live-e2e"
+      - name: Keep that these bytes previewed live
+        if: steps.seen.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p live-seen
+          echo "${{ needs.build.outputs.address }} ${{ needs.forge.outputs.address }}" >live-seen/address
+      - name: Keep that under its address
+        if: steps.seen.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: studio/live-seen
+          key: live-seen-v1-playwright-1.56.1-${{ needs.build.outputs.address }}-${{ needs.forge.outputs.address }}
+      - name: Keep what the check saw
+        if: always() && steps.seen.outputs.cache-hit != 'true' 
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: live-e2e
+          path: ${{ runner.temp }}/live-e2e
+          if-no-files-found: ignore

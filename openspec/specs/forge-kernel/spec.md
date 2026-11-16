@@ -284,6 +284,148 @@ The gate SHALL NOT answer `allow` for a preview fetch unless granted, because a 
 
 Verified: proved by Lean for every request (FK-09, theorem `previewNoNetworkWithoutGrantHolds`).
 
+### Requirement: Performance budgets
+
+A request `budget JOURNEY VALUE` asks whether a measured VALUE is within JOURNEY's budget. JOURNEY is a mobile journey measured in milliseconds (`cold` and `warm`, the largest contentful paint of a first and a repeat visit; `inp`, the slowest of three presses; `token`, Enter to the first streamed token), or a route whose first load is measured in gzip kilobytes of script (`home`, `chat`, `settings`, `details`, `apps`, `code`, `publish`). The app SHALL answer `within` or `over`. The budgets are this kernel's and nowhere else's: the Performance gate asks it.
+
+#### Scenario: A first visit inside its budget
+
+- **WHEN** the request is `budget cold 9300`
+- **THEN** the answer SHALL be `within`
+
+#### Scenario: The first load grown past its budget
+
+- **WHEN** the request is `budget home 905`
+- **THEN** the answer SHALL be `over`
+
+### Requirement: Never within when over
+
+The app SHALL NOT answer `within` when VALUE is over JOURNEY's budget, because a regression must never pass the gate.
+
+Verified: proved by Lean for every request (FK-12, theorem `budgetOverWithinHolds`).
+
+### Requirement: Never over when within
+
+The app SHALL NOT answer `over` when VALUE is within JOURNEY's budget, because a gate that refuses good builds is soon switched off.
+
+Verified: proved by Lean for every request (FK-13, theorem `budgetWithinOverHolds`).
+
+### Requirement: The mobile INP budget is at most 500 ms
+
+The budget for `inp` SHALL NOT be above 500 ms, the threshold past which a press is felt as slow.
+
+Verified: proved by Lean for every request (FK-14, theorem `inpBudgetBoundHolds`).
+
+### Requirement: No route below the first load
+
+No route's script budget SHALL be below `home`'s, because every route loads the first load as well.
+
+Verified: proved by Lean for every request (FK-15, theorem `routeBelowFirstLoadHolds`).
+
+### Requirement: Chat and preview stack on a narrow screen
+
+A request `layout WIDTH` asks how the chat screen lays out chat and preview at WIDTH CSS pixels. The app SHALL answer `tabs` under 768 and `split` from 768. Under 768 the two side by side were 95 px each at 390.
+
+Verified: proved by Lean for every request (FK-16, theorem `narrowSplitHolds`; FK-17, theorem `wideTabsHolds`).
+
+#### Scenario: A phone gets tabs
+
+- **WHEN** the request is `layout 390`
+- **THEN** the answer SHALL be `tabs`
+
+### Requirement: Motion
+
+A request `motion MS REDUCED` asks whether an animation of MS milliseconds may run, REDUCED being `yes` when the visitor asked for reduced motion. The app SHALL answer `allow` or `deny`: never when reduced motion is asked, and never longer than 200 ms.
+
+Verified: proved by Lean for every request (FK-18, theorem `reducedMotionHolds`; FK-19, theorem `longMotionHolds`).
+
+#### Scenario: A sheet slides in 200 ms
+
+- **WHEN** the request is `motion 200 no`
+- **THEN** the answer SHALL be `allow`
+
+#### Scenario: Reduced motion stops it
+
+- **WHEN** the request is `motion 200 yes`
+- **THEN** the answer SHALL be `deny`
+
+### Requirement: Tap targets
+
+A request `target PX` asks whether a control whose hit area is PX CSS pixels on its shorter side may be offered to a finger. The app SHALL answer `ok` or `small`, and SHALL NOT answer `ok` under 44.
+
+Verified: proved by Lean for every request (FK-20, theorem `smallTargetHolds`).
+
+#### Scenario: The kit's 32 px button needs its hit area
+
+- **WHEN** the request is `target 32`
+- **THEN** the answer SHALL be `small`
+
+### Requirement: This week
+
+A request `recent SECONDS` asks whether something SECONDS old counts as this week on the Apps page. The app SHALL answer `yes` or `no`, and SHALL NOT answer `yes` past 604800 (7 days).
+
+Verified: proved by Lean for every request (FK-21, theorem `oldRecentHolds`).
+
+#### Scenario: Eight days ago is not this week
+
+- **WHEN** the request is `recent 691200`
+- **THEN** the answer SHALL be `no`
+
+### Requirement: The build journey's budgets
+
+A request `budget JOURNEY VALUE` SHALL also answer for the journey of building an app, each measured in milliseconds: `preview` (Enter to the preview frame, 1999), `declaration` (Enter to the model's first declaration, 19999), `pixel` (first declaration to first pixel, 99), `update` (work per preview update, 15), `edit` (an edit to the screen, 33), `checked` (the module complete to its check on screen, 2999) and `built` (Enter to a checked app, 29999). The gates that measure these ask the kernel; none keeps a number of its own.
+
+The budget for `built` SHALL NOT be above 30000, and the budget for `edit` SHALL NOT be above 33, two frames at 60 Hz.
+
+Verified: proved by Lean for every request (FK-23, theorem `builtBudgetBoundHolds`; FK-24, theorem `editBudgetBoundHolds`).
+
+#### Scenario: A model that thinks for 99 seconds is over
+
+- **WHEN** the request is `budget declaration 99000`
+- **THEN** the answer SHALL be `over`
+
+#### Scenario: An edit on screen in two frames
+
+- **WHEN** the request is `budget edit 33`
+- **THEN** the answer SHALL be `within`
+
+### Requirement: Model thinking
+
+A request `think ATTEMPT` asks whether the model may reason before it writes, ATTEMPT being 0 for the first attempt at a turn and 1 or more for a repair. The app SHALL answer `allow` or `deny`, and SHALL NOT answer `allow` for ATTEMPT 0: a first attempt that thinks cannot meet the `declaration` budget, and a refused module is repaired with the checker's words, where thinking is allowed.
+
+Verified: proved by Lean for every request (FK-22, theorem `firstThinkHolds`).
+
+#### Scenario: A first attempt writes at once
+
+- **WHEN** the request is `think 0`
+- **THEN** the answer SHALL be `deny`
+
+#### Scenario: A repair may think
+
+- **WHEN** the request is `think 1`
+- **THEN** the answer SHALL be `allow`
+
+### Requirement: Where a telemetry record may go
+
+A request `telemetry EFFECT ASKED DEVICE` asks whether a build-telemetry record may flow into EFFECT: `store` (this browser's storage), `show` (the user's screen), `save` (a file the user saves), `fetch`, `infer` (a model), `serve` or `frame` (an app's preview). ASKED is `yes` when the user asked for this flow, DEVICE is `yes` when the model runs on the device. The app SHALL answer `allow` only for store, show, save when asked, and infer on the device, and `deny` for anything else.
+
+Verified: proved by Lean for every request (FK-25, theorem `telemetryEgressHolds`; FK-26, `telemetryUnaskedHolds`; FK-27, `telemetryOffDeviceHolds`).
+
+#### Scenario: A record never reaches the network
+
+- **WHEN** the request is `telemetry fetch yes yes`
+- **THEN** the answer SHALL be `deny`
+
+#### Scenario: A file is saved only when the user asks
+
+- **WHEN** the request is `telemetry save no no`
+- **THEN** the answer SHALL be `deny`
+
+#### Scenario: Records are kept on the device
+
+- **WHEN** the request is `telemetry store no no`
+- **THEN** the answer SHALL be `allow`
+
 ## Out of scope
 
 - It decides the build phase and whether an effect is admitted. It performs no effect: storage, network, inference and the screen belong to the runner that asks it.
@@ -305,10 +447,18 @@ Verified: proved by Lean for every request (FK-09, theorem `previewNoNetworkWith
 - `gate forge fetch no no no` gives `deny`
 - `gate preview fetch yes yes no` gives `allow`
 - `gate published serve yes yes no` gives `allow`
+- `budget cold 9300` gives `within`
+- `budget home 905` gives `over`
+- `layout 390` gives `tabs`
+- `layout 1440` gives `split`
+- `motion 200 no` gives `allow`
+- `motion 201 no` gives `deny`
+- `target 44` gives `ok`
+- `recent 691200` gives `no`
 
 ## What is proved and what is tested
 
-Lean proves each property marked proved above, for every request that decodes, with no exceptions and no sampling. The proofs are about `judge` and `gateAllows`, the functions the WebAssembly guest runs, because both come from the same model.
+Lean proves each property marked proved above, for every request that decodes, with no exceptions and no sampling. The proofs are about `judge`, `gateAllows`, `budgetWithin`, `layoutTabs`, `motionAllows`, `targetOk` and `recentYes`, the functions the WebAssembly guest runs, because both come from the same model.
 
 The parsing of requests is tested, not proved: the acceptance vectors in the app replay through the built guest, including malformed and oversized requests.
 

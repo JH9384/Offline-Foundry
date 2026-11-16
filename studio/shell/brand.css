@@ -26,6 +26,9 @@
   --brand: #e93b01;
   --brand-foreground: #ffffff;
   --destructive: #e7000b;
+  --success: #1f7a4d;
+  --success-foreground: #ffffff;
+  --muted-foreground-subtle: #8a857e;
   --border: #deddd4;
   --input: #deddd4;
   --ring: #a8a399;
@@ -42,6 +45,26 @@
   --sidebar-accent-foreground: #302b28;
   --sidebar-border: #deddd4;
   --sidebar-ring: #a8a399;
+  --warning: #bb370b;
+  --warning-foreground: #ffffff;
+  --destructive-foreground: #e7000b;
+  --info: #6b6660;
+  --link: #302b28;
+  --link-hover: #302b28;
+  --destructive-subtle: #fcdbdd;
+  --destructive-border: #f5999d;
+  --warning-subtle: #f5e3dd;
+  --warning-border: #e4af9d;
+  --success-subtle: #e0ece6;
+  --success-border: #a5cab8;
+  --info-subtle: #eae9e1;
+  --info-border: #deddd4;
+  --primary-hover: #474340;
+  --accent-pressed: #d2d1c8;
+  --border-solid: #deddd4;
+  --border-strong: #deddd4;
+  --scrim: #0a0a0a59;
+  --shadow: #0a0a0a2e;
   --radius: 10px;
   --font-sans: Geist, Inter, sans-serif;
   --font-display: Archivo, Geist, sans-serif;
@@ -53,7 +76,6 @@
   --background-darker: #eae9e1;
   --background-darkest: #e0dfd6;
   --docs-bg: #eae9e1;
-  --destructive-foreground: #e7000b;
 }
 .dark {
   --background: #151312;
@@ -73,6 +95,9 @@
   --brand: #e93b01;
   --brand-foreground: #ffffff;
   --destructive: #ff6467;
+  --success: #5fd18b;
+  --success-foreground: #171717;
+  --muted-foreground-subtle: #767472;
   --border: #ffffff1a;
   --input: #ffffff26;
   --ring: #757371;
@@ -89,6 +114,26 @@
   --sidebar-accent-foreground: #f6f5f4;
   --sidebar-border: #ffffff1a;
   --sidebar-ring: #757371;
+  --warning: #ec6032;
+  --warning-foreground: #0a0a0a;
+  --destructive-foreground: #ff6467;
+  --info: #a6a4a2;
+  --link: #f6f5f4;
+  --link-hover: #e7e5e3;
+  --destructive-subtle: #3e2626;
+  --destructive-border: #783939;
+  --warning-subtle: #3b261e;
+  --warning-border: #703724;
+  --success-subtle: #27352b;
+  --success-border: #386448;
+  --info-subtle: #282624;
+  --info-border: #353332;
+  --primary-hover: #ceccca;
+  --accent-pressed: #383735;
+  --border-solid: #2d2b2a;
+  --border-strong: #383635;
+  --scrim: #0a0a0a99;
+  --shadow: #0a0a0a8c;
   --radius: 10px;
   --font-sans: Geist, Inter, sans-serif;
   --font-display: Archivo, Geist, sans-serif;
@@ -100,15 +145,16 @@
   --background-darker: #151312;
   --background-darkest: #0a0a0a;
   --docs-bg: #282624;
-  --destructive-foreground: #ff6467;
 }
 
-/* Immersive: the photo, unfaded, behind a transparent main surface; glass on the panels that carry text. */
-:root[data-holo-immersive="on"] body { background: transparent; }
-:root[data-holo-immersive="on"] body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--holo-wallpaper, none) center / cover no-repeat, var(--background); }
+/* Immersive: the photo, unfaded, inside the workspace window (the inset panel, clipped to its corners), behind a
+   transparent main surface; glass on the panels that carry text. The sidebar and the margin round the workspace
+   are the page's solid ground, as in every other look. */
+:root[data-holo-immersive="on"] body { background: var(--sidebar); }
+:root[data-holo-immersive="on"] [data-slot="sidebar-inset"] { background: var(--holo-wallpaper, none) center / cover no-repeat, var(--background-darker); }
 :root[data-holo-immersive="on"], :root[data-holo-immersive="on"].dark {
   --background: rgb(21 19 18 / 0);
-  --sidebar: rgb(30 28 27 / 0.62);
+  --sidebar: rgb(30 28 27 / 1);
   --card: rgb(30 28 27 / 0.74);
   --popover: rgb(30 28 27 / 0.94);
   --muted: rgb(40 38 36 / 0.7);
@@ -118,7 +164,7 @@
   --border: #ffffff1a;
   --sidebar-border: #ffffff1a;
 }
-:root[data-holo-immersive="on"] [data-slot="sidebar-inner"], :root[data-holo-immersive="on"] [data-slot="sidebar"] > div, :root[data-holo-immersive="on"] .popover { -webkit-backdrop-filter: blur(24px) saturate(1.2); backdrop-filter: blur(24px) saturate(1.2); }
+:root[data-holo-immersive="on"] .popover { -webkit-backdrop-filter: blur(24px) saturate(1.2); backdrop-filter: blur(24px) saturate(1.2); }
 
 /* Type: the display face for titles, the interface face for everything else, the mono face for addresses; nothing under 14px. */
 body { font-family: var(--font-sans); }

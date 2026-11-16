@@ -18,11 +18,41 @@ The three honesty levels (R2):
 `cargo xtask audit-limits` fails if any code path returns an error the
 model does not sanction.
 
+## app-covers
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `AC-01` | `build` | App covers are captured only from the asked preview, never from a blank frame, and card words are stored only within the sentence and tag rules |
+
 ## application-authority
 
 | ID | Level | Statement |
 | --- | --- | --- |
 | `FA-01` | `build` | The application authority model rejects missing or competing product authorities and unchecked external boundaries |
+
+## application-main-integration
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-59` | `build` | Current-main experience rules and renderer improvements coexist with complete application protocols and verified private offline closure |
+
+## application-shape-authority
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-84` | `build` | Application shape edits and transitions retain one source-bound authority and cannot obtain proof standing from authored files |
+
+## atomic-browser-settings
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-63` | `build` | Browser settings updates serialize their read and write and acknowledge only transaction completion |
+
+## atomic-chat-preferences
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-77` | `build` | Chat title mode and model preferences commit atomically through their imported schema without losing concurrent transcript updates |
 
 ## atomic-generation-patch
 
@@ -60,11 +90,95 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-27` | `build` | Portable builds fetch only bounded approved-origin modules and retain exact module-byte receipts |
 
+## bounded-kernel-execution
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-60` | `build` | Fresh guest instances execute in bounded browser worker lifetimes without exhausting compiler memory reservations |
+
+## browser-chat-mode-controls
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-80` | `build` | Canonical Build Ask and Plan controls persist scoped preferences and initialize chats with the captured supported mode |
+
+## browser-telemetry-isolation
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-30` | `build` | The browser renderer never initializes vendor telemetry and cannot restore collection through stored settings |
+
+## browser-window-coordination
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-57` | `build` | Browser window registration focus visibility interests and invalidation recovery replace empty acknowledgements with bounded origin coordination |
+
+## canonical-build-closure
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-38` | `build` | Decision builds require the canonical module and generated runtime to match the captured specification |
+
+## canonical-generation-ownership
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-37` | `build` | Generic generation batches cannot overwrite canonical decision sources or their generated rule runtime |
+
+## canonical-model-edits
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-36` | `build` | Direct canonical edits atomically update the decision source, projections and source-bound rules state |
+
+## canonical-module-boundary
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-35` | `build` | The canonical decision-module reader refuses ambiguous or discarded semantics before authoring |
+
+## canonical-version-history
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-52` | `build` | Version history preserves canonical content identity through renderer aliases and atomically commits metadata with verified snapshot differences |
+
 ## capability-availability
 
 | ID | Level | Statement |
 | --- | --- | --- |
 | `FA-15` | `build` | Unimplemented browser queries return typed unsupported errors rather than fabricated resource status or empty findings |
+
+## chat-model-picker-scope
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-79` | `build` | The model picker resolves mounted chat routes and persists the active chat selection independently of Home defaults |
+
+## chat-owner-recovery
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-74` | `build` | Surviving chat windows retain execution-lock interest until closed-owner recovery pauses the exact durable head |
+
+## chat-provider-routing
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-81` | `build` | Chat model routing preserves the captured provider and exact model identity without silently replacing cloud selections with device inference |
+
+## chat-queue-model
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-50` | `build` | Bounded chat queues preserve unique pending work and reject stale revisions owners and stop policies through guest transitions |
+
+## command-ownership-registry
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-43` | `build` | Every imported and browser command is classified by canonical ownership and dispatch refuses missing or changed bindings |
 
 ## composition-host-runtime
 
@@ -84,11 +198,59 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-24` | `build` | Current live editing and reword flows retain source-bound commits and the complete compiled kernel protocols |
 
+## durable-build-work
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-46` | `build` | Portable builds execute under guest-admitted durable ownership and retain source-bound completed artifacts or resumable reservations |
+
+## durable-chat-queue
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-51` | `build` | Actual chat queue commands atomically bind guest transitions to durable payloads and exclusive recoverable execution |
+
+## durable-event-delivery
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-40` | `build` | Guest-admitted events commit to a source-bound durable queue and remain pending until ordered acknowledgement |
+
+## durable-prompt-library
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-61` | `build` | Prompt library creation updates deletion and listing persist atomically with bounded validated records and unique slugs |
+
+## durable-theme-library
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-67` | `build` | Custom generation themes and app selection persist atomically with exact imported renderer contracts |
+
+## durable-version-preview
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-54` | `build` | Version preview ownership binds guest transitions to atomic source restoration and exclusive recoverable browser sessions |
+
+## editor-load-lifecycle
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-66` | `build` | Editor initialization preserves cancellation ownership and reports load failures without detached rejections |
+
 ## event-admission
 
 | ID | Level | Statement |
 | --- | --- | --- |
 | `FA-19` | `build` | Typed event admission binds exact feature routes to current composition policy, generation, sequence and bounded payloads |
+
+## event-wire-protocol
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-33` | `build` | Typed event admission crosses a bounded byte protocol executed by the generated Prism guest |
 
 ## exact-representation
 
@@ -117,6 +279,28 @@ model does not sanction.
 | `FK-09` | `build` | The gate never lets a preview fetch without a grant |
 | `FK-10` | `build` | The app always answers proved when event is reword and phase is proved |
 | `FK-11` | `build` | The app always answers published when event is reword and phase is published |
+| `FK-12` | `build` | The kernel never answers within when a journey's measure is over its budget |
+| `FK-13` | `build` | The kernel never answers over when a journey's measure is within its budget |
+| `FK-14` | `build` | The mobile INP budget is never above 500 ms |
+| `FK-15` | `build` | No route's JS budget is below the first load's |
+| `FK-16` | `build` | The kernel never answers split when the width is under 768 px |
+| `FK-17` | `build` | The kernel never answers tabs when the width is 768 px or more |
+| `FK-18` | `build` | The kernel never allows motion when reduced motion is asked |
+| `FK-19` | `build` | The kernel never allows motion longer than 200 ms |
+| `FK-20` | `build` | The kernel never answers ok for a tap target under 44 px |
+| `FK-21` | `build` | The kernel never counts as this week what is older than 7 days |
+| `FK-22` | `build` | The kernel never allows model thinking on a first attempt |
+| `FK-23` | `build` | The budget from Enter to a checked app is never above 30 s |
+| `FK-24` | `build` | The budget from an edit to the screen is never above two frames, 33 ms |
+| `FK-25` | `build` | The kernel never lets a telemetry record reach the network or an app's frame |
+| `FK-26` | `build` | The kernel never lets a telemetry record be saved unless the user asked |
+| `FK-27` | `build` | The kernel never lets a telemetry record reach a model that is not on the device |
+
+## front-end-trace
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `PM-02` | `build` | Every IPC call a Foundry screen makes reaches a back-end feature the screen requires, every register ID and registry feature is owned by exactly one back-end feature, and every back-end feature, screen and stakeholder is reached by a journey |
 
 ## host-input-boundary
 
@@ -130,11 +314,114 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-03` | `build` | The browser host refuses unsupported channels and invalid contracted responses with typed errors |
 
-## inference-effect-boundary
+## in-tab-kernel-verdict
 
 | ID | Level | Statement |
 | --- | --- | --- |
-| `FA-11` | `build` | Cloud inference bounds requests and streamed responses and refuses cancellation, malformed data and provider failures explicitly |
+| `FA-86` | `build` | A proof verdict is decided by the Prism guest from addresses the tab derived and the result of a kernel run in the tab, never from a server reply |
+
+## initial-project-theme
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-71` | `build` | New projects inherit the validated selected generation theme in the project creation transaction |
+
+## kernel-owner-handoff
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-75` | `build` | Service-worker guest execution reselects verified document owners lost during navigation within one bounded deadline |
+
+## kernel-owner-readiness
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-73` | `build` | Service-worker guest requests await an initializing matching document owner without accepting unverified executables |
+
+## large-module-presentation
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-76` | `build` | Presentation validation retains complete large canonical modules without promoting them into the bounded proof profile |
+
+## live-lexlean
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `LL-01` | `build` | Every guarantee holds on every request in the bounds when every local obligation passes |
+| `LL-02` | `build` | Every guarantee of the Verdant Resonance fixture holds on every request in its bounds |
+
+## live-main-integration
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-69` | `build` | Current live module generation and every-app replay integrate without losing canonical ownership or consent |
+
+## local-browser-compiler
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-32` | `build` | The browser compiler loads locked verified local bytes and recovers after failed initialization |
+
+## local-editor-closure
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-31` | `build` | The editor loads only from integrity-checked locked package bytes inside the active shell closure |
+
+## message-linked-restoration
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-55` | `build` | Message-linked restoration atomically binds verified source preview to exact chat truncation or a history-preserving fork |
+
+## module-presentation-ownership
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-72` | `build` | Generated modules retain presentation only when the canonical application interface remains compatible |
+
+## portable-build-permission
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-44` | `build` | Portable builds require revocable source-bound consent before package retrieval or generated-code execution |
+
+## preview-auto-start
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-82` | `build` | Automatic preview startup respects existing app state so remounts cannot repeat declined execution while explicit retry remains available |
+
+## preview-permissions
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-39` | `build` | Networked previews require explicit source-bound permission with persistent revocation controls |
+
+## prism-id
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-88` | `build` | A session from Foundry's frame verifies by stitch's Prism id only for the app, the active device and the time it was signed for, and a removed device or another id signs none |
+
+## prism-r4-route
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-87` | `build` | A chat turn is answered only by Foundry's own model in Prism, and Prism R4 refuses every route to another model before the request leaves the tab |
+
+## private-workspace
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-91` | `build` | A private workspace opens only for the Prism id that owns it, on a device with a live session and its current boundary key; a record is read only when authentic and in place and stored only sealed; the workspace kept before an id moves in once; and Foundry's Prism kernel names every refusal |
+
+## product-model
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `PM-01` | `build` | Foundry is one Prism model whose architecture, design, features, security, quality and compliance facets are projected from app/product.json and the kernel, and whose quality thresholds are the kernel's own terms |
 
 ## proposal-admission
 
@@ -142,29 +429,53 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-18` | `build` | Router proposals resolve exact registered feature versions and cannot bypass ambiguity, registry revision or composition admission |
 
-## provider-key-validation
-
-| ID | Level | Statement |
-| --- | --- | --- |
-| `FA-16` | `build` | Provider credential validation rejects unsupported providers and requires a bounded authenticated response before success |
-
-## publication-cancellation
-
-| ID | Level | Statement |
-| --- | --- | --- |
-| `FA-04` | `build` | Cancelling publication prevents subsequent browser requests and bounded requests return typed failures |
-
 ## publication-identity
 
 | ID | Level | Statement |
 | --- | --- | --- |
 | `FA-05` | `build` | Publication requires exact canonical archive identity and complete nonempty runtime acceptance |
 
+## read-only-chat-execution
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-78` | `build` | Ask and Plan turns preserve source proof and preview state while retaining consented inference and transcript completion |
+
+## renderer-stylesheet-identity
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-62` | `build` | Generated renderer stylesheet identity prevents duplicate blocking CSS retrieval |
+
+## rule-judge
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-90` | `build` | A published app's answer is decided by the rule judge in Foundry's Prism kernel: the first rule whose conditions all hold decides, otherwise decides when none does, and a request outside the fields' bounds is refused |
+
 ## rules-source-binding
 
 | ID | Level | Statement |
 | --- | --- | --- |
 | `FA-09` | `build` | Rule status and asynchronous proof or publication completion remain bound to the current rule source |
+
+## semantic-application-discovery
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-49` | `build` | Finite language discovery creates only guest-admitted catalog applications after source-bound explicit review |
+
+## semantic-routing-model
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-48` | `build` | Typed semantic proposals rank explicit concept relations and close dependencies while Prism independently admits ambiguity constraints and effects |
+
+## sidebar-tool-access
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-68` | `build` | Foundry tools remain reachable without covering renderer controls across responsive sidebar lifetimes |
 
 ## snapshot-bound-builds
 
@@ -178,11 +489,104 @@ model does not sanction.
 | --- | --- | --- |
 | `FA-08` | `build` | Snapshot restoration validates every referenced object before atomically replacing files and the main reference |
 
+## source-bound-gallery
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-70` | `build` | Gallery media and descriptions publish atomically only for their captured current project source |
+
+## stateful-application-journeys
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-42` | `build` | Stored gallery and garden applications execute canonical guest transitions with atomic recovery and explicit audio consent |
+
+## stateful-application-model
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-41` | `build` | The generated interaction profile admits bounded state transitions and projects consent-sensitive visual audio and motion outputs |
+
 ## storage-commit-boundary
 
 | ID | Level | Statement |
 | --- | --- | --- |
 | `FA-20` | `build` | Host storage requests report success only after transaction completion and refuse aborted or invalid operations |
+
+## studio-pr-concurrency
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-56` | `build` | Only superseded pull-request Studio runs are cancelled while every main and release run retains its full acceptance boundary |
+
+## telemetry
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `TL-01` | `build` | A journey's first moment, once recorded, never moves |
+| `TL-02` | `build` | A journey's end is never recorded before its start, so no KPI span is negative |
+| `TL-03` | `build` | The worst preview update is never below an update the turn made |
+| `TL-04` | `build` | The worst preview update never falls during a turn |
+| `TL-05` | `build` | An edit's time to screen is counted only from an edit that started |
+| `TL-06` | `build` | The worst edit to screen never falls during a turn |
+| `TL-07` | `build` | A turn within budget is never counted as over |
+| `TL-08` | `build` | A turn over budget is always counted as over |
+| `TL-09` | `build` | The loop never suggests anything without a turn over budget |
+| `TL-10` | `build` | The loop never suggests anything unless most observed turns are over budget |
+| `TL-11` | `build` | The loop never suggests anything for a KPI with no budget |
+| `TL-12` | `build` | A budgeted KPI over budget in most turns always gets a suggestion |
+| `TL-13` | `build` | A time under the kernel's threshold is never judged over |
+| `TL-14` | `build` | A time at or over the kernel's threshold is never judged within |
+| `TL-15` | `build` | The loop never suggests switching to the model already in use |
+| `TL-16` | `build` | The loop never suggests a model switch on fewer than five reads of either model |
+| `TL-17` | `build` | The loop never suggests a model switch while Enter to Checked is within budget |
+| `TL-18` | `build` | Only the user's approval adopts a suggestion |
+| `TL-19` | `build` | Approving with no suggestion pending adopts nothing |
+| `TL-20` | `build` | An adopted change is never called an improvement unless the KPI got faster |
+| `TL-21` | `build` | The device never keeps more than 512 turns |
+| `TL-22` | `build` | An app the kernel refused anything is never shown as all clear |
+| `TL-23` | `build` | An app is never shown as reaching a site it was never allowed to reach |
+| `TL-24` | `build` | A refused site is never shown as only allowed |
+| `TL-25` | `build` | A refusal is never counted as allowed, and an allowance never as a refusal |
+| `TL-26` | `build` | Every allowance and every refusal is counted once |
+| `TL-27` | `build` | The time an app or a site was last seen never moves back |
+| `TL-28` | `build` | The device never keeps more than 256 apps |
+
+## theater
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-92` | `build` | Theater, right after Library in the sidebar, plays Prism apps one after another on a stage beside an up next rail, under the build preview's own sandbox, with the floor's catalogue, covers and bookmarks, and its look is the experience spec's five Theater statements |
+
+## verified-host-bundle
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-64` | `build` | The browser host loads one reproducible static bundle with preserved module URL identities |
+
+## verified-project-import
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-28` | `build` | Imports validate bounded snapshot closure and discard authority-bearing metadata before atomic insertion |
+
+## verified-shell-cache
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-29` | `build` | Worker activation requires bounded independently verified shell bytes including renderer and scaffold closure |
+
+## verified-working-tree
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-58` | `build` | Working-tree queries compare atomically captured source with verified snapshot bytes and refuse corrupt or over-budget differences |
+
+## version-preview-model
+
+| ID | Level | Statement |
+| --- | --- | --- |
+| `FA-53` | `build` | Version preview transitions preserve exact origin identity and reject stale or conflicting ownership through the Prism guest |
 
 ## work-ownership
 

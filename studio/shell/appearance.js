@@ -31,8 +31,69 @@ const BUILT_IN = [
   {"id":"0wFwSZn6I-I","image":"https://images.unsplash.com/photo-1709625862266-014ef072fd93?ixid=M3w4OTc5NTl8MHwxfGFsbHx8fHx8fHx8fDE3OTQwNTIyMTJ8&ixlib=rb-4.1.0","alt":"Dark curved forms in soft light","name":"Pawel Czerwinski","user":"pawel_czerwinski"},
 ];
 const isBuiltIn = (photo) => BUILT_IN.some((p) => p.id === photo.id);
-const fullOf = (photo) => (isBuiltIn(photo) ? `${FRAME_HOST}backdrops/${photo.id}.jpg` : `${PROXY}image?${new URLSearchParams({ src: photo.image, w: "2400" })}`);
-const thumbOf = (photo) => (isBuiltIn(photo) ? `${FRAME_HOST}backdrops/${photo.id}-thumb.jpg` : `${PROXY}image?${new URLSearchParams({ src: photo.image, w: "240", h: "150" })}`);
+// Every photo is shown at this screen's own pixels, the most it can display: the worker asks Unsplash for the
+// photo at that width (never past the original's own), at high quality, in the smallest format this browser
+// decodes. A built-in photo's frame file is only its quick first paint; a sharp copy replaces it once decoded.
+const SIDES = [1280, 1920, 2560, 3200, 3840, 5120]; // a few widths, so screens share the worker's cached copies
+const ASPECT = 1.5; // the photos are about 3:2; a tall screen covered by one crops its sides, so needs it wider
+function screenSide() {
+  const sc = globalThis.screen || { width: 1920, height: 1080 };
+  const dpr = Math.min(Math.max(globalThis.devicePixelRatio || 1, 1), 4);
+  const want = Math.max(sc.width, sc.height * ASPECT) * dpr;
+  return SIDES.find((w) => w >= want) || SIDES[SIDES.length - 1];
+}
+// AVIF where the browser decodes it (about half of WebP's bytes at the same look), else WebP. The answer is
+// kept, so every later visit knows it before anything loads.
+const FORMAT_KEY = "holo.image.format";
+const knownFormat = (() => { try { return localStorage.getItem(FORMAT_KEY); } catch (e) { return "webp"; } })();
+let format = knownFormat || "webp";
+const AVIF_PROBE = "data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADrbWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAAAAAAAOcGl0bQAAAAAAAQAAAB5pbG9jAAAAAEQAAAEAAQAAAAEAAAETAAAAIQAAAChpaW5mAAAAAAABAAAAGmluZmUCAAAAAAEAAGF2MDFDb2xvcgAAAABqaXBycAAAAEtpcGNvAAAAFGlzcGUAAAAAAAAAAQAAAAEAAAAQcGl4aQAAAAADCAgIAAAADGF2MUOBAAwAAAAAE2NvbHJuY2x4AAEADQAGgAAAABdpcG1hAAAAAAAAAAEAAQQBAoMEAAAAKW1kYXQSAAoIGAAGiAhoNCAyExlHh4Yhh5555oAAAJBAyRxhQr4=";
+// A one pixel AVIF decodes at once from memory; the first visit's sharp copy waits for the answer.
+const formatReady = knownFormat || typeof Image !== "function" ? Promise.resolve() : (() => {
+  const probe = new Image();
+  probe.src = AVIF_PROBE;
+  return probe.decode().then(() => "avif", () => "webp").then((found) => {
+    format = found;
+    try { localStorage.setItem(FORMAT_KEY, found); } catch (e) {}
+  });
+})();
+const proxied = (photo, size) => `${PROXY}image?${new URLSearchParams({ src: photo.image, ...size, fm: format })}`;
+const sharpOf = (photo) => proxied(photo, { w: String(screenSide()), q: "85" });
+// The frame's built-in file paints at once; a found photo's quickest first paint is its tile, already loaded.
+const quickOf = (photo) => (isBuiltIn(photo) ? `${FRAME_HOST}backdrops/${photo.id}.jpg` : thumbOf(photo));
+// Tiles: twice the frame's 240 by 150, sharp on a phone's 3x screen; under it the built-in tile's frame file,
+// shown until the sharp one arrives (two background layers, no script).
+const thumbOf = (photo) => proxied(photo, { w: "480", h: "300", q: "75" });
+const tileOf = (photo) => [thumbOf(photo), ...(isBuiltIn(photo) ? [`${FRAME_HOST}backdrops/${photo.id}-thumb.jpg`] : [])].map((u) => `url(${JSON.stringify(u)})`).join(", ");
+// Decoded sharp copies, by address: one asked for again (hovered, then chosen) is not fetched twice.
+const decoded = new Map();
+function warm(src) {
+  if (!decoded.has(src)) {
+    if (typeof Image !== "function") return Promise.reject(new Error("no images here"));
+    const img = new Image();
+    img.decoding = "async";
+    img.src = src;
+    const done = img.decode().then(() => { done.ready = true; return src; }, (e) => { decoded.delete(src); throw e; });
+    decoded.set(src, done);
+  }
+  return decoded.get(src);
+}
+const widthOf = (src) => { const m = /[?&]w=(\d+)/.exec(src || ""); return m && String(src).startsWith(PROXY) && !/[?&]h=/.test(src) ? Number(m[1]) : 0; };
+// The photo behind the page, made sharp: kept as the wallpaper once decoded, so the pre paint script shows it
+// from the browser's cache on every later load. A copy already as wide as this screen needs is kept.
+function sharpen() { formatReady.then(sharpenNow); }
+function sharpenNow() {
+  const s = readTheme();
+  if (!s.immersive || !s.photo || !s.photo.image || isBuiltIn(s.photo)) return; // a built-in photo stays the frame's own file: no worker on load
+  const src = sharpOf(s.photo);
+  if (s.wallpaper === src || widthOf(s.wallpaper) >= screenSide()) return;
+  warm(src).then(() => {
+    const now = readJson(KEY) || {};
+    if (!now.photo || now.photo.id !== s.photo.id) return; // another photo was chosen meanwhile
+    try { localStorage.setItem(KEY, JSON.stringify({ ...now, wallpaper: src })); } catch (e) {}
+    if (readTheme().immersive) root.style.setProperty("--holo-wallpaper", `url(${JSON.stringify(src)})`);
+  }, () => {});
+}
 
 // The build screen (the renderer's chat route: chat beside the live preview) keeps its own look, Dark until
 // one is chosen there, kept under BUILD_KEY; every other screen keeps the home look under KEY. The photo,
@@ -66,6 +127,7 @@ function showTheme(s) {
   if (!root.classList.contains(palette)) { root.classList.remove("light", "dark"); root.classList.add(palette); }
   try { localStorage.setItem("theme", palette); } catch (e) {}
   paint(s);
+  sharpen();
 }
 
 // ---- the panel
@@ -94,9 +156,12 @@ function grid(photos) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "photo"; b.title = photo.alt || photo.name; b.setAttribute("aria-label", photo.alt || photo.name);
     b.style.backgroundColor = photo.color || "";
-    b.style.backgroundImage = `url(${JSON.stringify(thumbOf(photo))})`;
+    b.style.backgroundImage = tileOf(photo);
     b.setAttribute("aria-pressed", String(!!s.immersive && s.photo && s.photo.id === photo.id));
     b.onclick = () => choose(photo);
+    // Pointing at a photo, or touching it, starts its sharp copy, so it is often ready by the click.
+    const ready = () => { warm(sharpOf(photo)).catch(() => {}); };
+    b.addEventListener("pointerenter", ready); b.addEventListener("pointerdown", ready); b.addEventListener("focus", ready);
     $("photos").append(b);
   }
 }
@@ -111,7 +176,10 @@ function choose(photo) {
     fetch(`${PROXY}use?id=${encodeURIComponent(photo.id)}`, { method: "POST" }).catch(() => {});
   }
   const recent = isBuiltIn(photo) ? s.recent || [] : [photo, ...(s.recent || []).filter((p) => p.id !== photo.id)].slice(0, 3);
-  applyTheme({ ...s, palette: "dark", immersive: true, wallpaper: fullOf(photo), photo, recent });
+  // The sharp copy at once when it is already decoded; otherwise the quick one now and the sharp one after.
+  const sharp = sharpOf(photo);
+  const ready = decoded.has(sharp) && decoded.get(sharp).ready;
+  applyTheme({ ...s, palette: "dark", immersive: true, wallpaper: ready ? sharp : quickOf(photo), photo, recent });
 }
 function paint(s) {
   const mode = s.immersive ? "immersive" : s.palette === "light" ? "light" : "dark";
@@ -168,6 +236,9 @@ document.addEventListener("click", (e) => { if (!$("popover").contains(e.target)
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("popover").hidden) close(); });
 for (const b of document.querySelectorAll("#popover .mode")) b.onclick = () => setMode(b.dataset.mode);
 showTheme(readTheme());
+// Moved to a sharper screen (a window dragged to a 4K display): the photo follows.
+let resized = null;
+addEventListener("resize", () => { clearTimeout(resized); resized = setTimeout(sharpen, 400); });
 
 // The renderer moves between screens without loading a page (pushState, replaceState, back and forward), so
 // the look follows the route: entering or leaving the build screen shows that screen's look.
@@ -191,3 +262,34 @@ new MutationObserver(() => {
   if (!rtheme || rtheme === (s.palette === "light" ? "light" : "dark")) return;
   applyTheme({ ...s, palette: rtheme, immersive: rtheme === "light" ? false : s.immersive });
 }).observe(root, { attributes: true, attributeFilter: ["class"] });
+
+// Full screen: a second round button, to the right of the sun. It is drawn only where the browser lets a page
+// fill the screen (desktop browsers and Android; Safari on iPhone does not), and its icon and label follow the
+// state, however full screen was entered or left (the button, Escape, or the browser's own control).
+const FULL_ON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>';
+const FULL_OFF = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"></path></svg>';
+const fullElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+if (document.fullscreenEnabled || document.webkitFullscreenEnabled) {
+  const full = document.createElement("button");
+  full.type = "button"; full.id = "fullscreen"; full.className = "appearance fullscreen";
+  const show = () => {
+    const on = !!fullElement();
+    full.innerHTML = on ? FULL_OFF : FULL_ON;
+    full.setAttribute("aria-label", on ? "Exit full screen" : "Full screen");
+    full.title = on ? "Exit full screen" : "Full screen";
+    full.setAttribute("aria-pressed", String(on));
+  };
+  full.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      if (fullElement()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else await (root.requestFullscreen || root.webkitRequestFullscreen).call(root, { navigationUI: "hide" });
+    } catch { /* refused by the browser (for example inside a frame); the button keeps its state */ }
+    show();
+  };
+  document.addEventListener("fullscreenchange", show);
+  document.addEventListener("webkitfullscreenchange", show);
+  show();
+  $("appearance").after(full);
+  root.classList.add("has-fullscreen");
+}

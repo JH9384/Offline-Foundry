@@ -1,0 +1,205 @@
+\begin{lexlean}{RuleJudge}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\importmodule{WorkProtocol}
+\importmodule{CompositionProtocol}
+\title{Boolean}
+\begin{semanticmodule}
+definition{
+  name: ruleOpHolds,
+  parameters: [op : Nat, bound : Nat, value : Nat],
+  result: Bool,
+  body: (if (op =? 0) then (value <? bound) else (if (op =? 1) then (value <=? bound) else (if (op =? 2) then (bound <? value) else (if (op =? 3) then (bound <=? value) else (if (op =? 4) then (value =? bound) else (not (value =? bound)))))))
+}
+
+definition{
+  name: ruleCondsHold,
+  parameters: [words : (List Nat), at : Nat, count : Nat, base : Nat],
+  result: Bool,
+  body: (match count
+    | Nat.zero => true
+    | Nat.succ less => (if (ruleOpHolds (WorkProtocol::word words (at + 1)) (WorkProtocol::word words (at + 2)) (WorkProtocol::word words (base + (WorkProtocol::word words at)))) then (ruleCondsHold words (at + 3) less base) else false)),
+  recursive_argument: count
+}
+
+definition{
+  name: ruleCondFieldsKnown,
+  parameters: [words : (List Nat), at : Nat, count : Nat, fields : Nat],
+  result: Bool,
+  body: (match count
+    | Nat.zero => true
+    | Nat.succ less => (if ((WorkProtocol::word words at) <? fields) then (ruleCondFieldsKnown words (at + 3) less fields) else false)),
+  recursive_argument: count
+}
+
+definition{
+  name: ruleSpan,
+  parameters: [words : (List Nat), at : Nat],
+  result: Nat,
+  body: ((at + 2) + (prim multiply 3 (WorkProtocol::word words at) : Nat))
+}
+
+definition{
+  name: rulesWellFormed,
+  parameters: [words : (List Nat), at : Nat, count : Nat, fields : Nat, size : Nat],
+  result: Bool,
+  body: (match count
+    | Nat.zero => true
+    | Nat.succ less => (if ((ruleSpan words at) <=? size) then (if (ruleCondFieldsKnown words (at + 2) (WorkProtocol::word words at) fields) then (rulesWellFormed words (ruleSpan words at) less fields size) else false) else false)),
+  recursive_argument: count
+}
+
+definition{
+  name: rulesEnd,
+  parameters: [words : (List Nat), at : Nat, count : Nat],
+  result: Nat,
+  body: (match count | Nat.zero => at | Nat.succ less => (rulesEnd words (ruleSpan words at) less)),
+  recursive_argument: count
+}
+
+definition{
+  name: ruleOutcome,
+  parameters: [words : (List Nat), at : Nat, count : Nat, otherwise : Nat, base : Nat],
+  result: Nat,
+  body: (match count
+    | Nat.zero => otherwise
+    | Nat.succ less => (if (ruleCondsHold words (at + 2) (WorkProtocol::word words at) base) then (WorkProtocol::word words (at + 1)) else (ruleOutcome words (ruleSpan words at) less otherwise base))),
+  recursive_argument: count
+}
+
+definition{
+  name: ruleDeciding,
+  parameters: [words : (List Nat), at : Nat, count : Nat, base : Nat],
+  result: Nat,
+  body: (match count
+    | Nat.zero => 0
+    | Nat.succ less => (if (ruleCondsHold words (at + 2) (WorkProtocol::word words at) base) then 0 else ((ruleDeciding words (ruleSpan words at) less base) + 1))),
+  recursive_argument: count
+}
+
+definition{
+  name: ruleInBounds,
+  parameters: [words : (List Nat), field : Nat, count : Nat, base : Nat],
+  result: Bool,
+  body: (match count
+    | Nat.zero => true
+    | Nat.succ less => (if (((WorkProtocol::word words (2 + (prim multiply 2 field : Nat))) <=? (WorkProtocol::word words (base + field))) && ((WorkProtocol::word words (base + field)) <=? (WorkProtocol::word words (3 + (prim multiply 2 field : Nat))))) then (ruleInBounds words (field + 1) less base) else false)),
+  recursive_argument: count
+}
+
+definition{
+  name: ruleEncode,
+  parameters: [outcome : Nat, deciding : Nat],
+  result: Bytes,
+  body: (prim append 0x6f6b20 (prim append (WorkProtocol::hexWord 1) (prim append (WorkProtocol::hexWord outcome) (WorkProtocol::hexWord deciding) : Bytes) : Bytes) : Bytes)
+}
+
+definition{
+  name: ruleDecide,
+  parameters: [words : (List Nat), fields : Nat, start : Nat, count : Nat, otherwise : Nat],
+  result: Bytes,
+  body: (let base : Nat := (rulesEnd words start count); (if ((base + fields) =? (prim length words : Nat)) then (if (ruleInBounds words 0 fields base) then (ruleEncode (ruleOutcome words start count otherwise base) (ruleDeciding words start count base)) else 0x6f75744f66426f756e6473) else 0x6d616c666f726d656452756c6552657175657374))
+}
+
+definition{
+  name: ruleAnswer,
+  parameters: [words : (List Nat)],
+  result: Bytes,
+  body: (let fields : Nat := (WorkProtocol::word words 1); (if (((WorkProtocol::word words 0) =? 1) && (((4 + (prim multiply 2 fields : Nat)) <=? (prim length words : Nat)) && (rulesWellFormed words (4 + (prim multiply 2 fields : Nat)) (WorkProtocol::word words (3 + (prim multiply 2 fields : Nat))) fields (prim length words : Nat)))) then (ruleDecide words fields (4 + (prim multiply 2 fields : Nat)) (WorkProtocol::word words (3 + (prim multiply 2 fields : Nat))) (WorkProtocol::word words (2 + (prim multiply 2 fields : Nat)))) else 0x6d616c666f726d656452756c6552657175657374))
+}
+
+definition{
+  name: dispatchRule,
+  parameters: [bytes : Bytes],
+  result: Bytes,
+  body: (if (8192 <? (prim length bytes : Nat)) then 0x72756c6552657175657374546f6f4c61726765 else (let decoded : CompositionProtocol::DecodedWords := (CompositionProtocol::decodeWords bytes 0 1024 (nil Nat)); (if (project decoded valid) then (ruleAnswer (project decoded value)) else 0x6d616c666f726d656452756c6552657175657374))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: ruleWireBoundary,
+  parameters: [],
+  result: String,
+  body: "Requests use rule-space then lowercase little-endian uint32 hex words, at most 1024 of them: version 1; the number of fields; each field's least and greatest value (a choice is its index); the otherwise outcome; the number of rules; each rule as its number of conditions, its outcome, and per condition the field, the operator (0 less, 1 at most, 2 greater, 3 at least, 4 equal, any other not equal) and the bound; then the request's value for every field. The first rule whose conditions all hold decides; otherwise decides when none does. Replies are ok-space then three words (version 1, the outcome, the position of the deciding rule or the number of rules when otherwise decides), outOfBounds when a value is outside its field's bounds, and malformedRuleRequest when the words do not have this shape or a condition names a field the request does not have."
+}
+
+theorem{
+  name: ruleOutcome_noRulesIsOtherwise,
+  parameters: [words : (List Nat), at : Nat, otherwise : Nat, base : Nat],
+  statement: ((ruleOutcome words at 0 otherwise base) = otherwise),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: ruleWords_memberDecidesFirst,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 5 (cons 1 (nil Nat)))))))))))))))))))))) = 0x6f6b20303130303030303030303030303030303030303030303030),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_longStayPays,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 5 (cons 0 (nil Nat)))))))))))))))))))))) = 0x6f6b20303130303030303030323030303030303031303030303030),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_otherwiseDecides,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 2 (cons 0 (nil Nat)))))))))))))))))))))) = 0x6f6b20303130303030303030313030303030303032303030303030),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_boundaryHoursEqualThree,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 3 (cons 0 (nil Nat)))))))))))))))))))))) = 0x6f6b20303130303030303030313030303030303032303030303030),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_outsideBoundsRefused,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 30 (cons 0 (nil Nat)))))))))))))))))))))) = 0x6f75744f66426f756e6473),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_noRulesOtherwise,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 1 (cons 0 (cons 9 (cons 7 (cons 0 (cons 4 (nil Nat))))))))) = 0x6f6b20303130303030303030373030303030303030303030303030),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_versionRefused,
+  parameters: [],
+  statement: ((ruleAnswer (cons 2 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 5 (cons 1 (nil Nat)))))))))))))))))))))) = 0x6d616c666f726d656452756c6552657175657374),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_fieldOutOfRangeRefused,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 1 (cons 1 (cons 0 (cons 5 (cons 4 (cons 1 (cons 5 (cons 1 (nil Nat))))))))))))))))) = 0x6d616c666f726d656452756c6552657175657374),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: ruleWords_trailingWordRefused,
+  parameters: [],
+  statement: ((ruleAnswer (cons 1 (cons 2 (cons 0 (cons 24 (cons 0 (cons 1 (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (cons 4 (cons 1 (cons 1 (cons 2 (cons 0 (cons 2 (cons 3 (cons 5 (cons 1 (cons 0 (nil Nat))))))))))))))))))))))) = 0x6d616c666f726d656452756c6552657175657374),
+  proof: reflexivity{},
+  axioms: []
+}
+\end{semanticmodule}
+\end{lexlean}

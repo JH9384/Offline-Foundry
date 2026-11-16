@@ -1,11 +1,43 @@
+import {chatModelRoute,LOCAL_MODEL} from './chat-model-route.mjs';
+import {createThemeLibrary} from "./theme-library.mjs";
+import {themesData} from "./builtin-themes.mjs";
+import {changeUserSettings} from "./settings-transactions.mjs";
+import {createPromptLibrary} from "./prompt-library.mjs";
+import {readWorkingTree} from "./working-tree.mjs";
+import {createWindowDelivery} from "./window-delivery.mjs";
+import {createWindowCoordinator,windowJournalStore,windowRecoveryScopes} from "./window-coordination.mjs";
+import {VisibleEntitySchema,ChatTabOwnershipSchema,WindowInterestSchema,QueryInvalidationScopeSchema,QueryInvalidationBatchSchema} from "./chat-contracts.mjs";
+import {prepareMessageRestoration} from "./message-restoration.mjs";
+import {prepareSnapshot} from "./snapshot-restore.mjs";
+import {createVersionPreviewController} from "./version-preview-controller.mjs";
+import {previewProjectStore,previewFailure} from "./version-preview-store.mjs";
+import {previewWithGuest} from "./version-preview-codec.mjs";
+import {versionAddress,listStoredVersions,setStoredVersionMetadata,verifiedVersionChanges,resolveStoredVersion} from "./version-history.mjs";
+import {createChatQueueController} from "./chat-queue-controller.mjs";
+import {readStoredChatQueue,commitStoredChatQueue,bindQueuePayload,chatQueueFailure} from "./chat-queue-store.mjs";
+import {VersionPreviewIntentEventSchema,VersionPreviewRemoteSnapshotSchema,ChatStreamIntentEventSchema,SerializableChatTurnIntentSchema,serializeImmutableChatTurnPayload} from "./chat-contracts.mjs";
+import {queueWithGuest} from "./chat-queue-codec.mjs";
+import {createDiscovery} from "./application-discovery.mjs";
+import {mountApplicationDiscovery} from "./discovery-ui.mjs";
+import {routeWithGuest} from './routing-codec.mjs';
+import {runBuildWork,buildWorkStore} from './build-work.mjs';
+import {withPortableBuildPermission, portablePermissionFailure} from "./portable-build-permission.mjs";
+import {commandRegistry, invokeBoundCommand} from "./command-registry.mjs";
+import {interactionPreset, interactionModule, validateInteractionDocument, interactionFailure} from "./interaction-application.mjs";
+import {runStoredInteraction} from "./interaction-state.mjs";
+import {mountInteractionApplications, openInteractionApplication} from "./interaction-ui.mjs";
+import { admitEventWithGuest } from "./event-codec.mjs";
+import { loadBrowserCompiler } from "./browser-compiler.mjs";
+import { browserSettings, assertBrowserSettingsPatch } from "./privacy-policy.mjs";
+import { prepareProjectImport } from "./project-import.mjs";
 import { withBuildModules } from "./build-modules.mjs";
 import { captureBuildSource, assertBuildSourceCurrent, requiresRulePublication } from "./build-source.mjs";
 import { applyStoredProjectPatch, assertGenerationActive } from "./generation-patch.mjs";
-import { editStoredProject, captureProjectSource } from "./project-edit.mjs";
-import { loadProjectScaffold, prepareNewProject, createStoredProject, createStoredChat } from "./project-creation.mjs";
+import { editStoredProject, captureProjectSource, commitPreparedProject } from "./project-edit.mjs";
+import {modulePresentation} from "./module-presentation.mjs";
+import { loadProjectScaffold, prepareExistingProject, prepareNewProject, createStoredProject, createStoredChat } from "./project-creation.mjs";
 import { storageRequest } from "./storage-request.mjs";
 import { executeWorkWithGuest } from "./work-codec.mjs";
-import { validateProviderKey } from "./provider-key-validation.mjs";
 // The browser host: the surface src/preload.ts exposes as window.electron, implemented on the page
 // with no server. Rules come from the generated core (core.wasm: preimage, restore, network, view);
 // addresses are BLAKE3 over the bytes the core spells; records live in IndexedDB. Adapters only:
@@ -17,24 +49,40 @@ import { validateProviderKey } from "./provider-key-validation.mjs";
 
 import { packBytes, unpackBytes, RepresentationError } from "./exact-representation.mjs";
 import { admitWithGuest } from "./composition-codec.mjs";
-import { readBoundRules, readBoundRulesSnapshot, saveBoundRules } from "./rules-source.mjs";
+import { readBoundRules, readBoundRulesSnapshot, saveBoundRules, sameRuleReservation } from "./rules-source.mjs";
+import {browserChatMode,assertBrowserChatModes,browserChatModeSettings} from "./browser-chat-modes.mjs";
+import {chatExecutionPolicy,chatExecutionPrompt,readOnlyChatText} from "./chat-execution.mjs";
+import {updateChatPreferences} from "./chat-preferences.mjs";
 import { renameStoredProject, restoreStoredProject, deleteStoredProject, deleteStoredChat, updateStoredChat } from "./project-lifecycle.mjs";
 import { invokeHost, unwrapHost } from "./host-boundary.mjs";
-import { buildSystemPrompt } from "./prompts.js";
 import * as inference from "./inference.js";
-import { viewReady, lookup, routeOf, refusalWord, seal as sealAnswer, sealPaid, paidGenerate, gpuReady, gpuIds, heldFor, rulesModel, rememberSession, withEngine, engine, readWho, MODEL_ID, paidId, site, siteKeyReady, deviceKeyGet } from "./inference.js";
+import { r4Decide, r4Refusal, r4Request, r4Spec } from "./r4.mjs";
+import { viewReady } from "./inference.js";
 import { install, installed, encodeView, b64, unb64, sha256 } from "./holo.js";
+import { admitPublication } from "./publication-identity.mjs";
 import * as prism from "./prism.js";
 import * as live from "./live/project.mjs";
+import * as lexlean from "./live/lexlean.mjs";
+import { canonicalEditPath, planCanonicalEdit } from "./canonical-edits.mjs";
+import {applicationShape, activeApplicationModule, retiredApplicationPaths, boundApplicationState, shapeFailure} from './application-shape.mjs';
+import { executeInteraction } from "./interaction-codec.mjs";
+import { copyEventCommand, readEventJournal, updateEventJournal } from "./event-delivery.mjs";
+import { authorizePreview, commitPreviewPermission, previewPermissionFailure, mountPreviewPermissions } from "./preview-permissions.mjs";
+import { copyGenerationInput, assertCanonicalGeneration } from "./canonical-generation.mjs";
+import * as appShape from "./live/app.mjs";
 import { frameHtml, FONTS } from "./live/frame-html.mjs";
 import { applyOps, createEditor, PatchError } from "./live/edit.mjs";
-import { buildOnGitHub } from "./github-build.js";
+import * as covers from "./covers.mjs";
+import { createProbe, K } from "./telemetry/probe.mjs";
+import {publishGallery, readGallery, galleryFailure} from "./gallery-store.mjs";
 
 const BASE = new URL("./", import.meta.url); // the shell's directory, wherever it is served
 const listeners = new Map();
 const handlers = new Map();
 const seen = new Map();
-const emit = (channel, payload) => { const set = listeners.get(channel); if (set) for (const fn of set) { try { fn(payload); } catch (e) { console.error(e); } } };
+let relayWindowEvent=()=>{};
+const emitLocal = (channel, payload) => { const set = listeners.get(channel); if (set) for (const fn of set) { try { fn(payload); } catch (e) { console.error(e); } } };
+const emit = (channel,payload)=>{emitLocal(channel,payload);relayWindowEvent(channel,payload);};
 
 // ---- the generated core, the addresses and the store come from the shared inference module: one
 // core.wasm, one BLAKE3, one database ("hologram-forge" v2) for the builder's records and the seals.
@@ -43,18 +91,36 @@ let core = null;
 const coreReady = inference.coreReady().then((c) => (core = c));
 const kappa = inference.kappa;
 const dbReady = inference.db();
+// The Prism R4 decision is read once, while the studio starts, so a first turn does not wait to fetch it.
+r4Spec().catch(() => {});
 async function tx(store, mode, fn) { return storageRequest(await dbReady, store, mode, fn); }
 const get = (store, key) => tx(store, "readonly", (s) => s.get(key));
 const put = (store, key, value) => tx(store, "readwrite", (s) => s.put(value, key));
 const del = (store, key) => tx(store, "readwrite", (s) => s.delete(key));
 const all = (store) => tx(store, "readonly", (s) => s.getAll());
 const keys = (store) => tx(store, "readonly", (s) => s.getAllKeys());
+// An app's files are the keys "<id>:<path>": read by key range instead of walking every app's keys.
+const appRange = (appId) => IDBKeyRange.bound(appId + ":", appId + ":￿");
+
+const themeLibrary=createThemeLibrary(dbReady,themesData);
+handlers.set("get-themes", () => themeLibrary("catalog"));
+handlers.set("get-custom-themes", () => themeLibrary("list"));
+handlers.set("create-custom-theme", input => themeLibrary("create",input));
+handlers.set("update-custom-theme", input => themeLibrary("update",input));
+handlers.set("delete-custom-theme", input => themeLibrary("delete",input));
+handlers.set("set-app-theme", input => themeLibrary("select",input));
+handlers.set("get-app-theme", input => themeLibrary("selected",input));
+const promptLibrary=createPromptLibrary(dbReady);
+handlers.set("prompts:list", () => promptLibrary("list"));
+handlers.set("prompts:create", input => promptLibrary("create",input));
+handlers.set("prompts:update", input => promptLibrary("update",input));
+handlers.set("prompts:delete", input => promptLibrary("delete",input));
 
 // ---- settings
 const DEFAULT_SETTINGS = {
-  // A new visitor starts on GLM 5.3 Flash in the cloud (the site's shared Featherless key answers); BitNet 2B
-  // on the device is one click away in the model picker.
-  selectedModel: { name: "zai-org/GLM-5.3-Flash", provider: "featherless" }, providerSettings: {}, telemetryConsent: "opted_out", telemetryUserId: "web",
+  // Foundry answers with its own language and reasoning only (Prism R4, r4.mjs): every visitor starts,
+  // and stays, on the model in Prism on this device.
+  selectedModel: { name: LOCAL_MODEL, provider: "local" }, providerSettings: {}, telemetryConsent: "opted_out", telemetryUserId: "web",
   hasRunBefore: true, experiments: {}, enableProLazyEditsMode: false, enableProSmartFilesContextMode: false, selectedChatMode: "build",
   enableAppBlueprint: false, enableTestingForNewApps: false, enableAutoUpdate: false, releaseChannel: "stable", isRunning: false,
   enableSandboxScriptExecution: false, enableMcpToolSearch: false, enableCodeExplorer: false, runTypeScriptForWholeProject: false,
@@ -69,13 +135,20 @@ const DEFAULT_SETTINGS = {
 // defaults fill what is missing, the record keeps what it has. One mode is implemented here, the build
 // turn that writes files, so that is the mode the record always carries: an agent mode would promise
 // tool calls this host does not make.
-const BUILD_MODE = { selectedChatMode: "build", defaultChatMode: "build" };
-handlers.set("get-user-settings", async () => ({ ...DEFAULT_SETTINGS, ...((await get("settings", "user")) || {}), ...BUILD_MODE }));
-handlers.set("set-user-settings", async (patch) => { const s = { ...DEFAULT_SETTINGS, ...((await get("settings", "user")) || {}), ...(patch || {}), ...BUILD_MODE }; await put("settings", "user", s); return s; });
-// What the renderer takes as "set up": the site's included key counts as OpenRouter's, the device's
-// GPU counts as the local provider's, so no connect dialog stands between the first prompt and the
-// answer. The values are words, never the key itself.
-handlers.set("get-env-vars", async () => { await siteKeyReady(); const env = {}; if (site.key) env.OPENROUTER_API_KEY = "included by this site"; if (navigator.gpu) env.HOLOGRAM_DEVICE = "webgpu"; return env; });
+handlers.set("get-user-settings", async () => {
+  const stored = (await inference.settingsGet()) || {};
+  // A selection stored when a cloud model was offered names a route R4 refuses; the stored setting is
+  // moved to the device model once, as one write of the visitor's settings record, never per turn.
+  if (stored.selectedModel && stored.selectedModel.provider !== "local") {
+    return changeUserSettings(dbReady, { selectedModel: DEFAULT_SETTINGS.selectedModel }, (current, captured) => browserSettings(browserChatModeSettings({ ...DEFAULT_SETTINGS, ...current, ...captured })));
+  }
+  return browserSettings(browserChatModeSettings({ ...DEFAULT_SETTINGS, ...stored }));
+});
+handlers.set("set-user-settings", (patch) => { assertBrowserSettingsPatch(patch); assertBrowserChatModes(patch); return changeUserSettings(dbReady, patch || {}, (current,captured) => browserSettings(browserChatModeSettings({ ...DEFAULT_SETTINGS, ...current, ...captured }))); });
+// What the renderer takes as "set up": the studio's own model is the only provider, and it is always
+// set up, so no connect dialog ever stands between the first prompt and the answer. Whether this
+// browser can run it is the R4 route's question (Local or NoGpu), never a provider or key question.
+handlers.set("get-env-vars", () => ({ HOLOGRAM_DEVICE: "on this device" }));
 handlers.set("get-system-platform", () => "web");
 handlers.set("get-app-version", () => ({ version: "1.15.0-web" }));
 handlers.set("native-theme:get-state", () => ({ shouldUseDarkColors: matchMedia("(prefers-color-scheme: dark)").matches }));
@@ -87,17 +160,16 @@ handlers.set("nodejs-status", () => ({ nodeVersion: "browser (esbuild in the tab
 // was refused, so the window session never initialised and every screen that keys off it -- the
 // version controls among them -- reported itself unavailable. The id lasts as long as the tab, which
 // is what a window session is, so a reload finds the same one.
-const windowSessionId = (() => {
-  let id = null;
-  try { id = sessionStorage.getItem("holo.window.session"); } catch (e) { id = null; }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || "")) {
-    id = crypto.randomUUID();
-    try { sessionStorage.setItem("holo.window.session", id); } catch (e) {}
-  }
-  return id;
-})();
-handlers.set("window-infrastructure:bootstrap", () => ({ windowSessionId, currentQueryInvalidationEpoch: 0, missedInvalidations: [], recoveryScopes: [], mayMigrateLegacyChatTabSession: false, restorableWindowSessionIds: [] }));
-for (const c of ["window-infrastructure:set-focused", "window-infrastructure:set-visible-entities", "window-infrastructure:set-chat-tab-ownership", "add-log", "renderer:error-toast-ready", "clear-logs"]) handlers.set(c, () => undefined);
+const windowsStore=dbReady.then(windowJournalStore);
+const windowSchemas={visible:VisibleEntitySchema.array().max(100),tabs:ChatTabOwnershipSchema.array().max(100),interest:WindowInterestSchema,scopes:QueryInvalidationScopeSchema.array().min(1).max(128),batch:QueryInvalidationBatchSchema};
+const windowCoordination=createWindowCoordinator({store:{read:()=>windowsStore.then(s=>s.read()),commit:(...args)=>windowsStore.then(s=>s.commit(...args))},locks:navigator.locks,channel:typeof BroadcastChannel==="function"?new BroadcastChannel("foundry:windows:v1"):null,storage:{getItem:key=>sessionStorage.getItem(key),setItem:(key,value)=>sessionStorage.setItem(key,value)},mintId:()=>crypto.randomUUID(),validate:(kind,value)=>windowSchemas[kind].safeParse(value),deliver:createWindowDelivery({emit:emitLocal,chatMachine:chatMachineOf,chatActor:id=>chatActorId(id),appMachine:machineOf}),exists:entity=>get(entity.kind==="app"?"apps":"chats",entity.id).then(Boolean)});
+handlers.set("window-infrastructure:bootstrap", input => windowCoordination.bootstrap(input));
+handlers.set("window-infrastructure:set-focused", () => windowCoordination.setFocused());
+handlers.set("window-infrastructure:set-visible-entities", input => windowCoordination.setVisible(input));
+handlers.set("window-infrastructure:set-chat-tab-ownership", input => windowCoordination.setTabs(input));
+for (const c of ["add-log", "renderer:error-toast-ready", "clear-logs"]) handlers.set(c, () => undefined);
+relayWindowEvent=(channel,payload)=>{windowCoordination.relay(channel,payload);if(channel==="version-created"&&Number.isSafeInteger(payload?.appId))void windowCoordination.invalidate([{family:"apps"},{family:"app",appId:payload.appId},{family:"versions",appId:payload.appId}]).catch(()=>{});if(channel==="chat:stream:end"&&Number.isSafeInteger(payload?.chatId))void windowCoordination.invalidate([{family:"chat",chatId:payload.chatId},{family:"chats"}]).catch(()=>{});};
+window.addEventListener("pagehide",()=>windowCoordination.dispose(),{once:true});
 handlers.set("does-release-note-exist", () => ({ exists: false }));
 handlers.set("get-user-budget", () => null);
 handlers.set("get-subscription-status", () => null);
@@ -112,31 +184,14 @@ handlers.set("get-system-debug-info", async () => {
   const m = s.selectedModel || {};
   return { nodeVersion: null, pnpmVersion: null, nodePath: "esbuild in the tab", telemetryId: "web", telemetryConsent: "opted_out", telemetryUrl: "", dyadVersion: "1.15.0-web", platform: "web", architecture: navigator.userAgent.includes("WOW64") || navigator.userAgent.includes("x86_64") ? "x86_64" : "unknown", logs: "", updaterLogs: null, selectedLanguageModel: (m.provider ? m.provider + "/" : "") + (m.name || "") };
 });
-const OPENROUTER = { id: "openrouter", name: "OpenRouter", hasFreeTier: true, websiteUrl: "https://openrouter.ai/settings/keys", gatewayPrefix: "openrouter/", type: "cloud" };
-const OPENROUTER_MODELS = [
-  { apiName: "openrouter/free", displayName: "Free router", description: "Whatever free model OpenRouter routes to", contextWindow: 128000 },
-  { apiName: "moonshotai/kimi-k2.5", displayName: "Kimi K2.5", contextWindow: 256000 },
-  { apiName: "minimax/minimax-m2.7", displayName: "MiniMax M2.7", contextWindow: 200000 },
-  { apiName: "qwen/qwen3.8-flash", displayName: "Qwen 3.8 Flash", contextWindow: 256000 },
-  { apiName: "deepseek/deepseek-v4.1-flash", displayName: "DeepSeek V4.1 Flash", contextWindow: 256000 },
-];
-// The device is a provider the renderer counts as set up (a custom provider whose "environment variable" is
-// the GPU), so a machine with WebGPU needs no key before its first prompt.
-const LOCAL = { id: "local", name: "On your device", type: "custom", hasFreeTier: true, envVarName: "HOLOGRAM_DEVICE" };
-// The window is the engine's own (q/core/loader.js: BitNet 2B, ctx 3000), not a round number: a build
-// turn carries the project's files, so the renderer must know what actually fits.
-const LOCAL_MODELS = [{ apiName: MODEL_ID, displayName: "BitNet 2B", description: "Runs on this browser's GPU; every answer is sealed on the device", contextWindow: 3000 }];
-// Featherless: open-weight models behind an OpenAI chat endpoint that admits this origin. The key is the
-// visitor's, entered on the provider's settings page and kept on this device; the site carries none.
-const FEATHERLESS = { id: "featherless", name: "Featherless", hasFreeTier: false, websiteUrl: "https://featherless.ai/account/api-keys", gatewayPrefix: "featherless/", type: "cloud" };
-const FEATHERLESS_MODELS = [{ apiName: "zai-org/GLM-5.3-Flash", displayName: "GLM 5.3 Flash", description: "Z.ai's GLM 5.3 Flash on Featherless", contextWindow: 262144 }];
-// Two models are offered: GLM 5.3 Flash in the cloud (Featherless) and BitNet 2B on the device. OpenRouter is
-// withdrawn from the picker and Settings for now; its models stay defined here, and the warm-up that answers
-// while the device model loads is unchanged.
-handlers.set("get-language-model-providers", () => [FEATHERLESS, LOCAL]);
-handlers.set("get-language-models", ({ providerId }) => (providerId === "openrouter" ? OPENROUTER_MODELS : providerId === "featherless" ? FEATHERLESS_MODELS : providerId === "local" ? LOCAL_MODELS : []));
-handlers.set("get-language-models-by-providers", () => ({ featherless: FEATHERLESS_MODELS, local: LOCAL_MODELS }));
-handlers.set("validate-provider-api-key", input => validateProviderKey(input));
+// Foundry's reader is the one provider, already set up: it needs no key, GPU or download.
+const LOCAL = { id: "local", name: "In this browser", type: "custom", hasFreeTier: true, envVarName: "HOLOGRAM_DEVICE" };
+const LOCAL_MODELS = [{ apiName: LOCAL_MODEL, displayName: "Foundry reader", description: "Compiled with Prism; reads your idea in this browser", contextWindow: 3000 }];
+// One model is offered: the model in Prism on this device. Prism R4 refuses every route to a model outside
+// Foundry, so no cloud provider is listed, set up or asked for a key.
+handlers.set("get-language-model-providers", () => [LOCAL]);
+handlers.set("get-language-models", ({ providerId }) => (providerId === "local" ? LOCAL_MODELS : []));
+handlers.set("get-language-models-by-providers", () => ({ local: LOCAL_MODELS }));
 
 // ---- apps and files. A file is stored under "<appId>:<path>"; the app record carries no files,
 // get-app lists them. Every edit seals a version: the address of the project state.
@@ -144,7 +199,7 @@ const nextId = async (store) => { const ks = await keys(store), high = await get
 const nulls = { githubOrg: null, githubRepo: null, githubBranch: null, supabaseProjectId: null, supabaseParentProjectId: null, supabaseOrganizationSlug: null, neonProjectId: null, neonDevelopmentBranchId: null, neonPreviewBranchId: null, neonActiveBranchId: null, selectedDatabaseBranchType: null, vercelProjectId: null, vercelProjectName: null, vercelDeploymentUrl: null, vercelTeamId: null, installCommand: null, startCommand: null, chatContext: null, isFavorite: false, testingEnabled: false, collectionId: null };
 const withDates = (a) => ({ ...a, createdAt: new Date(a.createdAt), updatedAt: new Date(a.updatedAt), resolvedPath: a.path });
 async function filesOf(appId) {
-  const ks = (await keys("files")).filter((k) => k.startsWith(appId + ":")).map((k) => k.slice(String(appId).length + 1)).sort();
+  const ks = (await tx("files", "readonly", (s) => s.getAllKeys(appRange(appId)))).map((k) => k.slice(String(appId).length + 1)).sort();
   return ks;
 }
 let scaffold = null;
@@ -158,19 +213,48 @@ handlers.set("check-app-name", async ({ appName }) => ({ exists: (await all("app
 handlers.set("preview-app-folder-name", async ({ appName }) => ({ folderName: appName }));
 handlers.set("create-app", async ({ name, initialChatMode }) => {
   await coreReady;
-  const prepared = await prepareNewProject({ name, initialChatMode, files: await loadScaffold() }, { core, derive: kappa });
-  const created = await createStoredProject(await dbReady, prepared, nulls);
+  const capturedMode = browserChatMode(initialChatMode,await get("settings","user"));
+  const prepared = await prepareNewProject({ name, initialChatMode: capturedMode, files: await loadScaffold() }, { core, derive: kappa });
+  const created = await createStoredProject(await dbReady, prepared, nulls, themesData);
   emit("version-created", { appId: created.app.id, oid: created.oid });
   return { app: withDates(created.app), chatId: created.chatId };
 });
 handlers.set("read-app-file", async ({ appId, filePath }) => { const c = await get("files", appId + ":" + filePath); if (c === undefined) throw new Error("no file " + filePath); return c; });
 handlers.set("edit-app-file", async (input) => {
+  input = structuredClone(input);
   await coreReady;
+  if (input?.filePath === "prism/interaction.json") {
+    const edit = structuredClone(input), source = await captureProjectSource(await dbReady, edit.appId);
+    const document = await validateInteractionDocument(edit.content, kernelReady);
+    const files = Object.fromEntries(source.files);
+    files["prism/interaction.json"] = JSON.stringify(document, null, 2) + "\n";
+    files["prism/Application.lex.tex"] = interactionModule(document.graph);
+    files["prism/InteractionModel.lex.tex"] = await loadInteractionModelSource();
+    const prepared = await prepareExistingProject({name:source.name,files}, {core,derive:kappa}, source.reference);
+    const oid = await commitPreparedProject(await dbReady, edit.appId, ["prism/interaction.json", "prism/Application.lex.tex", "prism/InteractionModel.lex.tex"], source, prepared);
+    emit("version-created", {appId:edit.appId,oid});return {};
+  }
+  if (["prism/Application.lex.tex", "prism/InteractionModel.lex.tex"].includes(input?.filePath) && await get("files", input.appId + ":prism/interaction.json") !== undefined) throw interactionFailure("interactionApplicationMismatch");
+  if (canonicalEditPath(input?.filePath)) {
+    const source = await captureProjectSource(await dbReady, input.appId);
+    const plan = planCanonicalEdit(input, source, { lexlean, prism });
+    if (plan) {
+      const options = {source, onCommit: oid => emit('version-created', {appId:input.appId, oid})};
+      if (plan.shape === 'stateful') {
+        await appAfterTurn(input.appId, '', {...options, moduleText:plan.moduleText});
+        await refreshPreview(input.appId);
+      } else {
+        await rulesAfterTurn(input.appId, plan.text, [], options);
+        await refreshLive(input.appId);
+      }
+      return plan.warning === null ? {} : { warning: plan.warning };
+    }
+  }
   const oid = await editStoredProject(await dbReady, input, { core, derive: kappa });
   emit("version-created", { appId: input.appId, oid });
-  return { success: true, warning: null };
+  return {};
 });
-handlers.set("delete-app", async ({ appId }) => { await deleteStoredProject(await dbReady, appId); liveEditors.delete(appId); });
+handlers.set("delete-app", async ({ appId }) => { const deletedChats=(await all("chats")).filter(chat=>chat.appId===appId).map(chat=>chat.id); await deleteStoredProject(await dbReady, appId); liveEditors.delete(appId); coverSources.delete(appId); clearTimeout(coverTimers.get(appId)); coverTimers.delete(appId); await covers.forget(BASE, appId); for(const chatId of deletedChats){queueChannel?.postMessage({chatId});await chatQueue.refresh(chatId).catch(()=>{});} });
 handlers.set("rename-app", async (input) => {
   await coreReady;
   await renameStoredProject(await dbReady, input, { core, derive: kappa, onCommit: oid => emit("version-created", { appId: input.appId, oid }) });
@@ -222,29 +306,23 @@ handlers.set("app:get-current-commit-hash", async ({ appId }) => (await get("ref
 // home page hands that file here. Ids are renumbered past the ones in use, so nothing here is replaced;
 // a name already taken gets " (moved)". The file carries apps, their files, chats, versions, rules state
 // and the objects those versions name; cached rule/proof status is ignored and must be rechecked. It never carries settings (keys), the audit, seals, grants or
-// installed holos, and anything else in it is ignored. An object is kept only when its bytes derive to
-// its address. Everything is written in one transaction: a failure leaves the store as it was.
+// installed holos, and anything else in it is ignored. Every object must derive to its address and
+// every referenced snapshot must have complete closure; any defect refuses the whole import. Everything is written in one transaction: a failure leaves the store as it was.
 const EXPORT_SCHEMA = "hologram-forge/export/1";
 handlers.set("forge:import", async (input) => {
-  const doc = typeof input === "string" ? JSON.parse(input) : input;
-  if (!doc || doc.schema !== EXPORT_SCHEMA || !Array.isArray(doc.apps)) throw new Error("This is not a Forge export file (" + EXPORT_SCHEMA + ").");
-  const objects = new Map();
-  let refused = 0;
-  const keep = async (k, bytes) => { if ((await kappa(bytes)) === k) objects.set(k, bytes); else refused += 1; };
-  for (const [k, text] of Object.entries(doc.objects || {})) { let bytes = null; try { bytes = unb64(String(text)); } catch (e) { refused += 1; continue; } await keep(k, bytes); }
-  const taken = new Set((await all("apps")).map((a) => a.name));
+  await coreReady;
+  const { apps: entries, objects } = await prepareProjectImport(input, {
+    core, derive: kappa,
+    admit: (derived, expected) => core.run({ op: "restore", derived, expected }).decision === "Accept",
+  }, { takenNames: (await all("apps")).map(a => a.name) });
   let appId = await nextId("apps"), chatId = await nextId("chats");
   const writes = [], apps = [];
-  for (const entry of doc.apps) {
-    const a = entry && entry.app;
-    if (!a || typeof a.name !== "string" || !a.name) throw new Error("An app in the file has no name.");
-    let name = a.name;
-    if (taken.has(name)) { name = a.name + " (moved)"; for (let n = 2; taken.has(name); n += 1) name = a.name + " (moved " + n + ")"; }
-    taken.add(name);
+  for (const entry of entries) {
+    const a = entry.app, name = a.name;
     const id = appId++, at = new Date().toISOString();
     writes.push(["apps", id, { ...nulls, ...a, id, name, path: name, createdAt: a.createdAt || at, updatedAt: a.updatedAt || at }]);
-    const files = Object.entries(entry.files || {}).filter(([, text]) => typeof text === "string");
-    for (const [path, text] of files) { writes.push(["files", id + ":" + path, text]); const bytes = enc.encode(text); objects.set(await kappa(bytes), bytes); }
+    const files = Object.entries(entry.files);
+    for (const [path, text] of files) writes.push(["files", id + ":" + path, text]);
     if (Array.isArray(entry.versions)) writes.push(["versions", id, entry.versions]);
     if (typeof entry.main === "string" && entry.main) writes.push(["refs", id + ":main", entry.main]);
     const chats = [];
@@ -254,7 +332,7 @@ handlers.set("forge:import", async (input) => {
       writes.push(["chats", cid, { ...c, id: cid, appId: id, messages: Array.isArray(c.messages) ? c.messages : [], referencedApps: [] }]);
       chats.push(cid);
     }
-    apps.push({ id, name, from: a.name, chats, files: files.length });
+    apps.push({ id, name, from: entry.from, chats, files: files.length });
   }
   for (const [k, bytes] of objects) writes.push(["objects", k, bytes]);
   const db = await dbReady;
@@ -279,41 +357,19 @@ handlers.set("forge:import", async (input) => {
       for (const store of ["apps", "chats"]) { const q = t.objectStore("refs").get(`allocation:${store}`); q.onsuccess = () => { marks.set(store, q.result === undefined ? 0 : q.result); commit(); }; }
     } catch { if (t) { try { t.abort(); } catch {} } refuse(); }
   });
-  return { apps, objects: objects.size, refused };
+  return { apps, objects: objects.size, refused: 0 };
 });
 
 // ---- versions: a branch is a name pointing at an address; rollback restores the object at an
 // address only when its bytes re-derive to it (the core's restore rule).
-handlers.set("list-versions", async ({ appId }) => (await get("versions", appId)) || []);
+handlers.set("list-versions", async input => listStoredVersions(await dbReady,input));
 handlers.set("get-current-branch", async () => ({ branch: "main" }));
-// What a version changed, computed from the addresses themselves: a version is the preimage of the
-// project state (its JSON lists every file as [path, kappa, bytes] with the parent's address), and
-// every file's bytes are an object at their own address, so the diff against the parent is a walk of
-// two entry lists. Nothing is stored twice for this.
-async function snapshotOf(oid) {
-  if (!oid) return null;
-  const bytes = await get("objects", oid);
-  if (!bytes) return null;
-  try { const snap = JSON.parse(dec.decode(bytes)); return Array.isArray(snap.entries) ? snap : null; } catch (e) { return null; }
-}
-const contentAt = async (kappa) => { const b = kappa ? await get("objects", kappa) : null; return b ? dec.decode(b) : ""; };
-handlers.set("get-version-changes", async ({ versionId }) => {
-  const snap = await snapshotOf(versionId);
-  if (!snap) return [];
-  const before = new Map((((await snapshotOf(snap.parent)) || {}).entries || []).map(([path, kappa]) => [path, kappa]));
-  const now = new Map(snap.entries.map(([path, kappa]) => [path, kappa]));
-  const changes = [];
-  for (const [path, kappa] of now) {
-    const old = before.get(path);
-    if (old === kappa) continue;
-    changes.push({ path, type: old ? "modified" : "added", oldContent: await contentAt(old), newContent: await contentAt(kappa) });
-  }
-  for (const [path, kappa] of before) if (!now.has(path)) changes.push({ path, type: "deleted", oldContent: await contentAt(kappa), newContent: "" });
-  return changes.sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
-});
-handlers.set("set-version-favorite", async ({ appId, oid, isFavorite }) => { const v = (await get("versions", appId)) || []; for (const x of v) if (x.oid === oid) x.isFavorite = isFavorite; await put("versions", appId, v); });
-handlers.set("set-version-note", async ({ appId, oid, note }) => { const v = (await get("versions", appId)) || []; for (const x of v) if (x.oid === oid) x.note = note; await put("versions", appId, v); });
+async function versionHistoryBoundary(){await coreReady;return {readObject:key=>get("objects",key),derive:kappa,admit:async(derived,expected)=>core.run({op:"restore",derived,expected}).decision==="Accept"};}
+handlers.set("get-version-changes", async input => verifiedVersionChanges(await dbReady,input,await versionHistoryBoundary()));
+handlers.set("set-version-favorite", async input => setStoredVersionMetadata(await dbReady,input,"isFavorite"));
+handlers.set("set-version-note", async input => setStoredVersionMetadata(await dbReady,input,"note"));
 async function restore(appId, oid, revert = false) {
+  oid = await resolveStoredVersion(await dbReady, appId, oid);
   await coreReady;
   return restoreStoredProject(await dbReady, appId, oid, {
     core, onCommit: hash => emit("version-created", { appId, oid: hash }),
@@ -326,17 +382,22 @@ async function restore(appId, oid, revert = false) {
     },
   }, revert);
 }
-handlers.set("checkout-version", async ({ appId, versionId }) => { await restore(appId, versionId); });
-handlers.set("revert-version", async ({ appId, previousVersionId }) => { await restore(appId, previousVersionId, true); return { successMessage: "Reverted" }; });
+handlers.set("checkout-version", async ({ appId, purpose, versionId, branch }) => {
+  if(purpose==="return"){if(branch!=="main")throw previewFailure("previewUnsupportedBranch");return versionPreview.dispatch(appId,{type:"CLOSE",operationId:crypto.randomUUID()});}
+  if(purpose!=="preview")throw previewFailure("invalidPreviewCommand");if(!(await versionPreview.acquire(appId)).acquired)throw previewFailure("previewWindowBusy");return versionPreview.dispatch(appId,{type:"SELECT_VERSION",versionId,operationId:crypto.randomUUID()});
+});
+handlers.set("revert-version", async ({appId,previousVersionId,expectedHeadOid,currentChatMessageId,targetBranchName}) => {
+  if(targetBranchName!==undefined&&targetBranchName!=="main")throw previewFailure("previewUnsupportedBranch");if(!(await versionPreview.acquire(appId)).acquired)throw previewFailure("previewWindowBusy");return versionPreview.dispatch(appId,{type:"RESTORE",versionId:previousVersionId,...(currentChatMessageId?{currentChatMessageId}:{}),...(expectedHeadOid?{expectedHeadOid}:{}),operationId:crypto.randomUUID()});
+});
 
 // ---- chats as records; the stream is the next slice
 handlers.set("get-chats", async (appId) => (await all("chats")).filter((c) => appId == null || c.appId === appId).map((c) => chatRow(c)));
-handlers.set("get-chat", async (id) => { const c = await get("chats", id); if (!c) throw new Error("no chat " + id); return { ...c, chatMode: c.chatMode || "build", referencedApps: c.referencedApps || [], messages: (c.messages || []).map((x) => ({ ...x, createdAt: x.createdAt || now() })) }; });
-const chatRow = (c) => ({ id: c.id, appId: c.appId, title: c.title, createdAt: new Date(c.createdAt || Date.now()), chatMode: c.chatMode || "build", isFavorite: !!c.isFavorite });
+handlers.set("get-chat", async (id) => { const c = await get("chats", id); if (!c) throw new Error("no chat " + id); return { ...c, chatMode: c.chatMode ?? null, referencedApps: c.referencedApps || [], messages: (c.messages || []).map((x) => ({ ...x, createdAt: x.createdAt || now() })) }; });
+const chatRow = (c) => ({ id: c.id, appId: c.appId, title: c.title, createdAt: new Date(c.createdAt || Date.now()), chatMode: c.chatMode ?? null, isFavorite: !!c.isFavorite });
 handlers.set("get-chat-metadata", async (id) => { const c = await get("chats", id); return c ? chatRow(c) : null; });
-handlers.set("create-chat", async (appId) => createStoredChat(await dbReady, appId, now()));
-handlers.set("update-chat", async ({ chatId, title }) => { if (title) await updateStoredChat(await dbReady, chatId, { title }); });
-handlers.set("delete-chat", async (id) => { await deleteStoredChat(await dbReady, id); });
+handlers.set("create-chat", async (appId) => createStoredChat(await dbReady, appId, now(), browserChatMode(undefined,await get("settings","user"))));
+handlers.set("update-chat", input => updateChatPreferences(dbReady,input));
+handlers.set("delete-chat", async (id) => { await deleteStoredChat(await dbReady, id); queueChannel?.postMessage({chatId:id}); await chatQueue.refresh(id).catch(()=>{}); });
 // The sidebar's search: a chat matches by title or by the text of one of its messages, and the line
 // that matched is what the renderer shows under it.
 handlers.set("search-chats", async (q) => {
@@ -355,13 +416,17 @@ handlers.set("search-chats", async (q) => {
 handlers.set("chat:count-tokens", async ({ chatId, input }) => {
   const chat = chatId != null ? await get("chats", chatId) : null;
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
-  const chosen = (chat && chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  const models = chosen.provider === "openrouter" ? OPENROUTER_MODELS : chosen.provider === "featherless" ? FEATHERLESS_MODELS : LOCAL_MODELS;
-  const contextWindow = (models.find((m) => m.apiName === chosen.name) || models[0] || { contextWindow: 4096 }).contextWindow;
+  const route = chatModelRoute(chat?.modelSelection,settings.selectedModel);
+  // A selection captured when a cloud model was offered keeps its route (R4 refuses it at send time), but
+  // no window other than the device model's is known any more.
+  const contextWindow = (LOCAL_MODELS.find((m) => m.apiName === route.model) || LOCAL_MODELS[0]).contextWindow;
   const tokens = (text) => Math.ceil(String(text || "").length / 4);
-  const codebaseTokens = chat && chat.appId != null ? tokens(await codebaseOf(chat.appId)) : 0;
-  const systemPromptTokens = tokens(buildSystemPrompt(chat && chat.appId != null ? await get("files", chat.appId + ":AI_RULES.md") : ""));
-  const messageHistoryTokens = ((chat && chat.messages) || []).reduce((n, m) => n + tokens(m.content), 0);
+  const captured = chat && chat.appId != null ? await captureProjectSource(await dbReady,chat.appId) : null;
+  const moduleNow = captured ? activeApplicationModule(captured, lexlean.canonicalSource) : null;
+  const codebaseTokens = tokens(moduleNow && appShape.isAppShape(moduleNow[1]) ? prism.moduleContext(moduleNow[1]) : prism.specContext(captured ? new Map(captured.files).get("prism/spec.json") : null));
+  const systemPromptTokens = tokens(chatExecutionPrompt(chatExecutionPolicy(null,chat?.chatMode),prism.SPEC_RULES) + "\n\n" + (chat && chat.appId != null ? await themeLibrary("resolve",{appId:chat.appId}) : ""));
+  const history = chat ? await messagesOf(chatId) : [];
+  const messageHistoryTokens = history.reduce((n,m)=>n+tokens(m.content),0);
   const inputTokens = tokens(input);
   return { estimatedTotalTokens: codebaseTokens + systemPromptTokens + messageHistoryTokens + inputTokens, actualMaxTokens: null, messageHistoryTokens, codebaseTokens, mentionedAppsTokens: 0, inputTokens, systemPromptTokens, contextWindow };
 });
@@ -378,26 +443,164 @@ function machineOf(appId) {
   if (!machines.has(key)) machines.set(key, { revision: 0, state: { appId, revision: 0, previewReloadEpoch: 0, phase: "idle", operation: null, startedAt: null, url: null, operationError: null, exit: null, capabilities: caps("idle"), invocationRef: null, lastSettlement: null } });
   return machines.get(key);
 }
+// ---- build telemetry (shell/telemetry, studio/telemetry/src): the turn's moments are marked here, in the
+// live frame's messages and in publish, kept in this browser's IndexedDB, and never sent. Each mark is four
+// numbers into a preallocated ring (well under a microsecond); the record is written once, at idle, after
+// the turn. Where a record may go is the kernel's decision (`telemetry EFFECT ASKED DEVICE`, FK-25 to FK-27).
+// The live frame's paint is timed when its message arrives here: the frame posts it on the animation frame
+// that paints, so the reading is the paint plus one message hop.
+const probe = createProbe();
+const tm = { turn: null, model: null, token: false, declaration: false, frame: false, complete: false, repaired: false, editOpen: false };
+const tmMark = (kind, value = 0) => probe.mark(K[kind], value);
+const tmOnce = (kind) => { if (tm.turn && !tm[kind]) { tm[kind] = true; tmMark(kind); } };
+function tmStart(chatId) {
+  probe.drain();
+  Object.assign(tm, { turn: chatId, model: null, token: false, declaration: false, frame: false, complete: false, repaired: false });
+  tmMark("enter");
+}
+let telemetryReady = null;
+const telemetryOf = () => telemetryReady ??= (async () => {
+  const [{ createTelemetry }, { fromData }, { indexedDbBackend }] = await Promise.all([import("./telemetry/telemetry.mjs"), import("./telemetry/model.mjs"), import("./telemetry/store.mjs")]);
+  const read = async (name) => (await fetch(new URL("./telemetry/data/" + name + ".json", import.meta.url))).json();
+  const names = await read("modules");
+  const model = fromData(Object.fromEntries(await Promise.all(names.map(async (n) => [n, await read(n)]))));
+  return { model, telemetry: createTelemetry({ model, backend: indexedDbBackend(), ask: (line) => window.__forgeKernel.ask(line) }) };
+})();
+const tmIdle = (fn) => (self.requestIdleCallback ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 500));
+// An approval or a publish is not a build turn: its Enter is forgotten.
+const tmCancel = (chatId) => { if (tm.turn === chatId) { tm.turn = null; probe.drain(); } };
+// The turn's events become one record at idle; a refusal or a failure costs the turn nothing.
+function tmFlush() {
+  const { events, dropped } = probe.drain(), modelName = tm.model || "unknown";
+  tm.turn = null;
+  if (!events.length) return;
+  tmIdle(() => telemetryOf().then(({ telemetry }) => telemetry.record({ events, dropped, model: modelName })).catch((e) => console.warn("[telemetry]", (e && e.code) || e)));
+}
+// What each app was let reach: the worker hands over the kernel's decisions as it serves an app
+// (sw.template.js, noteGate); they are recorded at idle like a turn. A preview's address changes with every
+// build, so the address is named here with the app it belongs to, and its builds count as one app.
+const tmApps = new Map();
+const tmNameApp = (address, appId, name) => tmApps.set(address, { key: "app:" + appId, name: name || null });
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("message", (e) => {
+  const d = e.data;
+  if (!d || d.type !== "telemetry/gate" || typeof d.id !== "string" || !Array.isArray(d.decisions)) return;
+  const named = tmApps.get(d.id) || {};
+  tmIdle(() => telemetryOf().then(({ telemetry }) => telemetry.noteApp({ id: d.id, key: named.key ?? null, name: named.name ?? null, installed: d.installed === true, decisions: d.decisions })).catch((err) => console.warn("[telemetry]", (err && err.code) || err)));
+});
+async function openTelemetry() {
+  const [{ openPanel }, t] = await Promise.all([import("./telemetry/panel.mjs"), telemetryOf()]);
+  openPanel(t);
+}
+addEventListener("keydown", (e) => { if (e.ctrlKey && e.altKey && (e.key === "t" || e.key === "T")) { e.preventDefault(); openTelemetry().catch(() => {}); } });
+const tmHash = () => { if (location.hash === "#telemetry") openTelemetry().catch(() => {}); };
+addEventListener("hashchange", tmHash);
+addEventListener("load", tmHash, { once: true });
+
 function publish(appId, patch) {
   const m = machineOf(appId);
+  if (tm.turn && patch.previewReloadEpoch > (m.state.previewReloadEpoch || 0)) tmMark("reload");
   m.revision += 1;
   m.state = { ...m.state, ...patch, revision: m.revision, capabilities: caps(patch.phase || m.state.phase) };
   emit("distributed-machine:snapshot", { protocolVersion: 1, machineId: "app_run", encodedKey: { appId }, actorInstanceId: "web-app_run-" + appId, revision: m.revision, encodedState: m.state });
+  if (m.state.phase === "ready" && m.state.url && m.state.url.appUrl) scheduleCover(appId, m.state.url.appUrl);
   return m;
 }
-let esbuildReady = null;
-async function esbuild() {
-  if (!esbuildReady) esbuildReady = import("https://cdn.jsdelivr.net/npm/esbuild-wasm@0.25.5/esm/browser.min.js").then(async (m) => { await m.initialize({ wasmURL: "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.25.5/esbuild.wasm" }); return m; });
-  return esbuildReady;
+// ---- app covers (covers.mjs). Every preview carries the capture responder; when an app's preview is
+// ready and its version has no cover yet, the preview is loaded once more, hidden, at cover size, and its
+// picture is stored with the version it shows. The card's words are asked of the visitor's own model
+// once per app, and stored only when they meet the rules in covers.mjs.
+let coverLibraryReady = null;
+const coverLibrary = () => (coverLibraryReady ??= fetch(new URL("assets/html-to-image.js", BASE)).then((r) => (r.ok ? r.text() : null)).catch(() => null));
+async function withCoverResponder(html) {
+  const library = await coverLibrary();
+  return library ? covers.withResponder(html, library) : html;
 }
-// The grant a preview is served under. The worker asks the kernel's gate (proved by Lean) before it
-// serves a preview, and the gate refuses anything that has no record, so every preview gets one:
-// it may be served, and it may reach the hosts its build names: esm.sh for packages and the play
-// build of Tailwind. An app may carry its own list in app.grants; nothing else is reachable.
+const coverTimers = new Map();
+const coverSources = new Map();
+let coverQueue = Promise.resolve();
+// A turn writes in batches and the preview is announced ready after each; the picture waits for the last.
+function scheduleCover(appId, appUrl) {
+  if (!String(appUrl).startsWith(BASE.href)) return;
+  // Capture when the preview is announced, before debounce, capture or model work.
+  const built = coverSources.get(appId);
+  const live = appUrl === liveFrameUrl + "#" + encodeURIComponent(appId);
+  if (!live && built?.appUrl !== appUrl) return;
+  const source = live ? dbReady.then(db => captureProjectSource(db, appId)) : Promise.resolve(structuredClone(built.source));
+  void source.catch(() => {});
+  clearTimeout(coverTimers.get(appId));
+  coverTimers.set(appId, setTimeout(() => {
+    coverTimers.delete(appId);
+    coverQueue = coverQueue.then(async () => coverApp(appId, appUrl, await source)).catch(e => console.warn("cover", appId, e?.code || "galleryStorageFailed"));
+  }, 4000));
+}
+async function galleryChanged(appId) {
+  dispatchEvent(new CustomEvent(covers.EVENT, { detail: { appId } }));
+  await windowCoordination.invalidate([{family:"apps"}]).catch(() => {});
+}
+async function coverApp(appId, appUrl, source) {
+  const version = source.reference + " " + appUrl;
+  const current = await readGallery(dbReady, appId);
+  if (current?.version === version) return;
+  const checkProjection = () => {
+    if (appUrl === liveFrameUrl + "#" + encodeURIComponent(appId)) {
+      const json = new Map(source.files).get("prism/spec.json");
+      if (!json || JSON.stringify(JSON.parse(json)) !== JSON.stringify(liveLatest.get(appId)?.raw)) throw galleryFailure("gallerySourceChanged");
+    } else if (coverSources.get(appId)?.appUrl !== appUrl) throw galleryFailure("gallerySourceChanged");
+  };
+  checkProjection();
+  const shot = await covers.capture(appUrl);
+  if (!shot) return;
+  checkProjection();
+  await publishGallery(dbReady, appId, source, {picture:await covers.encodeCover(shot.png),version});
+  await galleryChanged(appId);
+}
+const esbuild = () => loadBrowserCompiler(BASE);
+// Generated-code previews disclose network destinations before compilation. The grant is
+// installed only after the captured source and prior permission record still match.
+// Canonical live projection keeps its separate network-free serving grant.
 const PREVIEW_ENDPOINTS = ["https://esm.sh", "https://cdn.tailwindcss.com"];
 const previewId = (pathname) => pathname.split("/").filter(Boolean).pop();
-async function grantPreview(id, endpoints) {
-  await put("refs", "capabilities:" + id, { serve: true, network: { endpoints: [...endpoints], denied: [] } });
+async function grantPreview(id, endpoints, permission = null, expected) {
+  if (permission) return commitPreviewPermission(await dbReady, id, permission, expected);
+  const record = { serve: true, network: { endpoints: [...endpoints], denied: [] } };
+  try { await put("refs", "capabilities:" + id, record); }
+  catch { throw previewPermissionFailure("previewPermissionStorageFailed"); }
+}
+mountPreviewPermissions({
+  list: async () => {
+    const rows = [];
+    for (const key of await keys("refs")) {
+      if (typeof key !== "string" || !key.startsWith("capabilities:")) continue;
+      const record = await get("refs", key);
+      if (record?.serve === true && record.previewConsent?.profile === "foundry/preview-consent/1") rows.push({ id: key.slice(13), source: record.previewConsent.source, endpoints: [...record.network.endpoints] });
+    }
+    return rows;
+  },
+  revoke: async id => {
+    try { await put("refs", "capabilities:" + id, { serve: false, network: { endpoints: [], denied: [] } }); }
+    catch { throw previewPermissionFailure("previewPermissionStorageFailed"); }
+    const prefix = new URL(`p/${id}/`, BASE).href;
+    for (const frame of document.querySelectorAll("iframe")) if (frame.src.startsWith(prefix)) frame.src = "about:blank";
+  },
+});
+
+// The Hologram brand kit on every app the model writes as code: the kit's tokens in the scaffold's own
+// variable names (shell/scaffold-brand.css, generated by tools/brand_kit.py) and its web fonts as data
+// URLs, since a preview loads nothing from this origin. Added unlayered after the app's CSS, so the
+// kit wins over the scaffold's stock theme, which sits in `@layer base`.
+const BRAND_FONTS = [["Geist", "Geist-Regular", 400], ["Geist", "Geist-Medium", 500], ["Geist", "Geist-SemiBold", 600], ["Archivo", "Archivo-SemiBold", 600]];
+let brandHeadReady = null;
+function brandHead() {
+  return (brandHeadReady ??= (async () => {
+    const r = await fetch(new URL("scaffold-brand.css", BASE));
+    if (!r.ok) throw new Error("scaffold-brand.css answered " + r.status);
+    let faces = "";
+    for (const [family, file, weight] of BRAND_FONTS) {
+      const f = await fetch(new URL("fonts/" + file + ".woff2", BASE));
+      if (f.ok) faces += `@font-face { font-family: "${family}"; src: url("data:font/woff2;base64,${b64(new Uint8Array(await f.arrayBuffer()))}") format("woff2"); font-weight: ${weight}; font-display: swap; }\n`;
+    }
+    return `<style>${faces}${(await r.text()).replace(/<\/style/gi, "<\\/style")}</style>`;
+  })().catch((error) => { brandHeadReady = null; throw error; }));
 }
 
 async function verifiedBuildSource(appId) {
@@ -409,10 +612,15 @@ async function verifiedBuildSource(appId) {
 async function buildPreview(appId) {
   await coreReady;
   const source = await verifiedBuildSource(appId);
+  if (applicationShape(source) === 'stateful') throw shapeFailure('statefulBuildUnsupported');
   const { path } = core.run({ op: "preview", kappa: source.reference });
   const appUrl = new URL(path.slice(1), BASE);
   const owner = await get("apps", appId);
-  await grantPreview(previewId(appUrl.pathname), Array.isArray(owner && owner.grants) ? owner.grants : PREVIEW_ENDPOINTS);
+  const endpoints = Array.isArray(owner && owner.grants) ? owner.grants : PREVIEW_ENDPOINTS;
+  tmNameApp("p:" + previewId(appUrl.pathname), appId, owner && owner.name);
+  const previousPermission = await get("refs", "capabilities:" + previewId(appUrl.pathname));
+  const permission = endpoints.length ? await authorizePreview({ id: previewId(appUrl.pathname), source: source.reference, endpoints }) : null;
+  const approvedEndpoints = permission ? permission.disclosure.endpoints : [];
   const files = new Map(source.files);
   const pkg = await (await fetch(new URL("scaffold/package.json", BASE))).json();
   const pkgs = Object.fromEntries(Object.entries(pkg.dependencies).map(([n, v]) => [n, v.replace(/^[\^~]/, "")]));
@@ -453,11 +661,15 @@ async function buildPreview(appId) {
 <script type="importmap">${JSON.stringify({ imports })}<\/script>
 <script>tailwind = { config: ${tailwindConfig} };<\/script>
 <script src="https://cdn.tailwindcss.com"><\/script>
-<style>${css}</style></head><body><div id="root"></div>
+<style>${css}</style>${await brandHead()}</head><body><div id="root"></div>
 <script type="module">${js}<\/script></body></html>`;
+  const shown = await withCoverResponder(html);
   await assertBuildSourceCurrent(await dbReady, appId, source);
   const cache = await caches.open("previews");
-  await cache.put(appUrl.pathname + "index.html", new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } }));
+  await cache.put(appUrl.pathname + "index.html", new Response(shown, { headers: { "content-type": "text/html; charset=utf-8" } }));
+  try { await grantPreview(previewId(appUrl.pathname), approvedEndpoints, permission, previousPermission); }
+  catch (error) { await cache.delete(appUrl.pathname + "index.html"); throw error; }
+  coverSources.set(appId, {appUrl:appUrl.href,source:structuredClone(source)});
   return { appUrl: appUrl.href, bytes: js.length };
 }
 // ---- the live preview. An app with rules is not built: it is projected. One fixed frame on shadcn/ui
@@ -471,8 +683,9 @@ function liveFrame() {
     const text = async (p) => { const r = await fetch(new URL(p, BASE)); if (!r.ok) throw new Error(p + " answered " + r.status); return r.text(); };
     const fonts = {};
     for (const p of FONTS) { const r = await fetch(new URL(p, BASE)); if (r.ok) fonts[p] = b64(new Uint8Array(await r.arrayBuffer())); }
-    const html = frameHtml({ brandCss: await text("brand.css"), componentsCss: await text("live/components.css"), componentsJs: await text("live/components.js"), interpreter: prism.INTERPRETER, fonts });
-    await coreReady;
+    const html = await withCoverResponder(frameHtml({ brandCss: await text("brand.css"), componentsCss: await text("live/components.css"), componentsJs: await text("live/components.js"), interpreter: prism.INTERPRETER, fonts }));
+    // The worker serves the frame: on a first visit the frame waits for it, or it would load nothing.
+    await coreReady; await workerActive;
     const { path } = core.run({ op: "preview", kappa: await kappa(enc.encode(html)) });
     const url = new URL(path.slice(1), BASE);
     await grantPreview(previewId(url.pathname), []);
@@ -488,7 +701,7 @@ const liveTimes = [];          // patch to pixel, as each frame reports it
 const themeOf = () => (document.documentElement.classList.contains("dark") ? "dark" : "light");
 // A frame is trusted to receive an app's spec only when it is an iframe of this page showing the live frame.
 const isLiveFrame = (source) => !!liveFrameUrl && [...document.querySelectorAll("iframe")].some((f) => f.contentWindow === source && f.src.startsWith(liveFrameUrl));
-let liveFrameUrl = null;
+let liveFrameUrl = null, workerActive = null;
 function sendLive(appId) {
   const latest = liveLatest.get(appId);
   if (!latest) return;
@@ -497,6 +710,31 @@ function sendLive(appId) {
   for (const [win, app] of liveWindows) { if (win.closed) liveWindows.delete(win); else if (app === appId) win.postMessage(message, "*"); }
 }
 // Coalesced to one projection per animation frame: a model streams far faster than a screen draws.
+// A stateful app (shell/live/app.mjs): its module is run as it is written, and each frame goes to the
+// same live frame a decision's projection goes to. The library model is fetched on the first such app.
+const appApps = new Set();     // apps whose preview is a running module, not a projection
+const postApp = (appId, message) => { const m = { ...message, theme: themeOf() }; for (const [win, app] of liveWindows) { if (win.closed) liveWindows.delete(win); else if (app === appId) win.postMessage(m, "*"); } };
+let appFrames = null;
+let appModelLoad = null;
+const appModel = () => appModelLoad || (appModelLoad = fetch(new URL("live/v2/Model.json", BASE)).then((r) => { if (!r.ok) throw new Error("live/v2/Model.json answered " + r.status); return r.json(); }).catch((error) => { appModelLoad = null; throw error; }));
+const appFramesReady = () => appFrames || (appFrames = appModel().then((model) => appShape.appLive({ post: postApp, library: { "Foundation.View.Browser.V1.Model": model } })).catch(error => { appFrames = null; throw error; }));
+// The checker for a stateful app runs in this tab (shell/live/app.mjs checkApp): it reads, it runs, its theorems can be stated.
+const checkAppModule = async (module) => appShape.checkApp(module, { "Foundation.View.Browser.V1.Model": await appModel() });
+function pushApp(appId, module, trust = "draft", options = {}) {
+  assertGenerationActive(options.signal);
+  appApps.add(appId);
+  appFramesReady().then((frames) => { assertGenerationActive(options.signal); return frames.push(appId, module, trust, options); }).catch((e) => { if (!options.signal?.aborted) console.error(e); });
+}
+async function settleAppFrames(appId, signal) {
+  assertGenerationActive(signal);
+  if (appFrames && appApps.has(appId)) await (await appFrames).settled(appId);
+  assertGenerationActive(signal);
+}
+function forgetApplicationFrames(appId) {
+  liveLatest.delete(appId); livePending.delete(appId); liveEditors.delete(appId); livePointed.delete(appId);
+  appApps.delete(appId);
+  if (appFrames) appFrames.then(frames => frames.forget(appId)).catch(() => {});
+}
 function pushLive(appId, raw, trust, edit = false) {
   liveLatest.set(appId, { raw, trust, edit });
   // An edit is one change a person just made: it goes now, not at the next frame, so the frame can paint
@@ -510,18 +748,55 @@ window.addEventListener("message", (e) => {
   const m = e.data;
   if (!m || typeof m.type !== "string" || !m.type.startsWith("live/") || !isLiveFrame(e.source)) return;
   // The frame reads its app from the address (a string); the host keys apps as the store does (a number).
-  if (m.type === "live/hello") { const app = /^[0-9]+$/.test(String(m.app)) ? Number(m.app) : m.app; liveWindows.set(e.source, app); if (liveLatest.has(app)) sendLive(app); else refreshLive(app); return; }
+  if (m.type === "live/hello") {
+    // The hidden warm-up frame has no app. Only a real project identity may read source.
+    const app = typeof m.app === "number" ? m.app : typeof m.app === "string" && /^[1-9][0-9]*$/.test(m.app) ? Number(m.app) : 0;
+    if (!Number.isSafeInteger(app) || app < 1) return;
+    liveWindows.set(e.source, app);
+    Promise.resolve().then(async () => {
+      if (appApps.has(app)) { const frames = await appFramesReady(); return frames.has(app) ? frames.resend(app) : refreshPreview(app); }
+      if (liveLatest.has(app)) return sendLive(app);
+      return refreshPreview(app);
+    }).catch(() => refuse(app, null, "The app preview could not be refreshed. Reopen it to try again."));
+    return;
+  }
   if (m.type === "live/painted") { if (m.changed) { liveTimes.push(m.ms); if (liveTimes.length > 200) liveTimes.shift(); } return; }
   // Everything else acts on an app: the one this frame was shown, never the one the message names.
   const appId = liveWindows.get(e.source);
   if (!appId) return;
+  if (m.type === "live/intent") { if (appApps.has(appId)) appFramesReady().then((frames) => frames.intent(appId, m)).catch(() => {}); return; }
   if (m.type === "live/patch" && Array.isArray(m.ops)) patchSpec(appId, m.ops, { author: "user", key: m.key || null }).catch(() => {});
   else if (m.type === "live/undo" || m.type === "live/redo") stepSpec(appId, m.type === "live/undo" ? "undo" : "redo").catch(() => {});
   else if (m.type === "live/point") { if (livePointed.get(appId)?.key === m.key) livePointed.delete(appId); else livePointed.set(appId, { key: m.key, kind: m.kind, edit: m.edit || {}, text: String(m.text || "").slice(0, 200) }); }
 });
 new MutationObserver(() => { for (const appId of liveLatest.keys()) pushLive(appId, liveLatest.get(appId).raw, liveLatest.get(appId).trust); }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+// Build telemetry watches the same frame messages through its own listener, so the live handler above stays
+// exactly the production one its tests lift out; it applies the same trust checks and only marks moments.
+window.addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || typeof m.type !== "string" || !m.type.startsWith("live/") || !isLiveFrame(e.source)) return;
+  if (m.type === "live/hello") { if (tm.turn) tmOnce("frame"); return; }
+  if (m.type === "live/painted") {
+    if (!m.changed) return;
+    if (tm.turn) { tmMark("update", Math.round((m.work || 0) * 1000)); tmMark("pixel"); }
+    if (tm.editOpen) { tm.editOpen = false; tmMark("editScreen"); if (!tm.turn) tmFlush(); }
+    return;
+  }
+  if (m.type === "live/patch" && Array.isArray(m.ops) && liveWindows.get(e.source)) { tm.editOpen = true; tmMark("edit"); }
+});
 // The rules as they stand: the checked spec at its kernel phase, else what the model wrote, as a draft.
+// A stateful app is its module: it is run again from the stored source. Resolves whether this app is one.
+async function refreshApp(appId, options = {}) {
+  const app = await appStateOf(appId);
+  if (!app) return false;
+  pushApp(appId, app.source, app.state?.phase || 'draft', options);
+  return true;
+}
+// What the preview shows for an app as it stands: a running module, or a decision's projection.
+async function refreshPreview(appId, options = {}) { if (!(await refreshApp(appId, options))) await refreshLive(appId); }
 async function refreshLive(appId) {
+  const current = await captureProjectSource(await dbReady, appId);
+  if (applicationShape(current) === 'stateful') return;
   const json = await get("files", appId + ":prism/spec.json");
   if (!json) return;
   const state = await rulesOf(appId);
@@ -530,7 +805,12 @@ async function refreshLive(appId) {
   try {
     const bound = state?.spec && state.specKappa === await kappa(enc.encode(json));
     const trust = bound ? state.phase === "published" && state.publicationCurrent === false ? "proved" : state.phase : "draft";
-    pushLive(appId, JSON.parse(json), trust);
+    const spec = JSON.parse(json);
+    pushLive(appId, spec, trust);
+    // The edit history is ready before the first click, so even the first edit is drawn optimistically,
+    // before any storage read, instead of waiting for the history to be built.
+    if (liveEditors.has(appId)) liveEditors.get(appId).sync(spec); else liveEditors.set(appId, createEditor(spec, checkForEdit));
+    if (liveShown.has(appId) && liveFrameUrl) scheduleCover(appId, liveFrameUrl + "#" + encodeURIComponent(appId));
   } catch (e) {}
 }
 
@@ -564,7 +844,7 @@ function refuse(appId, key, message) {
   for (const [win, app] of liveWindows) if (app === appId && !win.closed) win.postMessage({ type: "live/refused", app: String(appId), key, message }, "*");
 }
 async function saveSpec(appId, spec, options = {}) {
-  const result = await rulesAfterTurn(appId, "<dyad-spec>" + JSON.stringify(spec) + "</dyad-spec>", [], { onCommit: (oid) => emit("version-created", { appId, oid }), ...options });
+  const result = await rulesAfterTurn(appId, "<dyad-spec>" + JSON.stringify(spec).replaceAll("<", "\\u003c") + "</dyad-spec>", [], { onCommit: (oid) => emit("version-created", { appId, oid }), ...options });
   await refreshLive(appId);
   return result;
 }
@@ -583,6 +863,9 @@ async function patchSpec(appId, ops, { author = "user", key = null, ...options }
     const before = ed.spec;
     try { if (!drawn) pushLive(appId, applyOps(before, ops), "draft", true); }
     catch (e) { if (!(e instanceof PatchError)) throw e; refuse(appId, key, e.message); return { ok: false, issues: [e.message] }; }
+    // The check samples up to 200,000 requests on this thread, which the live frame shares: it waits
+    // until the frame has painted the edit, so the person sees their change before it is judged.
+    await new Promise((r) => (typeof requestAnimationFrame === "function" && typeof setTimeout === "function" ? requestAnimationFrame(() => setTimeout(r, 0)) : r()));
     const result = ed.apply(ops);
     if (!result.ok) { await refreshLive(appId); refuse(appId, key, result.issues[0]); return result; }
     try {
@@ -607,12 +890,14 @@ async function stepSpec(appId, way) {
     catch (e) { liveEditors.delete(appId); await refreshLive(appId); refuse(appId, null, e.message); throw e; }
   });
 }
-// What the user points at, said to the agent with the request, so "make this cheaper" has a "this".
-function pointedNote(appId) {
-  const p = livePointed.get(appId);
-  if (!p) return "";
-  const paths = Object.entries(p.edit).filter(([, v]) => Array.isArray(v)).map(([slot, v]) => `${slot} at ${JSON.stringify(v)}`).join("; ");
-  return `\n\n(The user is pointing at the ${p.kind} "${p.text}" on the screen${paths ? ": " + paths : ""}. To change it, write a <dyad-spec-patch>.)`;
+// The built page takes the preview back from the live frame (an app's first turn opened the frame, then
+// wrote code, not rules): announced as a restart, so the renderer forgets the live frame's route.
+async function showBuilt(appId) {
+  const { appUrl } = await buildPreview(appId);
+  if (liveShown.has(appId)) return;
+  const m = machineOf(appId);
+  publish(appId, { phase: "starting", operation: "restart", invocationRef: { kind: "app-run", entityKey: appId, operationId: "built-" + appId + "-" + Date.now() }, startedAt: Date.now(), operationError: null, exit: null });
+  publish(appId, { phase: "ready", operation: null, invocationRef: null, startedAt: Date.now(), operationError: null, exit: null, url: { appUrl, originalUrl: appUrl, mode: "cloud" }, previewReloadEpoch: m.state.previewReloadEpoch + 1 });
 }
 // Point the app's preview at the live frame. The iframe loads once: after this, the address it shows
 // never changes for this app, so the preview never reloads.
@@ -629,7 +914,16 @@ async function showLive(appId) {
   publish(appId, { phase: "ready", operation: null, invocationRef: null, startedAt: Date.now(), operationError: null, exit: null, url: { appUrl, originalUrl: appUrl, mode: "cloud" }, previewReloadEpoch: m.state.previewReloadEpoch + 1 });
   return appUrl;
 }
-const hasRules = async (appId) => !!(await get("files", appId + ":prism/spec.json"));
+// An app whose preview is the live frame: one with rules, or one that is a running module.
+const hasRules = async (appId) => !!(await get("files", appId + ":prism/spec.json")) || !!(await get("files", appId + ":" + appShape.SOURCE_PATH));
+// An app whose code is still the scaffold it was made from. Code a model writes is never applied, so an
+// app made from an idea stays one until its rules arrive: its preview is the live frame, which Forge draws
+// from the rules on this origin, and nothing is built or fetched from another site for it.
+async function scaffoldOnly(appId) {
+  const made = await loadScaffold(), files = (await captureProjectSource(await dbReady, appId)).files;
+  return files.every(([path, text]) => !(path.startsWith("src/") || Object.hasOwn(made, path)) || made[path] === text);
+}
+const projected = async (appId) => (await hasRules(appId)) || (await scaffoldOnly(appId));
 // Warm before the first spec: the frame is built (about 90 ms of fetching, encoding and hashing) and
 // loaded once, hidden, while the page is idle, so the worker has it cached and its kernel has verified
 // itself and answered the gate before a model writes a word. The hidden copy goes once it says hello.
@@ -647,9 +941,10 @@ function warmLive() {
   }).catch(() => {});
 }
 (window.requestIdleCallback || ((fn) => setTimeout(fn, 1500)))(warmLive, { timeout: 4000 });
-window.__live = { liveFrame, showLive, pushLive, refreshLive, patchSpec, stepSpec, pointed: livePointed, times: liveTimes, project: live.project };
+window.__live = { liveFrame, showLive, pushLive, pushApp, appFrames: appFramesReady, refreshLive: refreshPreview, patchSpec, stepSpec, pointed: livePointed, times: liveTimes, project: live.project };
 
 handlers.set("distributed-machine:subscribe", async ({ machineId, encodedKey }) => {
+  if (machineId === "version_preview") return previewEnvelope(encodedKey.appId);
   if (machineId === "chat_stream") return chatSubscribe({ machineId, encodedKey });
   if (machineId !== "app_run") throw new Error("no browser machine " + machineId);
   const m = machineOf(encodedKey.appId);
@@ -658,6 +953,7 @@ handlers.set("distributed-machine:subscribe", async ({ machineId, encodedKey }) 
 handlers.set("distributed-machine:unsubscribe", () => undefined);
 handlers.set("distributed-machine:dispatch", async (envelope) => {
   const { machineId, encodedKey, messageId, encodedEvent } = envelope;
+  if (machineId === "version_preview") return previewDispatch(envelope);
   if (machineId === "chat_stream") return chatDispatch(envelope);
   if (machineId !== "app_run") throw new Error("no browser machine " + machineId);
   const appId = encodedKey.appId, type = encodedEvent && encodedEvent.type;
@@ -666,19 +962,26 @@ handlers.set("distributed-machine:dispatch", async (envelope) => {
     const op = type === "START" ? "run" : type === "RESTART" ? (encodedEvent.operation === "rebuild" ? "rebuild" : "restart") : "reload";
     // An app with rules is projected, not built: the live frame already shows it, so a start, restart
     // or reload keeps the frame (no epoch bump, no reload) and resends the rules.
-    if (await hasRules(appId)) {
-      try { await showLive(appId); await refreshLive(appId); }
+    if(await get("files",appId+":prism/interaction.json")!==undefined){
+      try{const opened=await openInteractionApplication(appId,{run:input=>handlers.get("forge:interaction-run")(input),probe:input=>executeInteraction(kernelReady,input)});if(!opened.current)throw interactionFailure("interactionApplicationMismatch");}
+      catch(error){return receipt(publish(appId,{phase:"errored",operation:null,operationError:{message:error.message}}));}
+      return receipt(publish(appId,{phase:"stopped",operation:null,url:null,lastSettlement:{operationId:encodedEvent.operationId||messageId,kind:"run",outcome:"succeeded"}}));
+    }
+    // The first build may have opened the frame before its first module was complete.
+    if (liveShown.has(appId) || await projected(appId)) {
+      try { await showLive(appId); if (await hasRules(appId)) await refreshPreview(appId); }
       catch (e) { const m = publish(appId, { phase: "errored", operation: null, operationError: { message: String((e && e.message) || e) } }); return receipt(m); }
       const m = publish(appId, { lastSettlement: { operationId: encodedEvent.operationId || messageId, kind: "run", outcome: "succeeded" } });
       return receipt(m);
     }
     const m = publish(appId, { phase: type === "MANUAL_RELOAD" ? "reloading" : "starting", operation: op, startedAt: Date.now(), operationError: null, exit: null });
-    (async () => {
+    m.pending = (async () => {
       try {
         const { appUrl } = await buildPreview(appId);
         // A build that finishes after the app's rules took the preview (a model began writing a spec
-        // while it ran) is about a page the app no longer shows: the live frame stays.
-        if (liveShown.has(appId)) return;
+        // while it ran) is about a page the app no longer shows: the live frame stays, and the start it
+        // answered still settles, or the renderer keeps waiting on it.
+        if (liveShown.has(appId)) { await showLive(appId).catch(() => {}); publish(appId, { phase: "ready", operation: null, lastSettlement: { operationId: encodedEvent.operationId || messageId, kind: "run", outcome: "succeeded" } }); return; }
         const cur = machineOf(appId);
         publish(appId, { phase: "ready", operation: null, url: { appUrl, originalUrl: appUrl, mode: "cloud" }, previewReloadEpoch: cur.state.previewReloadEpoch + 1, lastSettlement: { operationId: encodedEvent.operationId || messageId, kind: "run", outcome: "succeeded" } });
       } catch (e) {
@@ -694,27 +997,44 @@ handlers.set("distributed-machine:dispatch", async (envelope) => {
   return { kind: "ignored", actorInstanceId: "web-app_run-" + appId, revision: machineOf(appId).revision, messageId, reason: "unknown intent " + type };
 });
 handlers.set("connection-flow:get-states", () => ({ github: { status: "disconnected", revision: 0 }, supabase: { status: "disconnected", revision: 0 }, neon: { status: "disconnected", revision: 0 } }));
-handlers.set("window-infrastructure:attach-interest", () => undefined);
-handlers.set("window-infrastructure:detach-interest", () => undefined);
-// the renderer arbitrates the version preview between its windows: a window asks to own an app's preview
-// before it may select a version, and the version controls refuse to work until it does. One tab owns
-// everything here, so the interest is always granted and releasing it always starts the cleanup.
-handlers.set("version-preview:acquire-window-interest", () => ({ acquired: true }));
-handlers.set("version-preview:restore-window-interest", () => ({ acquired: true }));
-handlers.set("version-preview:release-window-interest", () => ({ cleanupStarted: true }));
+handlers.set("window-infrastructure:attach-interest", input => windowCoordination.attach(input));
+handlers.set("window-infrastructure:detach-interest", input => windowCoordination.detach(input));
+const previewEpoch=crypto.randomUUID();
+const previewActorId=appId=>`web-version_preview-${appId}-${previewEpoch}`;
+const previewEnvelope=appId=>({protocolVersion:1,machineId:"version_preview",encodedKey:{appId},actorInstanceId:previewActorId(appId),revision:versionPreview.snapshot(appId).revision,encodedState:VersionPreviewRemoteSnapshotSchema.parse(versionPreview.snapshot(appId))});
+async function previewModelBoundary(){await coreReady;return {guest:kernelReady,core,derive:kappa,readObject:key=>get("objects",key),admit:async(derived,expected)=>core.run({op:"restore",derived,expected}).decision==="Accept"};}
+const versionPreview=createVersionPreviewController({
+  locks:navigator.locks,
+  store:async appId=>{await coreReady;return previewProjectStore(await dbReady,appId,{guest:kernelReady,core,derive:kappa,readObject:key=>get("objects",key),admit:async(derived,expected)=>core.run({op:"restore",derived,expected}).decision==="Accept"});},
+  mintOwner:()=>{let owner=0;while(!owner)owner=crypto.getRandomValues(new Uint32Array(1))[0];return owner;},
+  prepareMessageCommand:async(appId,event)=>{
+    const db=await dbReady,model=await previewModelBoundary(),fork=event.type==="RESTORE_TO_MESSAGE",chatId=fork?event.chatId:event.currentChatMessageId.chatId,messageId=fork?event.messageId:event.currentChatMessageId.messageId;
+    const prepared=await prepareMessageRestoration(db,{appId,chatId,messageId,mode:fork?"fork":"truncate",restoreCodebase:fork?event.restoreCodebase:true,...(!fork?{versionId:event.versionId}:{})},{resolve:reference=>resolveStoredVersion(db,appId,reference),verify:reference=>prepareSnapshot(reference,model)});
+    const effectIdentity=await kappa(new TextEncoder().encode(JSON.stringify(event)));
+    const request={kind:prepared.versionId?4:3,...(prepared.versionId?{versionId:prepared.versionId}:{}),effectIdentity,...(event.expectedHeadOid?{expectedHeadOid:versionAddress(event.expectedHeadOid)}:{})};
+    return {request,boundary:previewProjectStore(db,appId,model,{chatUpdate:prepared.chatUpdate})};
+  },
+  validateEvent:value=>VersionPreviewIntentEventSchema.safeParse(value),
+  publish:(appId,snapshot)=>emit("distributed-machine:snapshot",{protocolVersion:1,machineId:"version_preview",encodedKey:{appId},actorInstanceId:previewActorId(appId),revision:snapshot.revision,encodedState:VersionPreviewRemoteSnapshotSchema.parse(snapshot)}),
+  created:(appId,oid)=>emit("version-created",{appId,oid}),
+  restart:async appId=>{const operationId=crypto.randomUUID();await handlers.get("distributed-machine:dispatch")({protocolVersion:1,machineId:"app_run",encodedKey:{appId},messageId:operationId,encodedEvent:{type:"RESTART",operationId}});await machineOf(appId).pending;const m=machineOf(appId);if(m.state.lastSettlement?.operationId!==operationId||m.state.lastSettlement.outcome!=="succeeded")throw previewFailure("previewUnavailable");},
+});
+async function previewDispatch(raw){
+  const {encodedKey,messageId,encodedEvent,expectedActorInstanceId}=structuredClone(raw),appId=encodedKey?.appId;
+  if(!Number.isSafeInteger(appId)||appId<1||typeof messageId!=="string"||!messageId||messageId.length>256)throw previewFailure("invalidPreviewCommand");
+  const actorInstanceId=previewActorId(appId);if(expectedActorInstanceId&&expectedActorInstanceId!==actorInstanceId)return {kind:"rejected",messageId,reason:"stale-actor"};
+  let result;try{result=await versionPreview.dispatch(appId,encodedEvent);}catch(error){emit("version-preview:result",{appId,operationId:encodedEvent.operationId,notification:{kind:"error",message:error.message},affectedChatId:null,createdChatId:null});throw error;}if(result)emit("version-preview:result",{appId,operationId:encodedEvent.operationId,notification:result.notification,affectedChatId:result.affectedChatId,createdChatId:result.createdChatId});const revision=versionPreview.snapshot(appId).revision;
+  return {kind:"applied",actorInstanceId,revision,transactionSequence:revision,messageId};
+}
+handlers.set("version-preview:acquire-window-interest", ({appId}) => versionPreview.acquire(appId));
+handlers.set("version-preview:restore-window-interest", ({appId}) => versionPreview.acquire(appId));
+handlers.set("version-preview:release-window-interest", ({appId,operationId}) => versionPreview.release(appId,operationId));
+window.addEventListener("pagehide",()=>versionPreview.dispose(),{once:true});
 handlers.set("is-capacitor", () => false);
-handlers.set("get-app-theme", () => null);
 handlers.set("get-proposal", () => null);
 handlers.set("select-app-for-preview", () => undefined);
-handlers.set("git:get-uncommitted-files", () => []);
-// Every edit here is sealed as it is made, so nothing is ever uncommitted; the diff of a file is still
-// real -- its bytes now against its bytes at the address main points at.
-handlers.set("git:get-uncommitted-file-diff", async ({ appId, filePath }) => {
-  const snap = await snapshotOf(await get("refs", appId + ":main"));
-  const entry = (snap ? snap.entries : []).find(([path]) => path === filePath);
-  const now = await get("files", appId + ":" + filePath);
-  return { path: filePath, oldContent: entry ? await contentAt(entry[1]) : "", newContent: now === undefined ? "" : now, additions: 0, deletions: 0 };
-});
+handlers.set("git:get-uncommitted-files", async input => readWorkingTree(await dbReady,input,await versionHistoryBoundary()));
+handlers.set("git:get-uncommitted-file-diff", async input => readWorkingTree(await dbReady,input,await versionHistoryBoundary()));
 handlers.set("github:list-local-branches", () => ({ branches: ["main"], current: "main" }));
 handlers.set("reload-env-path", () => undefined);
 handlers.set("get-cloud-sandbox-status", () => null);
@@ -745,36 +1065,10 @@ handlers.set("set-context-paths", async ({ appId, chatContext }) => { const a = 
 // boundary reports unsupportedChannel, preserving the renderer error state.
 window.__preview = buildPreview;
 
-// ---- the model: OpenRouter with the visitor's own key, streamed as OpenAI compatible SSE. The key
-// lives in the settings record as the renderer keeps it (providerSettings.openrouter.apiKey.value).
-async function* streamOpenRouter({ key, model, messages, signal }) {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST", signal,
-    headers: { "content-type": "application/json", authorization: "Bearer " + key, "HTTP-Referer": location.origin, "X-Title": "hologram-forge" },
-    body: JSON.stringify({ model, messages, stream: true }),
-  });
-  if (!res.ok) throw new Error("OpenRouter " + res.status + ": " + (await res.text()).slice(0, 200));
-  const reader = res.body.getReader();
-  let buf = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (data === "[DONE]") return;
-      try { const j = JSON.parse(data); const d = j.choices && j.choices[0] && j.choices[0].delta; if (d && d.content) yield d.content; if (j.error) throw new Error(j.error.message || "model error"); } catch (e) { if (e instanceof SyntaxError) continue; throw e; }
-    }
-  }
-}
-
 // ---- the renderer's tags: what the model writes becomes files. The grammar is the renderer's: a block per
 // file, attributes path and description, content verbatim between the tags; delete and rename are
 // single tags; add-dependency names packages the import map must carry.
-function parseDyadTags(text) {
+function parsePrismTags(text) {
   const writes = [], deletes = [], renames = [], deps = [];
   const attr = (s, name) => { const m = s.match(new RegExp(name + '="([^"]*)"')); return m ? m[1] : null; };
   for (const m of text.matchAll(/<dyad-write\s+([^>]*)>([\s\S]*?)<\/dyad-write>/g)) {
@@ -787,20 +1081,25 @@ function parseDyadTags(text) {
   for (const m of text.matchAll(/<dyad-add-dependency\s+([^>]*?)\s*\/?>/g)) { const p = attr(m[1], "packages") || attr(m[1], "package"); if (p) deps.push(...p.split(/\s+/).filter(Boolean)); }
   return { writes, deletes, renames, deps };
 }
-async function applyDyadTags(appId, tags, options = {}) {
+async function applyPrismTags(appId, tags, options = {}) {
+  const copied = copyGenerationInput(tags, options.source), { signal, onCommit } = options;
   await coreReady;
-  const result = await applyStoredProjectPatch(await dbReady, appId, tags, { core, derive: kappa, ...options });
-  return result;
+  assertGenerationActive(signal);
+  const source = copied.source || await captureProjectSource(await dbReady, appId);
+  assertCanonicalGeneration(source, copied.tags, lexlean);
+  return applyStoredProjectPatch(await dbReady, appId, copied.tags, { core, derive: kappa, source, signal, onCommit });
 }
-window.__chat = { streamOpenRouter, parseDyadTags, applyDyadTags };
+window.__chat = { parsePrismTags, applyPrismTags };
 
 // ---- the chat stream machine. the renderer submits a turn only here: SUBMIT on the chat_stream
 // machine, then it watches the snapshot (admitting, streaming, finalizing, idle) and applies the
 // chunk events to the message it renders. The model is OpenRouter with the visitor's own key; the
 // prompt is the renderer's text tag build prompt, so the answer carries <dyad-write> blocks the host applies
 // to the project, seals as a version, and the renderer then reloads the preview by itself.
+const chatActorEpoch=crypto.randomUUID();
+const chatActorId=chatId=>"web-chat_stream-"+chatId+"-"+chatActorEpoch;
 const chatMachines = new Map(); // chatId -> { revision, state, abort }
-const idleChat = (chatId) => ({ schemaVersion: 1, chatId, revision: 0, phase: "idle", invocationRef: null, error: null, queueRevision: 0, queuePaused: false, queuePauseReason: null, queue: [], stopPolicyVersion: 0, capabilities: { canSubmit: true, canCancel: false, canPauseQueue: true, canResumeQueue: false }, lastAcceptance: null, lastCompletion: null, lastQueueMutation: null });
+const idleChat = (chatId) => ({ schemaVersion: 1, chatId, revision: 0, phase: "idle", invocationRef: null, error: null, queueRevision: 0, queue: [], queuePaused: false, queuePauseReason: null, stopPolicyVersion: 0, capabilities: { canSubmit: true, canCancel: false, canPauseQueue: true, canResumeQueue: false }, lastAcceptance: null, lastCompletion: null, lastQueueMutation: null });
 function chatMachineOf(chatId) { if (!chatMachines.has(chatId)) chatMachines.set(chatId, { revision: 0, state: idleChat(chatId), abort: null }); return chatMachines.get(chatId); }
 function publishChat(chatId, patch) {
   const m = chatMachineOf(chatId);
@@ -808,7 +1107,7 @@ function publishChat(chatId, patch) {
   const phase = patch.phase || m.state.phase;
   const queuePaused = patch.queuePaused === undefined ? m.state.queuePaused : patch.queuePaused;
   m.state = { ...m.state, ...patch, revision: m.revision, capabilities: { canSubmit: true, canCancel: phase === "admitting" || phase === "streaming", canPauseQueue: !queuePaused, canResumeQueue: queuePaused } };
-  emit("distributed-machine:snapshot", { protocolVersion: 1, machineId: "chat_stream", encodedKey: { chatId }, actorInstanceId: "web-chat_stream-" + chatId, revision: m.revision, encodedState: m.state });
+  emit("distributed-machine:snapshot", { protocolVersion: 1, machineId: "chat_stream", encodedKey: { chatId }, actorInstanceId: chatActorId(chatId), revision: m.revision, encodedState: m.state });
   // shellUpdate is declared below and read here before it exists while the host starts: var, and checked.
   if (shellUpdate && shellUpdate.waiting && !turnRunning()) setTimeout(reloadIfIdle, 1500);
   return m;
@@ -843,25 +1142,22 @@ const djb2 = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = (
 const now = () => new Date().toISOString();
 async function messagesOf(chatId) { const c = await get("chats", chatId); return c ? c.messages : []; }
 async function saveMessages(chatId, messages) { return updateStoredChat(await dbReady, chatId, { messages }); }
-// What the model is shown of the project: every path, and the source of the files a visitor's app
-// is made of; the shadcn ui library files are named, not pasted, since the model knows them.
-async function codebaseOf(appId, source) {
-  const captured = source ? new Map(source.files) : null;
-  const paths = captured ? [...captured.keys()] : await filesOf(appId);
-  const parts = [];
-  for (const p of paths) {
-    if (p.startsWith("src/components/ui/")) continue;
-    const c = captured ? captured.get(p) : await get("files", appId + ":" + p);
-    parts.push(`<dyad-file path="${p}">\n${c}\n</dyad-file>`);
-  }
-  return "Files in the project:\n" + paths.join("\n") + "\n\n" + parts.join("\n\n");
-}
 // ---- proved rules. An app that decides something carries prism/spec.json, a Prism spec. Its build
 // phase (drafting, checked, proving, proved, published) is the Forge kernel's answer, never this
 // file's: the kernel is the Prism app whose state machine Lean proves (FK-01 to FK-04), so the chat
 // can say proved only after Lean attested the current rules, and publish only proved rules. The
 // state lives at refs["prism:<appId>"].
 const kernelReady = import(new URL("kernel.js", BASE).href).then(() => self.ForgeKernel.load((p) => fetch(new URL(p, BASE))));
+// The renderer's screens ask the kernel too, for the decisions it holds about them (the build screen's layout,
+// what counts as this week): the answer is the kernel's, the screen only draws it. Nothing is asked before the
+// guest has passed its pin and every acceptance vector.
+window.__forgeKernel = Object.freeze({ ask: (line) => kernelReady.then((k) => k.ask(line)) });
+// The build screen draws whichever layout the kernel last answered for this window's width, then asks again:
+// the answer is asked here as soon as the kernel is ready, and on every resize, so the build screen starts in
+// the kernel's layout instead of drawing the other one and remounting.
+const askLayout = () => kernelReady.then((k) => k.ask("layout " + Math.max(0, Math.round(innerWidth)))).then((a) => { if (a === "tabs" || a === "split") { try { localStorage.setItem("holo.layout.narrow", a === "tabs" ? "1" : "0"); } catch (e) {} } }).catch(() => {});
+askLayout();
+addEventListener("resize", askLayout);
 async function representationCommand(operation, input, reconstruct = false) {
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== (reconstruct ? "basis,bytes,identity" : "basis,bytes")) return { ok: false, code: "invalidRepresentation" };
   try { return { ok: true, value: await (reconstruct ? operation(input.bytes, input.identity, input.basis) : operation(input.bytes, input.basis)) }; }
@@ -874,7 +1170,43 @@ handlers.set("forge:compose", async (input) => {
   return admitWithGuest(await kernelReady, input.policy, input.features);
 });
 handlers.set("forge:work", async input => executeWorkWithGuest(await kernelReady, input));
+handlers.set("forge:event", async input => admitEventWithGuest(await kernelReady, input));
+handlers.set("forge:queue", input=>queueWithGuest(kernelReady,input));
+handlers.set("forge:version-preview", input => previewWithGuest(kernelReady,input));
+handlers.set("forge:route", input => routeWithGuest(kernelReady,input));
+handlers.set("forge:interact", input => executeInteraction(kernelReady, input));
+let interactionModelSource;
+async function loadInteractionModelSource(){
+  if(interactionModelSource!==undefined)return interactionModelSource;
+  try{const response=await fetch(new URL("interaction-model.lex.tex",BASE),{credentials:"omit",redirect:"error"});if(!response.ok)throw Error();const text=await response.text();if(text.length>131072||!text.startsWith("\\begin{lexlean}{InteractionModel}"))throw Error();interactionModelSource=text;return text;}catch{throw interactionFailure("interactionApplicationMismatch");}
+}
+handlers.set("forge:interaction-create", async raw => {
+  const input=structuredClone(raw);
+  if(!input || Object.keys(input).sort().join()!=="kind,name" || typeof input.name!=="string" || !input.name.trim() || input.name.length>120)throw interactionFailure("invalidInteractionApplication");
+  const document=await validateInteractionDocument(JSON.stringify(interactionPreset(input.kind)),kernelReady);
+  await coreReady;
+  const modelSource=await loadInteractionModelSource();
+  const files={"prism/interaction.json":JSON.stringify(document,null,2)+"\n","prism/Application.lex.tex":interactionModule(document.graph),"prism/InteractionModel.lex.tex":modelSource,"README.md":"# "+document.title+"\nOpen this project using Foundry Interactive apps. Edit prism/interaction.json to author its canonical profile.\n"};
+  const prepared=await prepareNewProject({name:input.name,files},{core,derive:kappa});
+  const created=await createStoredProject(await dbReady,prepared,nulls);
+  emit("version-created",{appId:created.app.id,oid:created.oid});return {app:withDates(created.app),chatId:created.chatId};
+});
+handlers.set("forge:interaction-run", async input => {const copied=structuredClone(input);await coreReady;return runStoredInteraction(await dbReady,kernelReady,kappa,copied,await loadInteractionModelSource());});
+
+async function eventDeliveryCommand(operation, raw) {
+  const input=copyEventCommand(operation,raw);
+  const db=await dbReady;
+  if(operation==="pending")return readEventJournal(db,input.appId);
+  return updateEventJournal(db,await kernelReady,input.appId,operation,input.context ?? input.envelope ?? input.receipt);
+}
+handlers.set("forge:event-configure", input => eventDeliveryCommand("configure", input));
+handlers.set("forge:event-deliver", input => eventDeliveryCommand("deliver", input));
+handlers.set("forge:event-pending", input => eventDeliveryCommand("pending", input));
+handlers.set("forge:event-acknowledge", input => eventDeliveryCommand("acknowledge", input));
 const PHASES = ["drafting", "checked", "proving", "proved", "published"];
+const discovery=createDiscovery({guest:kernelReady,derive:kappa,create:input=>handlers.get("forge:interaction-create")(input)});
+handlers.set("forge:discover", input=>discovery.discover(input));
+handlers.set("forge:discovery-create", input=>discovery.accept(input));
 async function nextPhase(phase, event) {
   const answer = await (await kernelReady).ask(phase + " " + event);
   if (!PHASES.includes(answer)) throw new Error("the kernel answered " + answer + " to " + phase + " " + event);
@@ -886,23 +1218,103 @@ const saveRules = async (appId, state, expected, signal) => saveBoundRules(await
 // After a turn: the spec the model wrote (if any) becomes prism/spec.json; new rules drop the proof
 // (the kernel's edit), are checked (its check), and on a pass the app's rule module is written.
 // Returns the files changed and the card that replaces the spec in the chat.
+// The end of a turn that wrote a stateful app: its module is kept as its source and checked. Resolves
+// null when the turn wrote none, and the turn is then a decision's (rulesAfterTurn).
+async function appAfterTurn(appId, text, options = {}) {
+  const appModule = options.moduleText === undefined ? appShape.moduleFromTurn(text, { final: true }) : {text:options.moduleText};
+  // Lines that still do not read change nothing; the chat says what the reader said.
+  if (appModule && appModule.notation && !appModule.text) {
+    assertGenerationActive(options.signal);
+    const source = options.source || await captureProjectSource(await dbReady, appId);
+    assertGenerationActive(options.signal);
+    return { changed: 0, source, card: appShape.notationCard(appModule.issues) };
+  }
+  if (!appModule || !appShape.isAppShape(appModule.text)) return null;
+  assertGenerationActive(options.signal);
+  await coreReady;
+  const source = options.source || await captureProjectSource(await dbReady, appId);
+  const files = new Map(source.files), writes = [], deletes = retiredApplicationPaths(source, 'stateful', appShape.SOURCE_PATH, lexlean.canonicalSource).map(path => ({path}));
+  const stage = (path, content) => { if (files.get(path) !== content) { files.set(path, content); writes.push({ path, content }); } };
+  const appSource = appModule.text.trim() + "\n";
+  stage(appShape.SOURCE_PATH, appSource);
+  if (appModule.notation) stage(appShape.NOTATION_PATH, appModule.notation);
+  // The phase is the kernel's answer: an edit sends the app back to drafting, a check that passes
+  // moves it to checked. A check that could not be made leaves it drafting and says why.
+  const known = new Map(source.files).has('prism/spec.json') ? null : await boundApplicationState(source, kappa);
+  const sourceKappa = await kappa(enc.encode(appSource));
+  let appState;
+  if (known && known.sourceKappa === sourceKappa && ["checked", "proving", "proved", "published"].includes(known.phase)) appState = known;
+  else {
+    let phase = known && known.phase ? await nextPhase(known.phase, "edit") : "drafting";
+    // A reading is not sent anywhere to be checked as it is shown: it is checked when the person approves it.
+    const verdict = options.check === false ? { ok: false, issues: [] } : await checkAppModule(appSource, { signal: options.signal, session: options.session }).catch((e) => ({ ok: false, issues: [], unchecked: String((e && e.message) || e).slice(0, 200) }));
+    assertGenerationActive(options.signal);
+    if (verdict.ok) phase = await nextPhase(phase, "check");
+    appState = { phase, sourceKappa, issues: verdict.issues || [], ...(verdict.unchecked ? { unchecked: verdict.unchecked } : {}), updated: now() };
+    stage(appShape.STATE_PATH, JSON.stringify(appState, null, 2) + "\n");
+  }
+  stage(appShape.STATE_PATH, JSON.stringify(appState, null, 2) + '\n');
+  const priorRules = await rulesSnapshotOf(appId);
+  const kept = writes.length || deletes.length || priorRules.expected !== undefined || JSON.stringify(source.applicationState) !== JSON.stringify(appState)
+    ? await applyStoredProjectPatch(await dbReady, appId, { writes, deletes, renames: [], deps: [] }, { core, derive: kappa, ...options, source, rulesUpdate:{expected:priorRules.expected,state:null}, appUpdate:{expected:source.applicationState,state:appState} })
+    : {changed:0,source};
+  assertGenerationActive(options.signal);
+  if (kept.changed && (new Map(source.files).has('prism/spec.json') || !appShape.isAppShape(new Map(source.files).get(appShape.SOURCE_PATH)))) forgetApplicationFrames(appId);
+  return { changed: kept.changed, source: kept.source, card: appShape.card(appState) };
+}
+const afterTurn = async (appId, text, written = [], options = {}) => (await appAfterTurn(appId, text, options)) || rulesAfterTurn(appId, text, written, options);
 async function rulesAfterTurn(appId, text, written = [], options = {}) {
   assertGenerationActive(options.signal);
   await coreReady;
   const source = options.source || await captureProjectSource(await dbReady, appId);
-  const files = new Map(source.files), writes = [];
+  const files = new Map(source.files), writes = [], deletes = [];
+  let previousCanonicalPath = null;
+  try { previousCanonicalPath = `prism/${lexlean.canonicalSource(JSON.parse(files.get("prism/spec.json"))).name}.lex.tex`; } catch {}
   const stage = (path, content) => { if (files.get(path) !== content) { files.set(path, content); writes.push({ path, content }); } };
+  // The rest of the app's prism/prompt/1, when the turn wrote it: the idea routed onto every facet
+  // (prism/builder/route.mjs). It lands with the rules in the one source transaction; a turn that
+  // writes none keeps the parts the app has.
+  const promptTag = prism.parsePromptTag(text);
+  if (promptTag && promptTag.parts) stage("prism/prompt.json", JSON.stringify(promptTag.parts, null, 2) + "\n");
+  // A LexLean module, when the model wrote one, carries the rules: the spec is read from it, keeping the
+  // screen's words only when their checked interface still belongs to the new module.
+  const lex = lexlean.specFromTurn(text);
+  let presentationReset = false;
+  if (lex && lex.error) return { changed: 0, source, card: `**Rules** · not read\n\n- ${lex.error}\n\nAsk me to fix the module.` };
+  if (lex) {
+    let previous = null;
+    try { previous = JSON.parse(files.get("prism/spec.json") || "null"); } catch { previous = {}; }
+    const presentation = modulePresentation(previous, lex.spec);
+    if (presentation.code) return { changed: 0, source, card: `**Rules** · not read\n\n- ${presentation.error}\n\nAsk me to fix the module.` };
+    presentationReset = presentation.reset;
+    text = "<dyad-spec>" + JSON.stringify(presentation.spec).replaceAll("<", "\\u003c") + "</dyad-spec>";
+  }
   const tag = prism.parseSpecTag(text);
+  if (!tag?.spec && appShape.isAppShape(files.get(appShape.SOURCE_PATH))) return {changed:0,source,card:null};
   if (tag && tag.spec) stage("prism/spec.json", JSON.stringify(tag.spec, null, 2) + "\n");
+  // Every app's rules have a canonical LexLean source, whatever wrote them (a module, the on-device
+  // model's JSON, a click or an agent's patch): the same meaning is always the same module bytes. It is
+  // staged with the spec, so both land in the one source transaction.
+  if (files.get("prism/spec.json")) {
+    try {
+      const c = lexlean.canonicalSource(JSON.parse(files.get("prism/spec.json"))), path = `prism/${c.name}.lex.tex`;
+      for (const oldPath of retiredApplicationPaths(source, 'decision', path, lexlean.canonicalSource)) {
+        if (files.has(oldPath)) {files.delete(oldPath); deletes.push({path:oldPath});}
+      }
+      stage(path, c.source);
+      if (previousCanonicalPath && previousCanonicalPath !== path && files.has(previousCanonicalPath)) { files.delete(previousCanonicalPath); deletes.push({ path: previousCanonicalPath }); }
+    } catch (e) {}
+  }
   const current = files.get("prism/spec.json"), snapshot = await rulesSnapshotOf(appId), before = snapshot.state;
   if (!current) return { changed: 0, source, card: tag && tag.error ? `**Rules** · not checked\n\n- ${tag.error}\n\nAsk me to fix the rules.` : null };
   const specKappa = await kappa(enc.encode(current));
   const proofKey = spec => live.kappaOfValue({ name: spec.name, logic: live.logicOf(spec) });
-  if (before && before.specKappa === specKappa && writes.length === 0) return { changed: 0, source, card: tag ? prism.card(before) : null };
+  if (before && before.specKappa === specKappa && writes.length === 0 && deletes.length === 0 && source.applicationState === undefined) return { changed: 0, source, card: tag ? prism.card(before) : null };
   let phase = before ? await nextPhase(before.phase, "edit") : "drafting";
   let logicKappa = null, retained = false;
   let checked;
   try { checked = prism.checkSpec(JSON.parse(current)); } catch (e) { checked = { ok: false, issues: ["The rules are not valid JSON: " + e.message] }; }
+  if (!checked.ok && appShape.isAppShape(new Map(source.files).get(appShape.SOURCE_PATH))) return {changed:0,source,card:'**Rules** · not checked\n\nThe stateful module was retained because the replacement decision is invalid.'};
   if (checked.ok) {
     logicKappa = proofKey(checked.spec);
     if (before?.spec && before.logicKappa === logicKappa && proofKey(before.spec) === logicKappa) {
@@ -914,14 +1326,20 @@ async function rulesAfterTurn(appId, text, written = [], options = {}) {
     const page = files.get("src/pages/Index.tsx") || "";
     if (!page.includes("@/lib/prism") && !written.some((p) => p && p.startsWith("src/pages/"))) stage("src/pages/Index.tsx", prism.screenSource());
   }
-  const notes = [...(tag && tag.repaired ? ["Forge repaired the JSON syntax the model wrote. Read the rules before you approve them."] : []), ...(checked.notes || [])];
-  const state = { ...(retained ? before : {}), phase, specKappa, logicKappa, spec: checked.spec || null, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: retained ? before.proof : null, updated: now() };
+  const notes = [...(presentationReset ? ["The application interface changed or its previous presentation was invalid; the view and descriptions were reset to the new module."] : []), ...(tag && tag.repaired ? ["Forge repaired the JSON syntax the model wrote. Read the rules before you approve them."] : []), ...(checked.notes || [])];
+  // The full model: the builder projects every facet from the parts and the checked spec, or says why not.
+  let parts = null;
+  try { parts = JSON.parse(files.get("prism/prompt.json") || "null"); } catch {}
+  if (promptTag && promptTag.error) notes.push(promptTag.error);
+  const facets = checked.ok ? await prism.facetsOf(parts, checked.spec) : null;
+  const state = { ...(retained ? before : {}), phase, specKappa, logicKappa, spec: checked.spec || null, prompt: parts, facets, issues: checked.issues, notes, vectors: checked.vectors || 0, proof: retained ? before.proof : null, updated: now() };
   // A semantic proof survives wording changes; a release still identifies the older bytes.
   if (retained && before.phase === "published" && before.specKappa !== specKappa) state.publicationCurrent = false;
   // Compare the captured lifecycle and install its successor in the source transaction.
   // A completed proof wins over this stale edit; no deleted-status interval is exposed.
-  const applied = await applyStoredProjectPatch(await dbReady, appId, { writes, deletes: [], renames: [], deps: [] }, { core, derive: kappa, ...options, source, rulesUpdate: { expected: snapshot.expected, state } });
+  const applied = await applyStoredProjectPatch(await dbReady, appId, { writes, deletes, renames: [], deps: [] }, { core, derive: kappa, ...options, source, rulesUpdate: { expected: snapshot.expected, state }, appUpdate:{expected:source.applicationState,state:null} });
   assertGenerationActive(options.signal);
+  if (applied.changed && appShape.isAppShape(new Map(source.files).get(appShape.SOURCE_PATH))) forgetApplicationFrames(appId);
   return { changed: applied.changed, source: applied.source, card: prism.card(state) };
 }
 // The kernel's answer to a reword. A kernel guest older than the event (KERNEL_REV pins the guest the page
@@ -930,19 +1348,23 @@ async function rulesAfterTurn(appId, text, written = [], options = {}) {
 async function rewordPhase(phase) {
   try { return await nextPhase(phase, "reword"); } catch (e) { return null; }
 }
-// Lean proves the rules on the hosted verifier; the kernel moves the phase on its attestation or its
-// refusal. A proof whose logic changed meanwhile is dropped: it is about other rules. A reword meanwhile
-// keeps it, since the logic kappa is the same. Resolves the prover's result, or null when the logic
-// changed under it.
-async function proveRules(appId, logicKey, onWait) {
+// Lean's kernel proves the rules in this tab (prism.prove), and the kernel moves the phase on the Forge kernel
+// guest's verdict. A proof whose logic changed meanwhile is dropped: it is about other rules. A reword meanwhile
+// keeps it, since the logic kappa is the same. Resolves the prover's result, or null when the logic changed under it.
+async function proveRules(appId, logicKey, onWait, options = {}) {
   const state = await rulesOf(appId);
-  if (!state || (state.logicKappa || state.specKappa) !== logicKey || state.phase !== "proving") return null;
-  const result = await prism.prove(state.spec, { onWait }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+  const reservation = options.expectedState || state;
+  if (!sameRuleReservation(state, reservation) || (state.logicKappa || state.specKappa) !== logicKey) return null;
+  let submitted = false;
+  const result = await prism.prove(reservation.spec, { guest: kernelReady, beforeSubmit: () => { options.beforeSubmit?.(); submitted = true; } }).catch((e) => {
+    if (options.beforeSubmit && !submitted) throw e;
+    return { ok: false, error: String((e && e.message) || e) };
+  });
   const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
   let attempted;
   for (;;) {
     const latest = await rulesOf(appId);
-    if (!latest || (latest.logicKappa || latest.specKappa) !== logicKey || latest.phase !== "proving") return null;
+    if (!sameRuleReservation(latest, reservation)) return null;
     const predecessor = JSON.stringify(latest);
     if (predecessor === attempted) return null;
     attempted = predecessor;
@@ -956,57 +1378,248 @@ async function proveRules(appId, logicKey, onWait) {
 }
 // "approve" is the user's yes to the guarantees on the card: no model is asked. The answer is a
 // message, and, when Lean was started, the proof to wait for.
-async function approveRules(appId) {
+// A stateful app's standing (shell/live/app.mjs, STATE_PATH), only while it is about the stored module.
+async function appStateOf(appId) {
+  const captured = await captureProjectSource(await dbReady, appId);
+  const files = new Map(captured.files), source = files.get(appShape.SOURCE_PATH);
+  applicationShape(captured);
+  if (typeof source !== "string" || !appShape.isAppShape(source)) return null;
+  return {source, captured, state:await boundApplicationState(captured,kappa), expectedState:captured.applicationState};
+}
+// Approval and proof completion compare the snapshot they examined, never a fresh replacement.
+const saveAppFiles = async (appId, writes, source, appUpdate) => applyStoredProjectPatch(await dbReady, appId, { writes, deletes: [], renames: [], deps: [] }, { core, derive: kappa, source, appUpdate });
+// Approval of a stateful app: the kernel moves it from checked to proving, and Lean is asked.
+async function approveApp(appId, app, options = {}) {
+  const { source, state } = app;
+  if (options.signal) assertGenerationActive(options.signal);
+  if (!state) return { text: "This app's module is not checked yet, so there is nothing to approve. Ask me to fix it." };
+  if (state.phase === "proving") return { text: "Lean is already proving this app's properties." };
+  if (state.phase === "proved" || state.phase === "published") return { text: "This app's properties are already proved by Lean." };
+  if (state.phase !== "checked") return { text: "This app's module is not checked yet, so there is nothing to approve. Ask me to fix it." };
+  const count = appShape.theoremsOf(source).length;
+  if (!count) return { text: "This app's module states no properties, so there is nothing for Lean to prove. Ask me to add its promises." };
+  const phase = await nextPhase("checked", "approve");
+  const reservation = { ...state, phase, approved: now(), approvalId: options.approvalId || crypto.randomUUID() };
+  let saved, submitted = false, abandoned = false, rollback;
+  const cancel = () => {
+    if (submitted) return Promise.resolve(false);
+    abandoned = true;
+    return (rollback ||= (async () => {
+      if (!saved) return false;
+      const attempted = new Set();
+      let conflict;
+      for (;;) {
+        const latest = await appStateOf(appId);
+        if (!latest?.state || latest.source !== source || JSON.stringify(latest.expectedState) !== JSON.stringify(reservation)) return false;
+        // Unrelated edits may advance the project while this exact proof reservation survives.
+        // Restore only its lifecycle, using each new current source once; the CAS preserves all
+        // unrelated bytes and refuses a replacement approval or an edit to the approved module.
+        const predecessor = JSON.stringify(latest.captured);
+        if (attempted.has(predecessor)) throw conflict;
+        attempted.add(predecessor);
+        try {
+          await saveAppFiles(appId, [{ path: appShape.STATE_PATH, content: JSON.stringify(state, null, 2) + "\n" }], latest.captured, { expected: reservation, state });
+          await refreshApp(appId).catch(() => {});
+          return true;
+        } catch (error) {
+          if (!["projectEditConflict", "applicationStateConflict"].includes(error?.code)) throw error;
+          conflict = error;
+        }
+      }
+    })());
+  };
+  try {
+    if (options.signal) assertGenerationActive(options.signal);
+    saved = await saveAppFiles(appId, [{ path: appShape.STATE_PATH, content: JSON.stringify(reservation, null, 2) + "\n" }], app.captured, { expected: app.expectedState, state: reservation });
+    if (options.signal) assertGenerationActive(options.signal);
+    await refreshApp(appId);
+    if (options.signal) assertGenerationActive(options.signal);
+  } catch (error) {
+    await cancel();
+    if (["projectEditConflict", "applicationStateConflict"].includes(error?.code)) return { text: "The app changed before approval was recorded. Check the current module again." };
+    throw error;
+  }
+  return {
+    text: appShape.provingMessage(count), message: appShape.proofMessage, cancel, submitted: () => submitted,
+    prove: async (onWait) => {
+      try {
+        return await proveApp(appId, state.sourceKappa, source, onWait, { expectedState: reservation, beforeSubmit: () => {
+          if (options.signal) assertGenerationActive(options.signal);
+          if (abandoned) throw Object.assign(new Error("Generation cancelled"), { code: "generationCancelled" });
+          submitted = true;
+        } });
+      } finally { if (!submitted) await cancel(); }
+    },
+  };
+}
+// Lean proves the module with its kernel in this tab (prism.js proveModule); the Forge kernel moves the phase on its
+// verdict. A proof whose module changed meanwhile is dropped: it is about other bytes.
+async function proveApp(appId, sourceKappa, source, onWait, options = {}) {
+  const current = await appStateOf(appId);
+  if (!current?.state || current.state.sourceKappa !== sourceKappa || current.state.phase !== "proving" || current.source !== source || (options.expectedState && JSON.stringify(current.expectedState) !== JSON.stringify(options.expectedState))) return null;
+  const model = await appModel(), proved = source;
+  let submitted = false;
+  const result = await prism.proveModule(source, appShape.semanticData(source, { theorems: true }), model.declarations, { guest: kernelReady, beforeSubmit: () => { options.beforeSubmit?.(); submitted = true; } }).catch((e) => {
+    if (options.beforeSubmit && !submitted) throw e;
+    return { ok: false, error: String((e && e.message) || e) };
+  });
+  const attempted = new Set();
+  let theorems, promises;
+  for (;;) {
+    const latest = await appStateOf(appId);
+    if (!latest?.state || latest.source !== source || latest.state.sourceKappa !== sourceKappa || latest.state.phase !== "proving" || latest.state.approvalId !== current.state.approvalId) return null;
+    const predecessor = JSON.stringify(latest.captured);
+    if (attempted.has(predecessor)) return null;
+    attempted.add(predecessor);
+    const phase = await nextPhase("proving", result.ok ? "attest" : "fail");
+    const kept = result.ok ? proved.trim() + "\n" : latest.source;
+    theorems = appShape.theoremsOf(kept); promises = appShape.promisesOf(kept);
+    const state = { ...latest.state, phase, sourceKappa: await kappa(enc.encode(kept)), proof: result.ok ? result.record : null, proofError: result.ok ? null : result.error, theorems: result.ok ? theorems : [], promises: result.ok ? promises : [], updated: now() };
+    try {
+      await saveAppFiles(appId, [...(kept !== latest.source ? [{ path: appShape.SOURCE_PATH, content: kept }] : []), { path: appShape.STATE_PATH, content: JSON.stringify(state, null, 2) + "\n" }], latest.captured, { expected: latest.expectedState, state });
+      break;
+    } catch (error) {
+      if (!["projectEditConflict", "applicationStateConflict"].includes(error?.code)) throw error;
+      // An unrelated edit can race this CAS. Retry only the completed result against a new
+      // capture of the same module and approval, never the already submitted proof request.
+    }
+  }
+  await put("audit", Date.now() + ":prism:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.app.prove", resource: sourceKappa, outcome: result.ok ? "proved" : "refused" });
+  await refreshApp(appId);
+  return { ...result, theorems, promises };
+}
+const approve = async (appId, options = {}) => { const app = await appStateOf(appId); return app ? approveApp(appId, app, options) : approveRules(appId, options); };
+async function approveRules(appId, options = {}) {
+  if (options.signal) assertGenerationActive(options.signal);
   const state = await rulesOf(appId);
   if (!state) return { text: "This app has no rules to prove yet. Tell me what it decides and I will draft them." };
   if (state.phase === "proving") return { text: "Lean is already proving these rules." };
   if (state.phase === "proved" || state.phase === "published") return { text: "These rules are already proved by Lean." };
   if (state.phase !== "checked") return { text: "The rules are not checked yet, so there is nothing to approve. Ask me to fix them." };
-  const phase = await nextPhase("checked", "approve");
-  if (!await saveRules(appId, { ...state, phase, approved: now() }, state)) return { text: "The rules changed before approval was recorded. Check the current rules again." };
-  await refreshLive(appId);
-  return { text: prism.provingMessage(state.spec), spec: state.spec, prove: (onWait) => proveRules(appId, state.logicKappa || state.specKappa, onWait) };
+  const phase = await nextPhase("checked", "approve"), reservation = { ...state, phase, approved: now(), approvalId: options.approvalId || crypto.randomUUID() };
+  if (options.signal) assertGenerationActive(options.signal);
+  if (!await saveRules(appId, reservation, state)) return { text: "The rules changed before approval was recorded. Check the current rules again." };
+  let submitted = false, abandoned = false, rollback;
+  const cancel = () => {
+    if (submitted) return Promise.resolve(false);
+    abandoned = true;
+    return (rollback ||= (async () => {
+      const attempted = new Set();
+      for (;;) {
+        const latest = await rulesOf(appId);
+        if (!sameRuleReservation(latest, reservation)) return false;
+        const predecessor = JSON.stringify(latest);
+        if (attempted.has(predecessor)) return false;
+        attempted.add(predecessor);
+        const restored = { ...latest, phase: state.phase };
+        for (const key of ["approvalId", "approved"]) {
+          if (Object.hasOwn(state, key)) restored[key] = state[key]; else delete restored[key];
+        }
+        if (!await saveRules(appId, restored, latest)) continue;
+        await refreshLive(appId).catch(() => {});
+        return true;
+      }
+    })());
+  };
+  try { if (options.signal) assertGenerationActive(options.signal); await refreshLive(appId); if (options.signal) assertGenerationActive(options.signal); }
+  catch (error) { await cancel(); throw error; }
+  return {
+    text: prism.provingMessage(state.spec), spec: state.spec, cancel, submitted: () => submitted,
+    prove: async (onWait) => {
+      try {
+        return await proveRules(appId, state.logicKappa || state.specKappa, onWait, { expectedState: reservation, beforeSubmit: () => {
+          if (options.signal) assertGenerationActive(options.signal);
+          if (abandoned) throw Object.assign(new Error("Generation cancelled"), { code: "generationCancelled" });
+          submitted = true;
+        } });
+      } finally { if (!submitted) await cancel(); }
+    },
+  };
 }
 // The approve turn stays open while Lean works, as a build turn stays open while the model writes:
 // the renderer shows it working, the message counts the seconds, and the result completes it.
 async function approveTurn(chatId, appId, messages, userId, ref, intentId) {
-  const m = chatMachineOf(chatId);
+  const m = chatMachineOf(chatId), abort = new AbortController(), cancel = () => abort.abort();
+  m.abort = abort; m.queueSignal?.addEventListener("abort", cancel, { once: true });
+  if (m.queueSignal?.aborted) cancel();
   messages.push({ id: userId + 1, role: "assistant", content: "", approvalState: "approved", commitHash: null, createdAt: now() });
   const show = async (content) => {
     messages[messages.length - 1] = { ...messages[messages.length - 1], content };
     await saveMessages(chatId, messages);
     emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
   };
-  let started;
-  try { started = await approveRules(appId); } catch (e) { started = { text: `<dyad-output type="error" message="${String((e && e.message) || e).replace(/"/g, "'")}"></dyad-output>` }; }
-  await show(started.text);
-  if (started.prove) {
-    const abort = new AbortController(); m.abort = abort;
-    const proof = started.prove((s) => { if (!abort.signal.aborted) show(started.text + `\n\nLean is working, ${s} s.`); });
-    const stopped = new Promise((res) => abort.signal.addEventListener("abort", () => res("stopped")));
-    const result = await Promise.race([proof, stopped]);
-    m.abort = null;
-    if (result === "stopped") {
-      await show(started.text + "\n\nStopped watching. Lean keeps working; the result is kept with the app's rules.");
+  let started, observing = true, stopListener, error = null;
+  try {
+    assertGenerationActive(abort.signal);
+    started = await approve(appId, { signal: abort.signal, approvalId: intentId });
+    assertGenerationActive(abort.signal);
+    await show(started.text);
+    assertGenerationActive(abort.signal);
+    if (started.prove) {
+      const stopped = new Promise(resolve => {
+        stopListener = () => resolve("stopped"); abort.signal.addEventListener("abort", stopListener, { once: true });
+        if (abort.signal.aborted) stopListener();
+      });
+      const proof = started.prove(s => { if (observing && !abort.signal.aborted) void show(started.text + `\n\nLean is working, ${s} s.`).catch(() => {}); });
       proof.catch(() => {});
-    } else {
-      await show(started.text + "\n\n" + (result ? prism.proofMessage(started.spec, result) : "The rules changed while Lean worked, so this proof is about other rules and was dropped."));
+      const result = await Promise.race([proof, stopped]);
+      observing = false;
+      if (result === "stopped") {
+        await started.cancel?.();
+        await show(started.submitted?.()
+          ? started.text + "\n\nStopped watching. Lean keeps working; the result is kept with the app's rules."
+          : "Stopped before proof submission. No proof request was sent.");
+      } else {
+        await show(started.text + "\n\n" + (result ? (started.message ? started.message(result) : prism.proofMessage(started.spec, result)) : "The rules changed while Lean worked, so this proof is about other rules and was dropped."));
+      }
     }
+  } catch (failure) {
+    observing = false;
+    try { await started?.cancel?.(); } catch (rollbackFailure) { failure = rollbackFailure; }
+    if (!abort.signal.aborted || failure?.code !== "generationCancelled") error = String((failure && failure.message) || failure);
+    try { await show(error ? `<dyad-output type="error" message="${error.replace(/"/g, "'")}"></dyad-output>` : started?.submitted?.()
+      ? "Stopped watching. Lean keeps working; the result is kept with the app's rules."
+      : "Stopped before proof submission. No proof request was sent."); }
+    catch (storageFailure) { error = String((storageFailure && storageFailure.message) || storageFailure); }
+  } finally {
+    observing = false;
+    if (stopListener) abort.signal.removeEventListener("abort", stopListener);
+    m.queueSignal?.removeEventListener("abort", cancel);
+    if (m.abort === abort) m.abort = null;
+    publishChat(chatId, { phase: "finalizing", error, lastCompletion: { intentId, invocationRef: ref, outcome: error ? "errored" : "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
+    publishChat(chatId, { phase: "idle", invocationRef: null });
+    emit("chat:stream:end", { chatId });
   }
-  publishChat(chatId, { phase: "finalizing", error: null, lastCompletion: { intentId, invocationRef: ref, outcome: "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
-  publishChat(chatId, { phase: "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
-  emit("chat:stream:end", { chatId });
 }
 handlers.set("prism:status", async ({ appId }) => (await rulesOf(appId)) || null);
 
-// "publish": the proved app built with the Prism SDK, as `npx prism-code` builds it when Docker is not on the
-// machine: a repository from UOR-Foundation/template under the visitor's GitHub account, one commit (the
-// commit prism-code makes, prism.templateCommit), the template's pages and bootstrap workflows (Lean export,
-// Rust, WebAssembly; Lean checks every theorem in the gate), then GitHub Pages. The holo is fetched back and
-// opened with prism-code's own code; only when every acceptance vector passes in its compiled guest does
-// the kernel move the rules to published, and the preview shows the live app. The turn stays open and
-// counts the build, like the approve turn; Stop stops watching, not the build on GitHub.
-const prismCode = () => import("./prism-code/src/index.mjs");
+// "publish": a proved app with rules becomes a holo on this device, by its κ, with no account and no server.
+// Its page is Forge's kernel page (app/, whose verified app.holo carries RuleJudge, FA-90) with the app's
+// own card (shell/live/card-files.mjs); the card asks the kernel "rule " with the spec's words and the
+// request's, so the answer shown is the kernel guest's, after every acceptance vector replayed in this tab.
+// A rule that compares two fields has no rule words yet, so such an app is refused, never guessed.
+function ruleWords(spec) {
+  const hex = (n) => { if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) throw new Error("a bound outside 32 bits"); return [0, 8, 16, 24].map((k) => ((n >>> k) & 255).toString(16).padStart(2, "0")).join(""); };
+  const w = prism.ruleWordsOf(spec);
+  return { words: w.words.map(hex).join(""), outcomes: w.outcomes, choices: w.choices };
+}
+const START = (w) => `import { load } from "./vendor/prism-code/src/browser.mjs";import start from "./card.mjs";const W=${JSON.stringify(w)},e=new TextEncoder(),d=new TextDecoder(),h=(n)=>[0,8,16,24].map((k)=>((n>>>k)&255).toString(16).padStart(2,"0")).join("");
+const ask=(k)=>async(b)=>{const r=d.decode(await k.dispatch(e.encode("rule "+W.words+d.decode(b).split(" ").map((v,i)=>h(W.choices[i]?W.choices[i].indexOf(v):Number(v))).join(""))));if(!r.startsWith("ok "))throw new Error(r);return e.encode(W.outcomes[parseInt(r.slice(11,19).match(/../g).reverse().join(""),16)]);};
+let app=null;try{const k=await load("./app.holo"),a=await k.acceptance();if(k.identities.verified&&a.failed.length===0)app={dispatch:ask(k)};}catch(x){console.error(x);}start({app,show:(b)=>d.decode(b),$:(id)=>document.getElementById(id)});\n`;
+async function rulePage(spec) {
+  const w = ruleWords(spec), at = new URL("app/", BASE), bytes = async (u) => { const r = await fetch(u, { cache: "no-store" }); if (!r.ok) throw new Error(u + " answered " + r.status); return new Uint8Array(await r.arrayBuffer()); };
+  const keep = (await (await fetch(new URL("precache.json", at), { cache: "no-store" })).json()).files.map((f) => f.path.slice(2)).filter((p) => /^(app\.holo|brand\/|fonts\/|prism-page\.css|favicon\.svg|guest-worker\.mjs|vendor\/|worker-runtime\/)/.test(p));
+  const { cardFiles } = await import("./live/card-files.mjs");
+  const card = new Map((await cardFiles(spec, { load: async (p) => dec.decode(await bytes(new URL(p, BASE))) })).files.map((f) => [f.path.slice(5), f.content]));
+  const html = `<!doctype html><html lang="en" class="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${String(spec.title || spec.name).replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"))}</title><link rel="icon" href="favicon.svg"><link rel="stylesheet" href="brand/hologram-warm.css"><link rel="stylesheet" href="brand/fonts.css"><link rel="stylesheet" href="prism-page.css"><style>${card.get("card.css")}</style></head><body class="has-card"><script type="application/json" id="app-data">${JSON.stringify({ inputLabel: spec.title || spec.name }).replace(/</g, "\\u003c")}</script>${card.get("card.html")}<output id="out"></output><ol id="hist"></ol><script type="module" src="start.mjs"></script></body></html>\n`;
+  const files = [{ path: "index.html", bytes: enc.encode(html) }, { path: "card.mjs", bytes: enc.encode(card.get("card.mjs")) }, { path: "start.mjs", bytes: enc.encode(START(w)) }];
+  for (const p of keep) files.push({ path: p, bytes: await bytes(new URL(p, at)) });
+  // FA-05: the kernel this page carries is the one its page build named, and every vector it carries passes here.
+  const kernel = await (await import("./prism-code/src/index.mjs")).loadArchive(files.find((f) => f.path === "app.holo").bytes, {});
+  const admitted = admitPublication((await (await fetch(new URL("app.json", at), { cache: "no-store" })).json()).attestations?.build?.id, kernel.identities?.archiveFingerprint, await kernel.acceptance());
+  if (!admitted.ok) throw new Error(admitted.error);
+  return files.sort((x, y) => (x.path < y.path ? -1 : 1));
+}
 async function publishTurn(chatId, appId, messages, userId, ref, intentId) {
   const m = chatMachineOf(chatId);
   messages.push({ id: userId + 1, role: "assistant", content: "", approvalState: "approved", commitHash: null, createdAt: now() });
@@ -1017,68 +1630,44 @@ async function publishTurn(chatId, appId, messages, userId, ref, intentId) {
   };
   const finish = () => {
     publishChat(chatId, { phase: "finalizing", error: null, lastCompletion: { intentId, invocationRef: ref, outcome: "completed", updatedFiles: false, suppressAutoReview: true, targetAppId: appId } });
-    publishChat(chatId, { phase: "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
+    publishChat(chatId, { phase: "idle", invocationRef: null });
     emit("chat:stream:end", { chatId });
   };
   const rules = await rulesOf(appId);
-  const settings = (await get("settings", "user")) || {};
-  const token = settings.githubAccessToken && settings.githubAccessToken.value;
   const refusal = !rules || !rules.spec ? "This app has no rules to build yet. Tell me what it decides, approve the rules, then say publish."
-    : rules.phase !== "proved" && rules.phase !== "published" ? (rules.phase === "checked" ? "Reply approve first: Lean proves the rules, then the Prism SDK builds them." : `The rules are ${rules.phase === "proving" ? "being proved by Lean; say publish when it is done" : "not checked yet; ask me to fix them"}.`)
-    : !token ? "Publishing builds the app with the Prism SDK on GitHub Actions, in a public repository in your account. Connect GitHub in Settings, under Integrations, then say publish."
+    : rules.phase !== "proved" && rules.phase !== "published" ? (rules.phase === "checked" ? "Reply approve first: Lean proves the rules, then they are published on this device." : `The rules are ${rules.phase === "proving" ? "being proved by Lean; say publish when it is done" : "not checked yet; ask me to fix them"}.`)
+    : rules.facets && !rules.facets.ok ? `Publishing writes the whole model, and its facets are not projected yet: ${rules.facets.issue} Ask me to fix the app's prompt, then say publish.`
     : null;
   if (refusal) { await show(refusal); return finish(); }
-  const spec = rules.spec;
-  const head = `**Publishing ${spec.title}** with the Prism SDK on GitHub Actions, as \`npx prism-code\` builds it. The repository is public, so anyone can read its rules and LexLean model.`;
-  let links = "", observing = true;
-  const abort = new AbortController(); m.abort = abort;
-  const step = (word, detail, extra) => {
-    if (extra && extra.runs) links = `\n\n[Build run](${extra.runs["pages.yml"]}) · [Lean gate](${extra.runs["bootstrap.yml"]})`;
-    if (observing && !abort.signal.aborted) show(`${head}\n\n${word}: ${detail}.${links}`);
-  };
-  const stopped = new Promise((res) => abort.signal.addEventListener("abort", () => res("stopped")));
-  const t0 = Date.now();
-  const build = buildOnGitHub({ token, spec, axioms: rules.axioms || {}, attestation: rules.proof && rules.proof.attestation_id, templateCommit: prism.templateCommit, open: async (bytes) => (await prismCode()).loadArchive(bytes), step, signal: abort.signal })
-    .catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
-  const result = await Promise.race([build, stopped]);
-  observing = false;
-  if (m.abort === abort) m.abort = null;
-  if (result === "stopped") { await show(`${head}\n\nStopped browser requests. Work already submitted to GitHub may continue; say publish again to pick it up.${links}`); return finish(); }
   const row = (outcome, resource) => put("audit", Date.now() + ":publish:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "prism.application.publish", resource, outcome });
-  if (!result.ok) {
-    await row("refused", (result.repository || "") + (result.sha ? "@" + result.sha : ""));
-    const why = result.error || (result.vectors ? `${result.vectors.total - result.vectors.passed} of ${result.vectors.total} acceptance vectors failed in the built guest, or the live page names another holo` : "the build did not pass");
-    await show(`${head}\n\nPublication verification failed: ${why}. Remote content may already be live; this does not undo the GitHub build.${links}`);
-    return finish();
-  }
+  const head = `**Publishing ${rules.spec.title}** on this device, as a holo named by its contents. Nothing leaves this browser.`;
+  await show(`${head}\n\nComposing the page and replaying the kernel's acceptance vectors.`);
+  const out = await handlers.get("holo:publish")({ appId }).catch((e) => ({ decision: "Refuse", word: String((e && e.message) || e) }));
+  if (!out.kappa) { await row("refused", rules.specKappa || ""); await show(`${head}\n\nNot published: ${out.word}`); return finish(); }
   const next = await nextPhase(rules.phase, "publish");
-  const current = await saveRules(appId, { ...rules, phase: next === "published" ? next : rules.phase, publishedAs: result.live, publicationCurrent: true, build: { repository: result.repository, sha: result.sha, fingerprint: result.fingerprint, vectors: result.vectors, runs: Object.fromEntries(Object.entries(result.runs).map(([w, r]) => [w, r.html_url])), at: now() }, updated: now() }, rules);
-  if (!current) {
-    await row("stale", result.live);
-    await show(`${head}\n\nThe build completed for earlier rules and may already be live at ${result.live}. The current project has not been marked published. Check and approve the current rules before publishing them.${links}`);
-    return finish();
-  }
-  await row("granted", result.live);
-  // The preview shows what was published: the live app, from GitHub Pages.
+  const current = await saveRules(appId, { ...rules, phase: next === "published" ? next : rules.phase, publishedAs: out.url, publicationCurrent: true, build: { kappa: out.kappa } }, rules);
+  if (!current) { await row("stale", out.kappa); await show(`${head}\n\nThe holo was made from earlier rules, so the current rules are not marked published. Approve them, then say publish.`); return finish(); }
+  await row("granted", out.kappa);
   const run = machineOf(appId);
-  publish(appId, { phase: "ready", operation: null, url: { appUrl: result.live, originalUrl: result.live, mode: "cloud" }, previewReloadEpoch: run.state.previewReloadEpoch + 1 });
-  const minutes = Math.max(1, Math.round((Date.now() - t0) / 60000));
-  await show(`${head}\n\n**Live:** ${result.live}\n\nBuilt by the Prism SDK on GitHub Actions in ${minutes} min: Lean export, Rust, WebAssembly, and Lean checked every theorem in the gate. Forge fetched the holo and replayed ${result.vectors.passed} of ${result.vectors.total} acceptance vectors in its compiled guest. Holo \`${String(result.fingerprint).slice(0, 12)}…\` · [repository](https://github.com/${result.repository})${links}`);
+  publish(appId, { phase: "ready", operation: null, url: { appUrl: out.url, originalUrl: out.url, mode: "local" }, previewReloadEpoch: run.state.previewReloadEpoch + 1 });
+  await show(`${head}\n\n**Published:** [open it](${out.url}) · holo \`${out.kappa}\`, ${Math.round(out.byteLength / 1024)} KB, in ${Math.max(1, Math.round(out.ms / 1000))} s.\n\nShare the file from Publish, under Download; anyone opens it in any browser with holo.html, which checks it byte for byte before it runs.`);
   finish();
 }
-window.__prism = { rulesAfterTurn, approveRules, rulesOf, nextPhase, check: prism.checkSpec };
+window.__prism = { rulesAfterTurn: afterTurn, approveRules: approve, rulesOf, appStateOf, nextPhase, check: prism.checkSpec };
 
 async function chatTurn(chatId, intent) {
   const m = chatMachineOf(chatId);
+  assertGenerationActive(m.queueSignal);
   const chat = await get("chats", chatId);
+  if(!chat)throw chatQueueFailure("chatQueueMissing");
+  const execution = chatExecutionPolicy(intent.requestedChatMode,chat.chatMode);
   const appId = chat.appId;
   const ref = intent.invocationRef;
   const settings = (await get("settings", "user")) || DEFAULT_SETTINGS;
   const V = await viewReady();
-  const chosen = (chat.modelSelection && chat.modelSelection.provider ? chat.modelSelection : settings.selectedModel) || {};
-  // Only Featherless is offered as a cloud model now; a selection left on OpenRouter answers on the device.
-  const paid = chosen.provider === "featherless" && chosen.name;
-  const model = paid ? chosen.provider + "/" + chosen.name.replace(/^(openrouter|featherless)\//, "") : MODEL_ID;
+  const route = chatModelRoute(chat.modelSelection,settings.selectedModel);
+  const {model,provider} = route;
+  if (tm.turn === chatId) tm.model = model;
   // T2: the user message, accepted
   const messages = await messagesOf(chatId);
   const userId = messages.length ? Math.max(...messages.map((x) => x.id)) + 1 : 1;
@@ -1086,8 +1675,15 @@ async function chatTurn(chatId, intent) {
   await saveMessages(chatId, messages);
   publishChat(chatId, { phase: "streaming", lastAcceptance: { intentId: intent.intentId, acceptance: "message-accepted", acceptedMessageId: userId } });
   emit("chat:stream:start", { chatId, invocationRef: ref });
-  if (prism.isApproval(intent.prompt)) return approveTurn(chatId, appId, messages, userId, ref, intent.intentId);
-  if (prism.isPublish(intent.prompt)) return publishTurn(chatId, appId, messages, userId, ref, intent.intentId);
+  if (execution.sourceEffects && (prism.isApproval(intent.prompt) || prism.isPublish(intent.prompt))) tmCancel(chatId);
+  if (execution.sourceEffects && prism.isApproval(intent.prompt)) return approveTurn(chatId, appId, messages, userId, ref, intent.intentId);
+  if (execution.sourceEffects && prism.isPublish(intent.prompt)) return publishTurn(chatId, appId, messages, userId, ref, intent.intentId);
+  // An app's first build turn opens the live frame now, while the model thinks, not when the spec's tag
+  // streams in: the frame takes about a tenth of a second to mount, and a spec can name its first field
+  // right after the tag. If the turn ends without rules (an app built as code), the built page takes the
+  // preview back. Later turns of a code app keep their built preview throughout.
+  const speculativeLive = execution.sourceEffects && !(await hasRules(appId)) && messages.filter((x) => x.role === "user").length === 1;
+  if (speculativeLive) showLive(appId).catch(() => liveShown.delete(appId));
   // T3: the assistant placeholder
   const projectSource = await captureProjectSource(await dbReady, appId);
   const head = projectSource.reference;
@@ -1096,173 +1692,177 @@ async function chatTurn(chatId, intent) {
   await saveMessages(chatId, messages);
   emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
   let full = "", lastSent = "", updatedFiles = false, summary, error = null;
-  const abort = new AbortController(); m.abort = abort;
+  const abort = new AbortController(); m.abort = abort; if(m.queueSignal?.aborted){abort.abort();assertGenerationActive(abort.signal);}
   let provenance = null;
   const committed = [];
   const onCommit = (oid) => { committed.push(oid); updatedFiles = true; emit("version-created", { appId, oid }); };
   try {
-    const app = await get("apps", appId);
-    const rules = new Map(projectSource.files).get("AI_RULES.md");
-    const history = messages.slice(0, -2).filter((x) => x.content).map((x) => ({ role: x.role, content: x.content }));
-    const request = [
-      { role: "system", content: buildSystemPrompt(rules) + "\n\n" + prism.SPEC_RULES },
-      { role: "user", content: "This is my codebase. " + (await codebaseOf(appId, projectSource)) },
-      { role: "assistant", content: "OK, got it. I'm ready to help" },
-      ...history,
-      { role: "user", content: intent.prompt + pointedNote(appId) },
-    ];
-    // The route table decides who answers: a sealed answer to the same request is served without
-    // running anything; the device runs the Q engine; a paid model answers with the visitor's key;
-    // NoKey, NoGpu and PaidOffline are answered with the View's words.
-    // A build turn writes whole files: a cap that cuts the answer mid tag leaves a corrupt project, so
-    // the paid route is given room for several files (the device's engine keeps its own smaller cap).
-    // Featherless's GLM reasons for some 14,000 tokens before it writes, inside the same budget, so it gets
-    // the most Featherless allows (32,768); 16,384 left a page cut off mid file.
-    const body = { model, messages: request, max_tokens: !paid ? 2048 : chosen.provider === "featherless" ? 32768 : 16384, temperature: "0.7" };
-    const hit = await lookup(body);
-    const route = await routeOf(hit, body);
-    // The View's no-key word names OpenRouter; a Featherless model is told about its own key.
-    const word = route === "NoKey" && model.startsWith("featherless/") ? "Add your Featherless key in Settings, under Featherless, to use " + paidId(model) : await refusalWord(route);
-    if (word) throw new Error(word);
+    // R4 decides the route before the request is made: a route to any model outside Foundry is
+    // ungranted, so it is refused here and no byte of the request leaves the tab.
+    const before = r4Request({ provider });
+    const allowed = await r4Decide(before);
+    if (allowed.outcome !== "answer") throw new Error(r4Refusal(allowed, before));
     let lastSave = 0;
     const onText = async (t) => {
+      assertGenerationActive(abort.signal);
       full = t;
-      let lcp = 0; while (lcp < lastSent.length && lcp < full.length && lastSent[lcp] === full[lcp]) lcp++;
-      if (lcp < lastSent.length) { messages[messages.length - 1].content = full; emit("chat:response:chunk", { chatId, invocationRef: ref, messages }); }
-      else emit("chat:response:chunk", { chatId, invocationRef: ref, streamingMessageId: asstId, streamingPatch: { offset: lcp, content: full.slice(lcp), ...(lcp > 0 ? { prefixHash: djb2(full.slice(0, lcp)) } : {}) } });
-      lastSent = full;
+      if (tm.turn === chatId) {
+        if (!tm.token && t && !t.startsWith("<think>")) tmOnce("token");
+        if (!tm.complete && (t.includes("\\end{semanticmodule}") || t.includes("</prism-lexlean>") || t.includes("</dyad-spec>"))) tmOnce("complete");
+      }
+      // The chat shows the answer without the module's text (prism.shownText); `full` keeps it for reading.
+      const shown = execution.sourceEffects ? prism.shownText(full) : readOnlyChatText(prism.withoutThinking(full));
+      let lcp = 0; while (lcp < lastSent.length && lcp < shown.length && lastSent[lcp] === shown[lcp]) lcp++;
+      if (lcp < lastSent.length) { messages[messages.length - 1].content = shown; emit("chat:response:chunk", { chatId, invocationRef: ref, messages }); }
+      else emit("chat:response:chunk", { chatId, invocationRef: ref, streamingMessageId: asstId, streamingPatch: { offset: lcp, content: shown.slice(lcp), ...(lcp > 0 ? { prefixHash: djb2(shown.slice(0, lcp)) } : {}) } });
+      lastSent = shown;
       // The rules as far as the model has written them go to the live frame now, not after the turn.
-      if (full.includes("<dyad-spec>")) {
+      if (execution.sourceEffects && full.includes("<dyad-spec>")) {
         const raw = live.partialSpec(full);
-        if (raw) { if (!liveShown.has(appId)) { liveShown.add(appId); showLive(appId).catch(() => liveShown.delete(appId)); } pushLive(appId, raw, "draft"); }
+        if (raw) { if (!liveShown.has(appId)) { liveShown.add(appId); showLive(appId).catch(() => liveShown.delete(appId)); } tmOnce("declaration"); pushLive(appId, raw, "draft"); }
       }
-      if (Date.now() - lastSave > 150) { messages[messages.length - 1].content = full; await saveMessages(chatId, messages); lastSave = Date.now(); }
+      // LexLean a model writes is not projected: the frame shows the spec, and nothing else is a source.
+      if (Date.now() - lastSave > 150) { messages[messages.length - 1].content = shown; await saveMessages(chatId, messages); lastSave = Date.now(); }
     };
-    // Warm up: the local model is chosen but not resident yet; a held key (the visitor's, or the
-    // site's) answers through OpenRouter meanwhile, and the local model starts loading for the next turn.
-    const warm = route === "Local" && !engine.instance && core.run({ op: "warmup", localReady: !!engine.instance, keyPresent: !!(await inference.keyGet()), online: navigator.onLine }).warmup;
-    if (warm && navigator.gpu) gpuReady().catch(() => {});
-    if (route === "Serve") {
-      await onText(hit.text);
-      provenance = { receipt: hit.receipt, served: true, fingerprint: hit.fingerprint };
-    } else if (warm) {
-      const warmBody = { ...body, model: "openrouter/" + (site.model || V.paidModels[0].id) };
-      const warmHit = await lookup(warmBody);
-      if (warmHit.hit) { await onText(warmHit.text); provenance = { receipt: warmHit.receipt, served: true, fingerprint: warmHit.fingerprint, warm: true }; }
-      else {
-        const { text, rec } = await paidGenerate(warmBody, (t) => onText(t), abort.signal);
-        await onText(text);
-        provenance = { receipt: await sealPaid(warmBody, rec, warmHit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost, warm: true };
-      }
-    } else if (route === "Paid") {
-      // Until the answer starts, the model's reasoning shows in Dyad's open Thinking block; the answer
-      // replaces it, so the saved message, the history and the rules read only what the model answered.
-      const thinking = (r) => onText("<think>" + r.replace(/<(\/?)(dyad|think)/g, "＜$1$2"));
-      const { text, rec } = await paidGenerate(body, (t) => onText(t), abort.signal, thinking);
-      await onText(text);
-      // An answer cut at the token limit is not sealed, so the same request is never served it again.
-      provenance = rec.finish === "length" ? { cut: true } : { receipt: await sealPaid(body, rec, hit.key), fingerprint: `${rec.model};${rec.provider || ""}`, cost: rec.cost };
-    } else {
-      // The device. Its window is about 3,000 tokens and a build request is several times that, so the
-      // device is asked only for the app's rules, with a prompt that fits, by the rules model (the chat
-      // ladder's models cannot write them); Forge draws the screen from the rules after the turn.
-      if (!engine.rules) await onText("Loading the on-device rules model…");
-      const held = await rulesModel();
-      const inst = held.instance;
-      // Rules that checked are the base of an edit. Rules that did not are left out: given them, the small
-      // model copies them back unchanged, so it is asked again from the user's own words, every request so far.
-      const current = await rulesOf(appId);
-      const capturedSpec = new Map(projectSource.files).get("prism/spec.json");
-      const currentMatches = typeof capturedSpec === "string" && current?.specKappa === await kappa(enc.encode(capturedSpec));
-      const asks = messages.filter((x) => x.role === "user" && x.content && !prism.isApproval(x.content)).map((x) => x.content);
-      const deviceMessages = currentMatches && current.spec && current.phase !== "drafting"
-        ? prism.deviceRequest(intent.prompt, capturedSpec)
-        : prism.deviceRequest(asks.join("\n"), null);
-      const { ids } = gpuIds(inst, deviceMessages, held.model);
-      const room = held.model.ctx - ids.length - 8;
-      if (room < 128) throw new Error("This request does not fit the on-device model. Choose a paid model in the model picker.");
-      await onText("");
-      // No repetition penalty: rules are JSON, which repeats its keys by nature, and a penalty pushes a
-      // small model off valid syntax. The receipt records the penalty used, so the answer stays re-derivable.
-      const maxNew = Math.min(held.model.cap, room);
-      const res = await withEngine(() => inst.generate(ids, { maxNew, repPenalty: 1, onToken: ({ text }) => { if (!abort.signal.aborted) onText(text); } }));
-      const text = prism.withoutThinking(res.text);
-      window.__prism.lastDevice = res.text || "";
-      messages[messages.length - 1].model = "webgpu:" + held.model.fam; // the model that wrote the rules
-      rememberSession(deviceMessages, res, text, held.model);
-      await onText(/<dyad-spec>/.test(text) ? text : text + "\n\nThe on-device model did not write rules for this app. Ask again with the inputs and the answers, or choose a paid model in the model picker.");
-      const rec = await inst.buildReceipt({ promptText: intent.prompt, ctxIds: [], turnIds: ids, outIds: res.outIds, paramsPatch: { repetitionPenalty: 1, maxTokens: maxNew } });
-      provenance = { receipt: await sealAnswer(body, rec, hit.key), fingerprint: `${(rec.body["prov:used"] || {})["holo:model"]}` };
-    }
+    // Each text is shown in its turn, after the one before it has been saved.
+    let textWork = Promise.resolve();
+    const enqueueText = (text) => {
+      textWork = textWork.then(() => onText(text));
+      void textWork.catch(() => {});
+      return textWork;
+    };
+    // Foundry's own language model reads the idea: IdeaReader, compiled with Prism into the kernel guest, reads
+    // every request so far into the app notation (closed lexicon, fixed grammar, no weights). A phrase it cannot
+    // read is an open claim the chat shows, never a guess. R4 judges the answer as a compiled one.
+    const asks = messages.filter((x) => x.role === "user" && x.content && !prism.isApproval(x.content)).map((x) => x.content);
+    await enqueueText("");
+    // A stop ends the turn at once, as it did a model's stream: the reading is then left unread.
+    const lines = (await Promise.race([(await kernelReady).ask("read " + [...new Set(asks)].join(", ")), new Promise((_, no) => abort.signal.addEventListener("abort", () => no(abort.signal.reason), { once: true }))])).split("\n");
+    assertGenerationActive(abort.signal);
+    const made = r4Request({ provider });
+    const shown = await r4Decide(made);
+    if (shown.outcome !== "answer") throw new Error(r4Refusal(shown, made));
+    // "= " lines are the idea's goal and measure as read; "? " lines are open questions, shown and never guessed.
+    const said = (m) => lines.filter((l) => l.startsWith(m)).map((l) => "- " + l.slice(2)).join("\n"), notationLines = lines.filter((l) => l && !/^[?=] /.test(l));
+    await enqueueText((notationLines.length ? "<prism-lexlean>\n" + notationLines.join("\n") + "\n</prism-lexlean>\n\n" : "") + [said("= "), said("? ") && "Open questions:\n" + said("? ")].filter(Boolean).join("\n\n"));
+    messages[messages.length - 1].model = LOCAL_MODEL;
     // T6: completed batches have their own committed snapshots.
+    // A streamed parser still owns the pre-turn snapshot until it settles. Finish it before our
+    // own transaction changes that snapshot, so ownership checks cannot mistake our commit for an edit.
+    if (execution.sourceEffects) await settleAppFrames(appId, abort.signal);
     assertGenerationActive(abort.signal);
     const sm = full.match(/<dyad-chat-summary>([\s\S]*?)<\/dyad-chat-summary>/); summary = sm ? sm[1].trim() : undefined;
     if (summary && (!chat.title || chat.title === "New chat")) { await updateStoredChat(await dbReady, chatId, { title: summary }); }
-    const tags = parseDyadTags(full);
-    const applied = await applyDyadTags(appId, tags, { signal: abort.signal, source: projectSource, onCommit });
-    let changed = applied.changed;
-    const spec = await rulesAfterTurn(appId, full, tags.writes.map((w) => w.path), { signal: abort.signal, source: applied.source, onCommit });
-    for (const match of full.matchAll(/<dyad-spec-patch>([\s\S]*?)<\/dyad-spec-patch>/g)) {
-      assertGenerationActive(abort.signal);
-      let ops; try { ops = JSON.parse(match[1]); } catch {}
-      const result = ops ? await patchSpec(appId, Array.isArray(ops) ? ops : [ops], { author: "agent", signal: abort.signal, source: spec.source, onCommit }) : { ok: false, issues: ["The patch is not JSON."] };
-      if (!result.ok) spec.card = (spec.card ? spec.card + "\n\n" : "") + "**Patch refused.** " + result.issues[0];
-      else { spec.changed += result.changed; spec.source = result.source; spec.card = result.card; }
+    if (execution.sourceEffects) {
+      // Code a model wrote is never applied: the app's code and screen are projections of its module.
+      const wrote = parsePrismTags(full);
+      const refusedCode = wrote.writes.length + wrote.deletes.length + wrote.renames.length + wrote.deps.length;
+      const tags = { ...wrote, writes: [], deletes: [], renames: [], deps: [] };
+      const applied = await applyPrismTags(appId, tags, { signal: abort.signal, source: projectSource, onCommit });
+      let changed = applied.changed;
+      const turn = full;
+      const spec = (await appAfterTurn(appId, turn, { signal: abort.signal, source: applied.source, onCommit })) || await rulesAfterTurn(appId, turn, [], { signal: abort.signal, source: applied.source, onCommit });
+      const patchRefusals = [];
+      for (const match of full.matchAll(/<dyad-spec-patch>([\s\S]*?)<\/dyad-spec-patch>/g)) {
+        assertGenerationActive(abort.signal);
+        let ops; try { ops = JSON.parse(match[1]); } catch {}
+        const list = ops ? (Array.isArray(ops) ? ops : [ops]) : [];
+        const result = ops ? await patchSpec(appId, list, { author: "agent", signal: abort.signal, source: spec.source, onCommit }) : { ok: false, issues: ["The patch is not JSON."] };
+        if (result.ok) { spec.changed += result.changed; spec.source = result.source; spec.card = result.card; continue; }
+        // One op the checker refuses does not cost the others (measured: GLM's meanings, keyed by field, took
+        // its heading, labels and words with it): they are applied one by one, and only the refused are named.
+        const refused = list.length > 1 ? [] : [result.issues[0]];
+        if (list.length > 1) for (const op of list) {
+          assertGenerationActive(abort.signal);
+          const one = await patchSpec(appId, [op], { author: "agent", signal: abort.signal, source: spec.source, onCommit });
+          if (one.ok) { spec.changed += one.changed; spec.source = one.source; spec.card = one.card; } else { const label=Array.isArray(op?.path)&&op.path.every(p=>typeof p==="string"||Number.isSafeInteger(p))?op.path.join("."):"patch";refused.push(`${label || "patch"}: ${one.issues[0]}`); }
+        }
+        patchRefusals.push(...refused);
+      }
+      if (patchRefusals.length) spec.card = (spec.card ? spec.card + "\n\n" : "") + "**Patch refused.** " + patchRefusals.join(" ");
+      if (refusedCode) spec.card = (spec.card ? spec.card + "\n\n" : "") + prism.CODE_REFUSED;
+      if (tm.turn === chatId && tm.complete) {
+        // Checked is the phase the turn left the app in: the kernel's answer to the check just made.
+        let phase = null;
+        try { phase = JSON.parse(await get("files", appId + ":" + appShape.STATE_PATH) || "null")?.phase ?? (await rulesOf(appId))?.phase ?? null; } catch (e) {}
+        tmMark("rechecked");
+        if (phase && phase !== "drafting") { tmMark("read", tm.repaired ? 2 : 1); tmMark("checked"); } else tmMark("refused");
+      }
+      changed += spec.changed;
+      if (await hasRules(appId)) { await showLive(appId).catch(() => {}); await refreshPreview(appId, { signal: abort.signal }); }
+      else if (speculativeLive && liveShown.has(appId) && !(await scaffoldOnly(appId))) { liveShown.delete(appId); showBuilt(appId).catch(() => {}); }
+      updatedFiles = updatedFiles || changed > 0;
+      const commit = committed.at(-1) || null;
+      messages[messages.length - 1] = { ...messages[messages.length - 1], content: prism.withCard(full, spec.card), commitHash: commit, approvalState: "approved", requestId: provenance && provenance.receipt || null };
+    } else {
+      messages[messages.length - 1] = {...messages[messages.length - 1],content:readOnlyChatText(prism.withoutThinking(full)),commitHash:null,approvalState:null,requestId:provenance?.receipt||null};
     }
-    changed += spec.changed;
-    if (await hasRules(appId)) { await showLive(appId).catch(() => {}); await refreshLive(appId); }
-    updatedFiles = updatedFiles || changed > 0;
-    const commit = committed.at(-1) || null;
-    messages[messages.length - 1] = { ...messages[messages.length - 1], content: prism.withCard(full, spec.card), commitHash: commit, approvalState: "approved", requestId: provenance && provenance.receipt || null };
     await saveMessages(chatId, messages);
     emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
   } catch (e) {
     error = abort.signal.aborted ? null : String((e && e.message) || e);
-    messages[messages.length - 1] = { ...messages[messages.length - 1], commitHash: committed.at(-1) || null, content: full + (updatedFiles ? "\n\nCommitted project changes were retained." : "") + (abort.signal.aborted ? "\n\n<dyad-output type=\"warning\" message=\"Response cancelled by user\"></dyad-output>" : error ? `\n\n<dyad-output type="error" message="${error.replace(/"/g, "'")}"></dyad-output>` : "") };
+    messages[messages.length - 1] = { ...messages[messages.length - 1], commitHash: committed.at(-1) || null, content: (execution.sourceEffects ? prism.shownText(full) : readOnlyChatText(prism.withoutThinking(full))) + (updatedFiles ? "\n\nCommitted project changes were retained." : "") + (abort.signal.aborted ? "\n\n<dyad-output type=\"warning\" message=\"Response cancelled by user\"></dyad-output>" : error ? `\n\n<dyad-output type="error" message="${error.replace(/"/g, "'")}"></dyad-output>` : "") };
     await saveMessages(chatId, messages);
     emit("chat:response:chunk", { chatId, invocationRef: ref, messages });
+  } finally {
+    try { if (execution.sourceEffects && !abort.signal.aborted) await settleAppFrames(appId, abort.signal); }
+    catch (e) { if (!abort.signal.aborted) error ||= String((e && e.message) || e); }
   }
   m.abort = null;
   const outcome = abort.signal.aborted ? "cancelled" : error ? "errored" : "completed";
-  const completion = { intentId: intent.intentId, invocationRef: ref, outcome, updatedFiles, suppressAutoReview: true, targetAppId: appId, ...(summary ? { chatSummary: summary } : {}), ...(error ? { error } : {}), ...(provenance && provenance.cut ? { warningMessages: ["The model ran out of room before it finished; an unfinished file was not written."] } : {}), ...(provenance && provenance.receipt ? { warningMessages: [(provenance.warm ? V.warmupLabel + " · " : "") + (provenance.served ? V.servedLabel : V.sealedLabel) + " · " + provenance.receipt.replace(/^blake3:/, "").slice(0, 12) + "…"] } : {}) };
+  const completion = { intentId: intent.intentId, invocationRef: ref, outcome, updatedFiles, suppressAutoReview: true, targetAppId: appId, ...(summary ? { chatSummary: summary } : {}), ...(error ? { error } : {}), ...(provenance && provenance.cut ? { warningMessages: ["The model ran out of room before it finished; an unfinished file was not written."] } : {}), ...(provenance && provenance.receipt ? { warningMessages: [(provenance.served ? V.servedLabel : V.sealedLabel) + " · " + provenance.receipt.replace(/^blake3:/, "").slice(0, 12) + "…"] } : {}) };
   publishChat(chatId, { phase: "finalizing", error, lastCompletion: completion });
-  publishChat(chatId, { phase: outcome === "errored" ? "errored" : "idle", invocationRef: null, queuePaused: false, queuePauseReason: null });
+  publishChat(chatId, { phase: outcome === "errored" ? "errored" : "idle", invocationRef: null });
   emit("chat:stream:end", { chatId });
+  if (tm.turn === chatId) tmFlush();
 }
-const chatSubscribe = ({ machineId, encodedKey }) => { const m = chatMachineOf(encodedKey.chatId); return { protocolVersion: 1, machineId, encodedKey, actorInstanceId: "web-chat_stream-" + encodedKey.chatId, revision: m.revision, encodedState: m.state }; };
-function chatDispatch({ encodedKey, messageId, expectedActorInstanceId, encodedEvent }) {
-  const chatId = encodedKey.chatId, m = chatMachineOf(chatId), type = encodedEvent && encodedEvent.type;
-  const aid = "web-chat_stream-" + chatId;
-  if (expectedActorInstanceId && expectedActorInstanceId !== aid) return { kind: "rejected", messageId, reason: "stale-actor" };
-  const applied = () => ({ kind: "applied", actorInstanceId: aid, revision: m.revision, transactionSequence: m.revision, messageId });
-  if (type === "SUBMIT") {
-    const intent = encodedEvent.intent;
-    if (m.state.phase === "admitting" || m.state.phase === "streaming") return { kind: "ignored", actorInstanceId: aid, revision: m.revision, transactionSequence: m.revision, messageId, reason: "not-active" };
-    publishChat(chatId, { phase: "admitting", invocationRef: intent.invocationRef, error: null, queuePaused: false, queuePauseReason: null });
-    chatTurn(chatId, intent).catch((e) => { console.error("[host] chat turn", e); publishChat(chatId, { phase: "errored", invocationRef: null, error: String((e && e.message) || e) }); });
-    return applied();
-  }
-  if (type === "CANCEL") {
-    if (m.abort) m.abort.abort();
-    publishChat(chatId, { phase: m.abort ? "cancelling" : m.state.phase, stopPolicyVersion: m.state.stopPolicyVersion + 1 });
-    return applied();
-  }
-  if (type === "REPORT_ERROR") { publishChat(chatId, { error: encodedEvent.error }); return applied(); }
-  if (["PAUSE_QUEUE", "RESUME_QUEUE", "CLEAR_QUEUE", "EDIT_QUEUE_ENTRY", "REORDER_QUEUE_ENTRY", "REMOVE_QUEUE_ENTRY"].includes(type)) {
-    publishChat(chatId, { queuePaused: type === "PAUSE_QUEUE", queuePauseReason: type === "PAUSE_QUEUE" ? "manual" : null, queueRevision: m.state.queueRevision + 1, lastQueueMutation: { mutationId: encodedEvent.mutationId, outcome: "applied" } });
-    return applied();
-  }
-  return { kind: "ignored", actorInstanceId: aid, revision: m.revision, transactionSequence: m.revision, messageId, reason: "unknown intent " + type };
+const queueChannel=typeof BroadcastChannel==="function"?new BroadcastChannel("foundry:chat-queues:v1"):null;
+const queueBoundary={validate:value=>SerializableChatTurnIntentSchema.safeParse(value),validateEvent:value=>ChatStreamIntentEventSchema.safeParse(value),serialize:serializeImmutableChatTurnPayload,derive:kappa};
+const chatQueue=createChatQueueController({
+  guest:kernelReady,boundary:async()=>queueBoundary,locks:queueChannel?navigator.locks:null,
+  store:{read:async chatId=>readStoredChatQueue(await dbReady,chatId),commit:async(expected,journal)=>commitStoredChatQueue(await dbReady,expected,journal)},
+  mintOwner:()=>{let owner=0;while(!owner)owner=crypto.getRandomValues(new Uint32Array(1))[0];return owner;},
+  notify:message=>queueChannel?.postMessage(message),
+  publish:(chatId,snapshot,extra)=>{
+    const m=chatMachineOf(chatId),patch={...(snapshot||{})};
+    if(extra.journal&&!m.queueRunning){const active=extra.journal.entries.find(e=>e.id===extra.journal.state.active);patch.phase=active?"streaming":"idle";patch.invocationRef=active?.intent.invocationRef||null;}
+    if(extra.acceptance)patch.lastAcceptance=extra.acceptance;if(extra.error)patch.error=extra.error;if(extra.reportedError)patch.error=extra.reportedError;publishChat(chatId,patch);
+  },
+  run:async(chatId,intent,signal)=>{
+    const m=chatMachineOf(chatId);m.queueRunning=true;m.queueSignal=signal;const cancel=()=>m.abort?.abort();signal.addEventListener("abort",cancel);
+    tmStart(chatId);
+    publishChat(chatId,{phase:"admitting",invocationRef:intent.invocationRef,error:null});
+    try{assertGenerationActive(signal);await chatTurn(chatId,intent);return m.state.lastCompletion?.intentId===intent.intentId?m.state.lastCompletion:{outcome:"errored"};}
+    catch(error){if(["invalidChatModelSelection","unsupportedChatProvider"].includes(error?.code))publishChat(chatId,{error:error.code==="unsupportedChatProvider"?"The chat provider is unsupported":"The chat model selection is invalid"});throw error;}
+    finally{signal.removeEventListener("abort",cancel);m.queueRunning=false;m.queueSignal=null;m.abort=null;if(m.state.lastCompletion?.intentId!==intent.intentId){publishChat(chatId,{phase:"finalizing",lastCompletion:{intentId:intent.intentId,invocationRef:intent.invocationRef,outcome:signal.aborted?"cancelled":"errored",targetAppId:intent.appId??null,updatedFiles:false,suppressAutoReview:true}});emit("chat:stream:end",{chatId});}}
+  },
+});
+queueChannel?.addEventListener("message",event=>{const chatId=event.data?.chatId;if(Number.isSafeInteger(chatId)&&chatId>0)void chatQueue.refresh(chatId).catch(()=>{});});
+window.addEventListener("pagehide",()=>{chatQueue.dispose();queueChannel?.close();},{once:true});
+window.addEventListener("pageshow",event=>{if(event.persisted)location.reload();});
+const chatSubscribe=async({machineId,encodedKey})=>{await chatQueue.snapshot(encodedKey.chatId);const m=chatMachineOf(encodedKey.chatId);return {protocolVersion:1,machineId,encodedKey,actorInstanceId:chatActorId(encodedKey.chatId),revision:m.revision,encodedState:m.state};};
+async function chatDispatch(raw){
+  const {encodedKey,messageId,expectedActorInstanceId,encodedEvent}=structuredClone(raw),chatId=encodedKey?.chatId;
+  if(!Number.isSafeInteger(chatId)||chatId<1||typeof messageId!=="string"||!messageId||messageId.length>256)throw chatQueueFailure("invalidChatQueueCommand");
+  const aid=chatActorId(chatId);if(expectedActorInstanceId&&expectedActorInstanceId!==aid)return {kind:"rejected",messageId,reason:"stale-actor"};
+  await chatQueue.dispatch(chatId,encodedEvent);const m=chatMachineOf(chatId);return {kind:"applied",actorInstanceId:aid,revision:m.revision,transactionSequence:m.revision,messageId};
 }
-handlers.set("chat:observe-submission-stop-policy", (chatId) => chatMachineOf(chatId).state.stopPolicyVersion);
-handlers.set("chat:cancel", (chatId) => { const m = chatMachineOf(chatId); if (m.abort) m.abort.abort(); });
+handlers.set("chat:observe-submission-stop-policy",async chatId=>(await readStoredChatQueue(await dbReady,chatId)).journal.state.stopPolicy);
+handlers.set("chat:cancel",chatId=>chatQueue.cancelCurrent(chatId));
 
 // ---- the typed host boundary (FoundrySpecification.hostResponseBoundary)
 function dispatch(channel, args) {
   seen.set(channel, (seen.get(channel) || 0) + 1);
   const output = window.__contracts && window.__contracts[channel];
   const input = window.__inputContracts && window.__inputContracts[channel];
-  return invokeHost(channel, args, handlers.get(channel), output, output || input ? { schema: input } : null);
+  let captured;try{captured=structuredClone(args);}catch{captured=null;}
+  return invokeBoundCommand(commandRegistry, channel, args, handlers.get(channel), (name, values, handler) => invokeHost(name, values, handler, output, output || input ? { schema: input } : null)).then(async envelope=>{
+    const binding=commandRegistry.entries.find(c=>c.channel===channel),feature=commandRegistry.features.find(f=>f.id===binding?.feature);
+    if(envelope.ok&&feature?.effects.includes("storage")&&!/^(get-|list-|read-|count-|check-|window-infrastructure:|distributed-machine:(subscribe|unsubscribe))/.test(channel)){
+      const value=captured?.[0],appId=value?.appId??value?.encodedKey?.appId??envelope.value?.app?.id,chatId=value?.chatId??value?.encodedKey?.chatId??envelope.value?.chatId;
+      const scopes=windowRecoveryScopes();if(Number.isSafeInteger(appId)&&appId>0)scopes.push({family:"app",appId});if(Number.isSafeInteger(chatId)&&chatId>0)scopes.push({family:"chat",chatId});await windowCoordination.invalidate(scopes).catch(()=>{});
+    }return envelope;
+  });
 }
 
 
@@ -1278,6 +1878,9 @@ function dispatch(channel, args) {
 async function buildPortable(appId, captured) {
   await coreReady;
   const source = captured || await verifiedBuildSource(appId);
+  if (applicationShape(source) === 'stateful') throw shapeFailure('statefulBuildUnsupported');
+  const environment=(await (await fetch(new URL("manifest.json",BASE),{cache:"no-store"})).json()).closure;
+  return runBuildWork({appId,source:source.reference,environment},()=>withPortableBuildPermission({id:"portable-"+crypto.randomUUID(),source:source.reference}, async lease => {
   const t0 = performance.now();
   const files = new Map(source.files);
   const pkg = await (await fetch(new URL("scaffold/package.json", BASE))).json();
@@ -1336,18 +1939,24 @@ async function buildPortable(appId, captured) {
   // the stylesheet it writes is taken as static CSS. The published page then needs no network and no
   // compiler to style itself.
   const inline = (s) => s.replace(/<\/script/g, "<\\/script");
-  const body = `<style>${css}</style></head><body><div id="root"></div>\n<script type="module">${inline(js)}<\/script></body></html>`;
+  const body = `<style>${css}</style>${await brandHead()}</head><body><div id="root"></div>\n<script type="module">${inline(js)}<\/script></body></html>`;
   const head = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n<script>var __HOLO_BASE__ = location.pathname.replace(/index\\.html$/, "");`;
   // Every class like token of the bundle, the project's CSS and its HTML, listed once in a hidden
   // element, so the compiler's first scan already sees every candidate whether or not the page has
   // rendered it yet; the compile is then judged by the rendered page: no class in use without a rule.
   const candidates = [...new Set((js + " " + css).match(/[A-Za-z][A-Za-z0-9_\-:\/\.\[\]#%!]*/g) || [])].filter((t) => t.length < 120).join(" ");
   const compilePage = head + ` tailwind = { config: ${tailwindConfig} };<\/script>\n<script src="https://cdn.tailwindcss.com"><\/script>\n<div hidden id="tw-candidates" class="${candidates.replace(/"/g, "")}"></div>\n` + body;
-  const tailwindCss = await compileTailwind(compilePage);
+  const tailwindCss = await compileTailwind(compilePage, lease);
   const html = head + `<\/script>\n<style>${tailwindCss}</style>\n` + body;
   await assertBuildSourceCurrent(await dbReady, appId, source);
   return { html, sourceReference: source.reference, modules: remote.count, jsBytes: js.length, cssBytes: css.length, tailwindBytes: tailwindCss.length, ms: Math.round(performance.now() - t0) };
-  });
+  }, {signal:lease.signal,fetch:async(url,init)=>{await lease.check();return fetch(url,init);}});
+  }, {
+    assertSource:async()=>assertBuildSourceCurrent(await dbReady, appId, source),
+    grant:async(id,permission)=>grantPreview(id,permission.disclosure.endpoints,permission,undefined),
+    readGrant:id=>get("refs","capabilities:"+id),
+    revoke:id=>del("refs","capabilities:"+id),
+  }), {guest:await kernelReady,derive:kappa,...buildWorkStore(await dbReady,appId,source)});
 }
 // Runs inside the compile frame. The frame is a preview address, so the worker serves it in a CSP
 // sandbox with an opaque origin and the host cannot read its document: the frame reports instead,
@@ -1360,16 +1969,17 @@ function tailwindReporter() {
     const root = document.getElementById("root");
     const all = sheets.join("\n");
     const used = new Set([...document.querySelectorAll("[class]")].filter((e) => e.id !== "tw-candidates").flatMap((e) => String(e.className.baseVal ?? e.className).split(/\s+/).filter(Boolean)));
-    parent.postMessage({ tailwindReport: true, sheet: sheets.find((t) => t.includes("--tw-")) || "", rendered: !!(root && root.childElementCount), missing: [...used].filter((c) => !all.includes("." + escapeClass(c))) }, "*");
+    parent.postMessage({ tailwindReport: true, sheet: sheets.find((t) => t.includes("--tw-")) || "", rendered: !!(root && (root.childElementCount || root.textContent.trim())), missing: [...used].filter((c) => !all.includes("." + escapeClass(c))) }, "*");
   }, 250);
 }
 
-async function compileTailwind(page) {
-  const id = "tw-" + Date.now().toString(36);
+async function compileTailwind(page, lease) {
+  await lease.check();
+  const id = lease.id;
   const path = new URL("p/" + id + "/index.html", BASE).pathname;
   const at = page.lastIndexOf("</body>");
   const reporting = page.slice(0, at) + `<script>(${tailwindReporter})();<\/script>` + page.slice(at);
-  await grantPreview(id, ["https://cdn.tailwindcss.com"]);
+  await lease.check();
   const cache = await caches.open("previews");
   await cache.put(path, new Response(reporting, { headers: { "content-type": "text/html; charset=utf-8" } }));
   const frame = document.createElement("iframe");
@@ -1378,27 +1988,31 @@ async function compileTailwind(page) {
   const listen = (e) => { if (e.source === frame.contentWindow && e.data && e.data.tailwindReport) report = e.data; };
   window.addEventListener("message", listen);
   frame.src = path;
-  document.body.append(frame);
+  const removeFrame = () => frame.remove();
+  lease.signal.addEventListener("abort", removeFrame, {once:true});
   try {
+    await lease.check();
+    document.body.append(frame);
     const t0 = performance.now();
     let last = "", stable = 0;
     while (performance.now() - t0 < 30000) {
       await new Promise((r) => setTimeout(r, 250));
+      await lease.check();
       if (!report || !report.sheet || !report.rendered) continue;
       // Converged when the rendered page uses no class the compiled sheet (or the project's own CSS) lacks.
       // The sheet is inlined into a <style> element of the published page, so it may not close that element.
       const sheet = String(report.sheet).replace(/<\/style/gi, "<\\/style");
       const missing = Array.isArray(report.missing) ? report.missing.map(String) : [];
       const key = sheet.length + ":" + missing.join(",");
-      if (key === last) { stable += 1; if (stable >= 3 && missing.length === 0) return sheet; if (stable >= 12) return sheet; } else { last = key; stable = 0; }
+      if (key === last) { stable += 1; if (stable >= 3 && missing.length === 0) return sheet; if (stable >= 12) throw portablePermissionFailure("portableBuildStyleIncomplete"); } else { last = key; stable = 0; }
     }
     if (last) throw new Error("tailwind did not converge on the page");
     throw new Error("tailwind did not compile the page");
   } finally {
     window.removeEventListener("message", listen);
+    lease.signal.removeEventListener("abort", removeFrame);
     frame.remove();
     await cache.delete(path);
-    await del("refs", "capabilities:" + id);
   }
 }
 window.__portable = buildPortable;
@@ -1423,13 +2037,12 @@ handlers.set("holo:publish", async ({ appId }) => {
   const row = (outcome, resource) => put("audit", Date.now() + ":publish:" + appId, { timestamp_millis: Date.now(), principal: "app:" + appId, operation: "holo.application.publish", resource, outcome });
   if (decision !== "Accept") { await row("refused", version || ""); return { decision, word: words.publishRefusedLabel, closure, built, attestation }; }
   // Cached proof status can be absent after an edit; source determines the publication route.
-  if (requiresRulePublication(captured)) {
-    await row("refused", version);
-    return { decision: "Chat", word: "This app has rules, so it is built with the Prism SDK: say publish in the chat.", closure, built, attestation };
-  }
-  const page = await buildPortable(appId, captured);
-  const view = encodeView([{ path: "index.html", bytes: enc.encode(page.html) }, { path: "build/modules.json", bytes: enc.encode(JSON.stringify(page.moduleClosure, null, 2) + "\n") }, ...page.moduleFiles]);
-  const guest = new Uint8Array(await (await fetch(new URL("core.wasm", BASE), { cache: "no-store" })).arrayBuffer());
+  // An app with rules is published only once Lean proved them; its page asks the kernel guest (rulePage).
+  const ruled = requiresRulePublication(captured), rules = ruled ? await rulesOf(appId) : null;
+  if (ruled && !(rules && rules.spec && (rules.phase === "proved" || rules.phase === "published"))) { await row("refused", version); return { decision: "Chat", word: "This app has rules: approve them in the chat, then say publish.", closure, built, attestation }; }
+  const page = ruled ? { files: await rulePage(rules.spec), ms: 0 } : await buildPortable(appId, captured);
+  const view = encodeView(ruled ? page.files : [{ path: "index.html", bytes: enc.encode(page.html) }, { path: "build/modules.json", bytes: enc.encode(JSON.stringify(page.moduleClosure, null, 2) + "\n") }, ...page.moduleFiles]);
+  const guest = new Uint8Array(await (await fetch(new URL(ruled ? "kernel/guest.wasm" : "core.wasm", BASE), { cache: "no-store" })).arrayBuffer());
   const model = core.run({ op: "publish-preimage", application: app.name, version, closure, attestation }).bytes;
   const modelBytes = enc.encode(model);
   const modelId = await sha256(modelBytes);
@@ -1444,6 +2057,7 @@ handlers.set("holo:publish", async ({ appId }) => {
   if (address !== composed.identities.archive_kappa) throw new Error("the page's address of the archive differs from PrismPM's: " + address);
   await assertBuildSourceCurrent(await dbReady, appId, captured);
   const done = await install(bytes, { appId, application: app.name, version });
+  tmNameApp("holo:" + done.path.split("/").filter(Boolean).pop(), appId, app.name);
   await row("granted", address);
   const record = { application: app.name, version, closure, attestation, provenance: prov, identities: composed.identities, directory: composed.directory, byteLength: bytes.length, modelId, viewBytes: view.length, guestBytes: guest.length };
   lastPublish = { record, bytes, guest, view, model: modelBytes, source: sourceBytes, page };
@@ -1468,19 +2082,52 @@ window.electron = {
   if (!first || !first.prompt) return;
   const name = ("app-" + first.prompt.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")).slice(0, 40) || "app";
   const created = await handlers.get("create-app")({ name });
-  const intent = { intentId: "first-" + Date.now(), chatId: created.chatId, invocationRef: { kind: "chat-stream", entityKey: created.chatId, operationId: "first-" + Date.now() }, prompt: first.prompt, redo: false, selectedComponents: [], requestedChatMode: "build" };
-  publishChat(created.chatId, { phase: "admitting", invocationRef: intent.invocationRef, error: null });
-  chatTurn(created.chatId, intent).catch((e) => console.error("[host] first turn", e));
+  const intentId="first-"+crypto.randomUUID();
+  const intent=await bindQueuePayload({schemaVersion:1,intentId,appId:created.app.id,chatId:created.chatId,invocationRef:{kind:"chat-stream",entityKey:created.chatId,operationId:intentId},prompt:first.prompt,redo:false,selectedComponents:[],requestedChatMode:"build"},serializeImmutableChatTurnPayload);
+  await chatDispatch({encodedKey:{chatId:created.chatId},messageId:intentId,encodedEvent:{type:"SUBMIT",intent,observedStopPolicyVersion:0}});
   const base = new URL(document.baseURI).pathname;
   history.replaceState(null, "", base + "chat?id=" + created.chatId + "&appId=" + created.app.id);
   dispatchEvent(new PopStateEvent("popstate"));
 })();
+window.__gallery = Object.freeze({read: appId => readGallery(dbReady, appId)});
 window.__host = { handlers, emit, seen, get, put, all, kappa, core: () => core, coreReady, view: () => coreReady.then((c) => c.run({ op: "view" })), publish: () => lastPublish };
-if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js", BASE)).catch(() => {});
+if ("serviceWorker" in navigator) {
+  // A page an older worker drew reloads once when a newer worker takes control, so no visitor keeps running
+  // a build Foundry has replaced (a removed screen stays removed). The worker's script is always fetched
+  // fresh, and checked on every load.
+  const drawnByWorker = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (drawnByWorker && !reloading) { reloading = true; location.reload(); } });
+  // A first visit has no worker running yet; previews wait until it runs, or until its install fails.
+  workerActive = navigator.serviceWorker.register(new URL("sw.js", BASE), { updateViaCache: "none" }).then((r) => { r.update().catch(() => {}); const w = r.installing || r.waiting; return r.active || (w && new Promise((ok) => w.addEventListener("statechange", () => /activated|redundant/.test(w.state) && ok()))); }).catch(() => {});
+}
+// The worker installs only what a first paint needs; once this page has loaded and is idle it is asked to
+// fill the rest of the closure (the engine, the chat app, the photos), so offline use follows soon after.
+if ("serviceWorker" in navigator) {
+  const idle = (fn) => (self.requestIdleCallback ? requestIdleCallback(fn, { timeout: 10000 }) : setTimeout(fn, 3000));
+  addEventListener("load", () => idle(() => navigator.serviceWorker.ready.then((r) => r.active && r.active.postMessage("fill")).catch(() => {})), { once: true });
+}
+// After a deployment a page can run an entry that names a chunk the origin no longer serves: the worker has
+// already revalidated the entry, so one reload runs the new build whole.
+addEventListener("vite:preloadError", (event) => {
+  const key = "holo.chunk.reloaded";
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, "1");
+  event.preventDefault();
+  location.reload();
+});
+addEventListener("load", () => setTimeout(() => sessionStorage.removeItem("holo.chunk.reloaded"), 10000), { once: true });
 // Applications installed before the kernel's gate held no grant record, and the gate refuses to
 // serve without one: each gets the grant install now writes, served with no network.
 (async () => {
   await coreReady;
+  for (const key of await keys("refs")) {
+    if(typeof key!=="string"||!key.startsWith("capabilities:portable-"))continue;
+    const record=await get("refs",key);
+    if(record?.previewConsent?.purpose==="portable-build"&&(!Number.isFinite(record.previewConsent.expires)||Date.now()>=record.previewConsent.expires)){
+      const id=key.slice(13);await del("refs",key);await (await caches.open("previews")).delete(new URL("p/"+id+"/index.html",BASE).pathname);
+    }
+  }
   for (const ref of await installed()) {
     const id = core.run({ op: "holo-path", kappa: ref.kappa }).path.split("/").filter(Boolean).pop();
     if (!(await get("refs", "capabilities:" + id))) await put("refs", "capabilities:" + id, { serve: true, network: { endpoints: [], denied: [] } });
@@ -1503,3 +2150,12 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.j
     location.reload();
   } catch (e) {}
 })();
+
+mountInteractionApplications({
+  create:input=>handlers.get("forge:interaction-create")(input),
+  list:async()=>{const apps=[];for(const app of await all("apps"))if(await get("files",app.id+":prism/interaction.json")!==undefined)apps.push(app);return apps;},
+  run:input=>handlers.get("forge:interaction-run")(input),
+  probe:input=>executeInteraction(kernelReady,input),
+});
+
+mountApplicationDiscovery({discover:input=>handlers.get("forge:discover")(input),accept:input=>handlers.get("forge:discovery-create")(input),open:appId=>openInteractionApplication(appId,{run:input=>handlers.get("forge:interaction-run")(input),probe:input=>executeInteraction(kernelReady,input)})});

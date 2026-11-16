@@ -154,3 +154,163 @@ fn forge_kernel_fk_11() {
         "rewordKeepsPublishedHolds",
     );
 }
+
+/// `FK-12`: The kernel never answers within when a journey's measure is over its budget
+#[test]
+fn forge_kernel_fk_12() {
+    pinned(
+        "breaksBudgetOverWithin",
+        "body: (((ForgeKernel::budgetOf (project request journey)) <? (project request value)) && ((ForgeKernel::budgetWithin request) =? 1))",
+        "budgetOverWithinHolds",
+    );
+}
+
+/// `FK-13`: The kernel never answers over when a journey's measure is within its budget
+#[test]
+fn forge_kernel_fk_13() {
+    pinned(
+        "breaksBudgetWithinOver",
+        "body: ((not ((ForgeKernel::budgetOf (project request journey)) <? (project request value))) && ((ForgeKernel::budgetWithin request) =? 0))",
+        "budgetWithinOverHolds",
+    );
+}
+
+/// `FK-14`: The mobile INP budget is never above 500 ms
+#[test]
+fn forge_kernel_fk_14() {
+    pinned(
+        "breaksInpBudgetBound",
+        "body: (((project request journey) =? 2) && (500 <? (ForgeKernel::budgetOf (project request journey))))",
+        "inpBudgetBoundHolds",
+    );
+}
+
+/// `FK-15`: No route's JS budget is below the first load's
+#[test]
+fn forge_kernel_fk_15() {
+    pinned(
+        "breaksRouteBelowFirstLoad",
+        "body: (((4 <? (project request journey)) && ((project request journey) <? 11)) && ((ForgeKernel::budgetOf (project request journey)) <? (ForgeKernel::budgetOf 4)))",
+        "routeBelowFirstLoadHolds",
+    );
+}
+
+/// `FK-16`: The kernel never answers split when the width is under 768 px
+#[test]
+fn forge_kernel_fk_16() {
+    pinned(
+        "breaksNarrowSplit",
+        "body: (((project request width) <? 768) && ((ForgeKernel::layoutTabs request) =? 0))",
+        "narrowSplitHolds",
+    );
+}
+
+/// `FK-17`: The kernel never answers tabs when the width is 768 px or more
+#[test]
+fn forge_kernel_fk_17() {
+    pinned(
+        "breaksWideTabs",
+        "body: ((not ((project request width) <? 768)) && ((ForgeKernel::layoutTabs request) =? 1))",
+        "wideTabsHolds",
+    );
+}
+
+/// `FK-18`: The kernel never allows motion when reduced motion is asked
+#[test]
+fn forge_kernel_fk_18() {
+    pinned(
+        "breaksReducedMotion",
+        "body: (((project request reduced) =? 1) && ((ForgeKernel::motionAllows request) =? 1))",
+        "reducedMotionHolds",
+    );
+}
+
+/// `FK-19`: The kernel never allows motion longer than 200 ms
+#[test]
+fn forge_kernel_fk_19() {
+    pinned(
+        "breaksLongMotion",
+        "body: ((200 <? (project request duration)) && ((ForgeKernel::motionAllows request) =? 1))",
+        "longMotionHolds",
+    );
+}
+
+/// `FK-20`: The kernel never answers ok for a tap target under 44 px
+#[test]
+fn forge_kernel_fk_20() {
+    pinned(
+        "breaksSmallTarget",
+        "body: (((project request size) <? 44) && ((ForgeKernel::targetOk request) =? 1))",
+        "smallTargetHolds",
+    );
+}
+
+/// `FK-21`: The kernel never counts as this week what is older than 7 days
+#[test]
+fn forge_kernel_fk_21() {
+    pinned(
+        "breaksOldRecent",
+        "body: ((604800 <? (project request age)) && ((ForgeKernel::recentYes request) =? 1))",
+        "oldRecentHolds",
+    );
+}
+
+/// `FK-22`: The kernel never allows model thinking on a first attempt
+#[test]
+fn forge_kernel_fk_22() {
+    pinned(
+        "breaksFirstThink",
+        "body: (((project request attempt) =? 0) && ((ForgeKernel::thinkAllows request) =? 1))",
+        "firstThinkHolds",
+    );
+}
+
+/// `FK-23`: The budget from Enter to a checked app is never above 30 s
+#[test]
+fn forge_kernel_fk_23() {
+    pinned(
+        "breaksBuiltBudgetBound",
+        "body: (((project request journey) =? 17) && (30000 <? (ForgeKernel::budgetOf (project request journey))))",
+        "builtBudgetBoundHolds",
+    );
+}
+
+/// `FK-24`: The budget from an edit to the screen is never above two frames, 33 ms
+#[test]
+fn forge_kernel_fk_24() {
+    pinned(
+        "breaksEditBudgetBound",
+        "body: (((project request journey) =? 15) && (33 <? (ForgeKernel::budgetOf (project request journey))))",
+        "editBudgetBoundHolds",
+    );
+}
+
+/// `FK-25`: The kernel never lets a telemetry record reach the network or an app's frame
+#[test]
+fn forge_kernel_fk_25() {
+    pinned(
+        "breaksTelemetryEgress",
+        "body: ((((ForgeKernel::telemetryAllows request) =? 1) && (not ((project request effect) <=? (ForgeKernel::telemetrySave)))) && (not (((project request effect) =? (ForgeKernel::telemetryInfer)) && ((project request device) =? 1))))",
+        "telemetryEgressHolds",
+    );
+}
+
+/// `FK-26`: The kernel never lets a telemetry record be saved unless the user asked
+#[test]
+fn forge_kernel_fk_26() {
+    pinned(
+        "breaksTelemetryUnasked",
+        "body: ((((project request effect) =? (ForgeKernel::telemetrySave)) && (not ((project request asked) =? 1))) && ((ForgeKernel::telemetryAllows request) =? 1))",
+        "telemetryUnaskedHolds",
+    );
+}
+
+/// `FK-27`: The kernel never lets a telemetry record reach a model that is not on the device
+#[test]
+fn forge_kernel_fk_27() {
+    pinned(
+        "breaksTelemetryOffDevice",
+        "body: ((((project request effect) =? (ForgeKernel::telemetryInfer)) && (not ((project request device) =? 1))) && ((ForgeKernel::telemetryAllows request) =? 1))",
+        "telemetryOffDeviceHolds",
+    );
+}

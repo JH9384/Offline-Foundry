@@ -1,0 +1,72 @@
+\begin{lexlean}{Workspace}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\importmodule{WorkProtocol}
+\importmodule{CompositionProtocol}
+\title{Boolean}
+\begin{semanticmodule}
+definition{
+  name: openCode,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  result: Nat,
+  body: (if (removed =? 1) then 1 else (if (not (live =? 1)) then 2 else (if (not (owner =? 1)) then 3 else (if (not (key =? 1)) then 4 else 0))))
+}
+
+definition{
+  name: readCode,
+  parameters: [opened : Nat, authentic : Nat, bound : Nat],
+  result: Nat,
+  body: (if (not (opened =? 1)) then 5 else (if (not (authentic =? 1)) then 6 else (if (not (bound =? 1)) then 7 else 0)))
+}
+
+definition{
+  name: storeCode,
+  parameters: [opened : Nat, sealed : Nat, within : Nat],
+  result: Nat,
+  body: (if (not (opened =? 1)) then 5 else (if (not (sealed =? 1)) then 8 else (if (not (within =? 1)) then 9 else 0)))
+}
+
+definition{
+  name: moveCode,
+  parameters: [opened : Nat, moved : Nat],
+  result: Nat,
+  body: (if (not (opened =? 1)) then 5 else (if (moved =? 1) then 10 else 0))
+}
+
+definition{
+  name: removeCode,
+  parameters: [opened : Nat, committed : Nat],
+  result: Nat,
+  body: (if (not (opened =? 1)) then 5 else (if (not (committed =? 1)) then 11 else 0))
+}
+
+definition{
+  name: workspaceEncode,
+  parameters: [code : Nat],
+  result: Bytes,
+  body: (if (code =? 0) then 0x6f6b else (if (code =? 1) then 0x776f726b737061636544657669636552656d6f766564 else (if (code =? 2) then 0x776f726b737061636553657373696f6e45787069726564 else (if (code =? 3) then 0x776f726b73706163654e6f744f776e6572 else (if (code =? 4) then 0x776f726b73706163654b65795374616c65 else (if (code =? 5) then 0x776f726b7370616365436c6f736564 else (if (code =? 6) then 0x7265636f726454616d7065726564 else (if (code =? 7) then 0x7265636f72644d6973706c61636564 else (if (code =? 8) then 0x7265636f7264556e7365616c6564 else (if (code =? 9) then 0x776f726b737061636551756f74614578636565646564 else (if (code =? 10) then 0x776f726b7370616365416c72656164794d6f766564 else (if (code =? 11) then 0x7365616c6564436f70794e6f74436f6d6d6974746564 else 0x6d616c666f726d6564576f726b737061636552657175657374))))))))))))
+}
+
+definition{
+  name: workspaceAnswer,
+  parameters: [words : (List Nat)],
+  result: Bytes,
+  body: (if ((WorkProtocol::word words 0) =? 1) then (if (((WorkProtocol::word words 1) =? 0) && ((prim length words : Nat) =? 6)) then (workspaceEncode (openCode (WorkProtocol::word words 2) (WorkProtocol::word words 3) (WorkProtocol::word words 4) (WorkProtocol::word words 5))) else (if (((WorkProtocol::word words 1) =? 1) && ((prim length words : Nat) =? 5)) then (workspaceEncode (readCode (WorkProtocol::word words 2) (WorkProtocol::word words 3) (WorkProtocol::word words 4))) else (if (((WorkProtocol::word words 1) =? 2) && ((prim length words : Nat) =? 5)) then (workspaceEncode (storeCode (WorkProtocol::word words 2) (WorkProtocol::word words 3) (WorkProtocol::word words 4))) else (if (((WorkProtocol::word words 1) =? 3) && ((prim length words : Nat) =? 4)) then (workspaceEncode (moveCode (WorkProtocol::word words 2) (WorkProtocol::word words 3))) else (if (((WorkProtocol::word words 1) =? 4) && ((prim length words : Nat) =? 4)) then (workspaceEncode (removeCode (WorkProtocol::word words 2) (WorkProtocol::word words 3))) else 0x6d616c666f726d6564576f726b737061636552657175657374))))) else 0x6d616c666f726d6564576f726b737061636552657175657374)
+}
+
+definition{
+  name: dispatchWorkspace,
+  parameters: [bytes : Bytes],
+  result: Bytes,
+  body: (if (128 <? (prim length bytes : Nat)) then 0x776f726b737061636552657175657374546f6f4c61726765 else (let decoded : CompositionProtocol::DecodedWords := (CompositionProtocol::decodeWords bytes 0 16 (nil Nat)); (if (project decoded valid) then (workspaceAnswer (project decoded value)) else 0x6d616c666f726d6564576f726b737061636552657175657374))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: workspaceWireBoundary,
+  parameters: [],
+  result: String,
+  body: "Requests use workspace-space then lowercase little-endian uint32 hex words: version 1; the kind (0 open, 1 read a record, 2 store a record, 3 move the workspace kept before an id, 4 remove its plain copy); then one word per fact, 1 for yes and any other value for no. Open: this device was removed, the session is live, the id owns the workspace, the device holds the current boundary key. Read: the workspace is open, the sealed bytes are authentic, the record is the one its place names. Store: open, sealed, within quota. Move: open, already moved. Remove: open, the sealed copy is committed. The answer is ok or the first refusal: workspaceDeviceRemoved, workspaceSessionExpired, workspaceNotOwner, workspaceKeyStale, workspaceClosed, recordTampered, recordMisplaced, recordUnsealed, workspaceQuotaExceeded, workspaceAlreadyMoved, sealedCopyNotCommitted. Any other shape is malformedWorkspaceRequest, and more than 128 bytes is workspaceRequestTooLarge."
+}
+\end{semanticmodule}
+\end{lexlean}

@@ -94,12 +94,6 @@ suite = "host-response-boundary"
 statement = "The browser host refuses unsupported channels and invalid contracted responses with typed errors"
 
 [[id]]
-id = "FA-04"
-level = "build"
-suite = "publication-cancellation"
-statement = "Cancelling publication prevents subsequent browser requests and bounded requests return typed failures"
-
-[[id]]
 id = "FA-05"
 level = "build"
 suite = "publication-identity"
@@ -136,12 +130,6 @@ suite = "composition-host-runtime"
 statement = "The browser host composes features only through its pinned and replayed generated kernel"
 
 [[id]]
-id = "FA-11"
-level = "build"
-suite = "inference-effect-boundary"
-statement = "Cloud inference bounds requests and streamed responses and refuses cancellation, malformed data and provider failures explicitly"
-
-[[id]]
 id = "FA-12"
 level = "build"
 suite = "host-input-boundary"
@@ -164,12 +152,6 @@ id = "FA-15"
 level = "build"
 suite = "capability-availability"
 statement = "Unimplemented browser queries return typed unsupported errors rather than fabricated resource status or empty findings"
-
-[[id]]
-id = "FA-16"
-level = "build"
-suite = "provider-key-validation"
-statement = "Provider credential validation rejects unsupported providers and requires a bounded authenticated response before success"
 
 [[id]]
 id = "FA-17"
@@ -249,3 +231,645 @@ id = "FA-27"
 level = "build"
 suite = "bounded-build-modules"
 statement = "Portable builds fetch only bounded approved-origin modules and retain exact module-byte receipts"
+
+[[id]]
+id = "FA-28"
+level = "build"
+suite = "verified-project-import"
+statement = "Imports validate bounded snapshot closure and discard authority-bearing metadata before atomic insertion"
+
+[[id]]
+id = "FA-29"
+level = "build"
+suite = "verified-shell-cache"
+statement = "Worker activation requires bounded independently verified shell bytes including renderer and scaffold closure"
+
+[[id]]
+id = "FA-30"
+level = "build"
+suite = "browser-telemetry-isolation"
+statement = "The browser renderer never initializes vendor telemetry and cannot restore collection through stored settings"
+
+[[id]]
+id = "FA-31"
+level = "build"
+suite = "local-editor-closure"
+statement = "The editor loads only from integrity-checked locked package bytes inside the active shell closure"
+
+[[id]]
+id = "FA-32"
+level = "build"
+suite = "local-browser-compiler"
+statement = "The browser compiler loads locked verified local bytes and recovers after failed initialization"
+
+[[id]]
+id = "FA-33"
+level = "build"
+suite = "event-wire-protocol"
+statement = "Typed event admission crosses a bounded byte protocol executed by the generated Prism guest"
+
+[[id]]
+id = "FK-12"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never answers within when a journey's measure is over its budget"
+
+[[id]]
+id = "FK-13"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never answers over when a journey's measure is within its budget"
+
+[[id]]
+id = "FK-14"
+level = "build"
+suite = "forge_kernel"
+statement = "The mobile INP budget is never above 500 ms"
+
+[[id]]
+id = "FK-15"
+level = "build"
+suite = "forge_kernel"
+statement = "No route's JS budget is below the first load's"
+
+[[id]]
+id = "FK-16"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never answers split when the width is under 768 px"
+
+[[id]]
+id = "FK-17"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never answers tabs when the width is 768 px or more"
+
+[[id]]
+id = "FK-18"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never allows motion when reduced motion is asked"
+
+[[id]]
+id = "FK-19"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never allows motion longer than 200 ms"
+
+[[id]]
+id = "FK-20"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never answers ok for a tap target under 44 px"
+
+[[id]]
+id = "FK-21"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never counts as this week what is older than 7 days"
+
+[[id]]
+id = "FK-22"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never allows model thinking on a first attempt"
+
+[[id]]
+id = "FK-23"
+level = "build"
+suite = "forge_kernel"
+statement = "The budget from Enter to a checked app is never above 30 s"
+
+[[id]]
+id = "FK-24"
+level = "build"
+suite = "forge_kernel"
+statement = "The budget from an edit to the screen is never above two frames, 33 ms"
+
+[[id]]
+id = "FK-25"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never lets a telemetry record reach the network or an app's frame"
+
+[[id]]
+id = "FK-26"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never lets a telemetry record be saved unless the user asked"
+
+[[id]]
+id = "FK-27"
+level = "build"
+suite = "forge_kernel"
+statement = "The kernel never lets a telemetry record reach a model that is not on the device"
+
+[[id]]
+id = "TL-01"
+level = "build"
+suite = "telemetry"
+statement = "A journey's first moment, once recorded, never moves"
+
+[[id]]
+id = "TL-02"
+level = "build"
+suite = "telemetry"
+statement = "A journey's end is never recorded before its start, so no KPI span is negative"
+
+[[id]]
+id = "TL-03"
+level = "build"
+suite = "telemetry"
+statement = "The worst preview update is never below an update the turn made"
+
+[[id]]
+id = "TL-04"
+level = "build"
+suite = "telemetry"
+statement = "The worst preview update never falls during a turn"
+
+[[id]]
+id = "TL-05"
+level = "build"
+suite = "telemetry"
+statement = "An edit's time to screen is counted only from an edit that started"
+
+[[id]]
+id = "TL-06"
+level = "build"
+suite = "telemetry"
+statement = "The worst edit to screen never falls during a turn"
+
+[[id]]
+id = "TL-07"
+level = "build"
+suite = "telemetry"
+statement = "A turn within budget is never counted as over"
+
+[[id]]
+id = "TL-08"
+level = "build"
+suite = "telemetry"
+statement = "A turn over budget is always counted as over"
+
+[[id]]
+id = "TL-09"
+level = "build"
+suite = "telemetry"
+statement = "The loop never suggests anything without a turn over budget"
+
+[[id]]
+id = "TL-10"
+level = "build"
+suite = "telemetry"
+statement = "The loop never suggests anything unless most observed turns are over budget"
+
+[[id]]
+id = "TL-11"
+level = "build"
+suite = "telemetry"
+statement = "The loop never suggests anything for a KPI with no budget"
+
+[[id]]
+id = "TL-12"
+level = "build"
+suite = "telemetry"
+statement = "A budgeted KPI over budget in most turns always gets a suggestion"
+
+[[id]]
+id = "TL-13"
+level = "build"
+suite = "telemetry"
+statement = "A time under the kernel's threshold is never judged over"
+
+[[id]]
+id = "TL-14"
+level = "build"
+suite = "telemetry"
+statement = "A time at or over the kernel's threshold is never judged within"
+
+[[id]]
+id = "TL-15"
+level = "build"
+suite = "telemetry"
+statement = "The loop never suggests switching to the model already in use"
+
+[[id]]
+id = "TL-16"
+level = "build"
+suite = "telemetry"
+statement = "The loop never suggests a model switch on fewer than five reads of either model"
+
+[[id]]
+id = "TL-17"
+level = "build"
+suite = "telemetry"
+statement = "The loop never suggests a model switch while Enter to Checked is within budget"
+
+[[id]]
+id = "TL-18"
+level = "build"
+suite = "telemetry"
+statement = "Only the user's approval adopts a suggestion"
+
+[[id]]
+id = "TL-19"
+level = "build"
+suite = "telemetry"
+statement = "Approving with no suggestion pending adopts nothing"
+
+[[id]]
+id = "TL-20"
+level = "build"
+suite = "telemetry"
+statement = "An adopted change is never called an improvement unless the KPI got faster"
+
+[[id]]
+id = "TL-21"
+level = "build"
+suite = "telemetry"
+statement = "The device never keeps more than 512 turns"
+
+[[id]]
+id = "TL-22"
+level = "build"
+suite = "telemetry"
+statement = "An app the kernel refused anything is never shown as all clear"
+
+[[id]]
+id = "TL-23"
+level = "build"
+suite = "telemetry"
+statement = "An app is never shown as reaching a site it was never allowed to reach"
+
+[[id]]
+id = "TL-24"
+level = "build"
+suite = "telemetry"
+statement = "A refused site is never shown as only allowed"
+
+[[id]]
+id = "TL-25"
+level = "build"
+suite = "telemetry"
+statement = "A refusal is never counted as allowed, and an allowance never as a refusal"
+
+[[id]]
+id = "TL-26"
+level = "build"
+suite = "telemetry"
+statement = "Every allowance and every refusal is counted once"
+
+[[id]]
+id = "TL-27"
+level = "build"
+suite = "telemetry"
+statement = "The time an app or a site was last seen never moves back"
+
+[[id]]
+id = "TL-28"
+level = "build"
+suite = "telemetry"
+statement = "The device never keeps more than 256 apps"
+
+[[id]]
+id = "LL-01"
+level = "build"
+suite = "live-lexlean"
+statement = "Every guarantee holds on every request in the bounds when every local obligation passes"
+
+[[id]]
+id = "LL-02"
+level = "build"
+suite = "live-lexlean"
+statement = "Every guarantee of the Verdant Resonance fixture holds on every request in its bounds"
+
+[[id]]
+id = "FA-35"
+level = "build"
+suite = "canonical-module-boundary"
+statement = "The canonical decision-module reader refuses ambiguous or discarded semantics before authoring"
+
+[[id]]
+id = "FA-36"
+level = "build"
+suite = "canonical-model-edits"
+statement = "Direct canonical edits atomically update the decision source, projections and source-bound rules state"
+
+[[id]]
+id = "FA-37"
+level = "build"
+suite = "canonical-generation-ownership"
+statement = "Generic generation batches cannot overwrite canonical decision sources or their generated rule runtime"
+
+[[id]]
+id = "FA-38"
+level = "build"
+suite = "canonical-build-closure"
+statement = "Decision builds require the canonical module and generated runtime to match the captured specification"
+
+[[id]]
+id = "FA-39"
+level = "build"
+suite = "preview-permissions"
+statement = "Networked previews require explicit source-bound permission with persistent revocation controls"
+
+[[id]]
+id = "FA-40"
+level = "build"
+suite = "durable-event-delivery"
+statement = "Guest-admitted events commit to a source-bound durable queue and remain pending until ordered acknowledgement"
+
+[[id]]
+id = "FA-41"
+level = "build"
+suite = "stateful-application-model"
+statement = "The generated interaction profile admits bounded state transitions and projects consent-sensitive visual audio and motion outputs"
+
+[[id]]
+id = "FA-42"
+level = "build"
+suite = "stateful-application-journeys"
+statement = "Stored gallery and garden applications execute canonical guest transitions with atomic recovery and explicit audio consent"
+
+[[id]]
+id = "FA-43"
+level = "build"
+suite = "command-ownership-registry"
+statement = "Every imported and browser command is classified by canonical ownership and dispatch refuses missing or changed bindings"
+
+[[id]]
+id = "FA-44"
+level = "build"
+suite = "portable-build-permission"
+statement = "Portable builds require revocable source-bound consent before package retrieval or generated-code execution"
+
+[[id]]
+id = "FA-46"
+level = "build"
+suite = "durable-build-work"
+statement = "Portable builds execute under guest-admitted durable ownership and retain source-bound completed artifacts or resumable reservations"
+
+[[id]]
+id = "FA-48"
+level = "build"
+suite = "semantic-routing-model"
+statement = "Typed semantic proposals rank explicit concept relations and close dependencies while Prism independently admits ambiguity constraints and effects"
+
+[[id]]
+id = "FA-49"
+level = "build"
+suite = "semantic-application-discovery"
+statement = "Finite language discovery creates only guest-admitted catalog applications after source-bound explicit review"
+
+[[id]]
+id = "FA-50"
+level = "build"
+suite = "chat-queue-model"
+statement = "Bounded chat queues preserve unique pending work and reject stale revisions owners and stop policies through guest transitions"
+
+[[id]]
+id = "FA-51"
+level = "build"
+suite = "durable-chat-queue"
+statement = "Actual chat queue commands atomically bind guest transitions to durable payloads and exclusive recoverable execution"
+
+[[id]]
+id = "FA-52"
+level = "build"
+suite = "canonical-version-history"
+statement = "Version history preserves canonical content identity through renderer aliases and atomically commits metadata with verified snapshot differences"
+
+[[id]]
+id = "FA-53"
+level = "build"
+suite = "version-preview-model"
+statement = "Version preview transitions preserve exact origin identity and reject stale or conflicting ownership through the Prism guest"
+
+[[id]]
+id = "FA-54"
+level = "build"
+suite = "durable-version-preview"
+statement = "Version preview ownership binds guest transitions to atomic source restoration and exclusive recoverable browser sessions"
+
+[[id]]
+id = "FA-55"
+level = "build"
+suite = "message-linked-restoration"
+statement = "Message-linked restoration atomically binds verified source preview to exact chat truncation or a history-preserving fork"
+
+[[id]]
+id = "FA-56"
+level = "build"
+suite = "studio-pr-concurrency"
+statement = "Only superseded pull-request Studio runs are cancelled while every main and release run retains its full acceptance boundary"
+
+[[id]]
+id = "FA-57"
+level = "build"
+suite = "browser-window-coordination"
+statement = "Browser window registration focus visibility interests and invalidation recovery replace empty acknowledgements with bounded origin coordination"
+
+[[id]]
+id = "FA-58"
+level = "build"
+suite = "verified-working-tree"
+statement = "Working-tree queries compare atomically captured source with verified snapshot bytes and refuse corrupt or over-budget differences"
+
+[[id]]
+id = "FA-59"
+level = "build"
+suite = "application-main-integration"
+statement = "Current-main experience rules and renderer improvements coexist with complete application protocols and verified private offline closure"
+
+[[id]]
+id = "FA-60"
+level = "build"
+suite = "bounded-kernel-execution"
+statement = "Fresh guest instances execute in bounded browser worker lifetimes without exhausting compiler memory reservations"
+
+[[id]]
+id = "FA-61"
+level = "build"
+suite = "durable-prompt-library"
+statement = "Prompt library creation updates deletion and listing persist atomically with bounded validated records and unique slugs"
+
+[[id]]
+id = "FA-62"
+level = "build"
+suite = "renderer-stylesheet-identity"
+statement = "Generated renderer stylesheet identity prevents duplicate blocking CSS retrieval"
+
+[[id]]
+id = "FA-63"
+level = "build"
+suite = "atomic-browser-settings"
+statement = "Browser settings updates serialize their read and write and acknowledge only transaction completion"
+
+[[id]]
+id = "FA-64"
+level = "build"
+suite = "verified-host-bundle"
+statement = "The browser host loads one reproducible static bundle with preserved module URL identities"
+
+[[id]]
+id = "AC-01"
+level = "build"
+suite = "app-covers"
+statement = "App covers are captured only from the asked preview, never from a blank frame, and card words are stored only within the sentence and tag rules"
+
+[[id]]
+id = "FA-66"
+level = "build"
+suite = "editor-load-lifecycle"
+statement = "Editor initialization preserves cancellation ownership and reports load failures without detached rejections"
+
+[[id]]
+id = "FA-67"
+level = "build"
+suite = "durable-theme-library"
+statement = "Custom generation themes and app selection persist atomically with exact imported renderer contracts"
+
+[[id]]
+id = "FA-68"
+level = "build"
+suite = "sidebar-tool-access"
+statement = "Foundry tools remain reachable without covering renderer controls across responsive sidebar lifetimes"
+
+[[id]]
+id = "FA-69"
+level = "build"
+suite = "live-main-integration"
+statement = "Current live module generation and every-app replay integrate without losing canonical ownership or consent"
+
+[[id]]
+id = "FA-70"
+level = "build"
+suite = "source-bound-gallery"
+statement = "Gallery media and descriptions publish atomically only for their captured current project source"
+
+[[id]]
+id = "FA-71"
+level = "build"
+suite = "initial-project-theme"
+statement = "New projects inherit the validated selected generation theme in the project creation transaction"
+
+[[id]]
+id = "FA-72"
+level = "build"
+suite = "module-presentation-ownership"
+statement = "Generated modules retain presentation only when the canonical application interface remains compatible"
+
+[[id]]
+id = "FA-73"
+level = "build"
+suite = "kernel-owner-readiness"
+statement = "Service-worker guest requests await an initializing matching document owner without accepting unverified executables"
+
+[[id]]
+id = "FA-74"
+level = "build"
+suite = "chat-owner-recovery"
+statement = "Surviving chat windows retain execution-lock interest until closed-owner recovery pauses the exact durable head"
+
+[[id]]
+id = "FA-75"
+level = "build"
+suite = "kernel-owner-handoff"
+statement = "Service-worker guest execution reselects verified document owners lost during navigation within one bounded deadline"
+
+[[id]]
+id = "FA-76"
+level = "build"
+suite = "large-module-presentation"
+statement = "Presentation validation retains complete large canonical modules without promoting them into the bounded proof profile"
+
+[[id]]
+id = "FA-77"
+level = "build"
+suite = "atomic-chat-preferences"
+statement = "Chat title mode and model preferences commit atomically through their imported schema without losing concurrent transcript updates"
+
+[[id]]
+id = "FA-78"
+level = "build"
+suite = "read-only-chat-execution"
+statement = "Ask and Plan turns preserve source proof and preview state while retaining consented inference and transcript completion"
+
+[[id]]
+id = "FA-79"
+level = "build"
+suite = "chat-model-picker-scope"
+statement = "The model picker resolves mounted chat routes and persists the active chat selection independently of Home defaults"
+
+[[id]]
+id = "FA-80"
+level = "build"
+suite = "browser-chat-mode-controls"
+statement = "Canonical Build Ask and Plan controls persist scoped preferences and initialize chats with the captured supported mode"
+
+[[id]]
+id = "FA-81"
+level = "build"
+suite = "chat-provider-routing"
+statement = "Chat model routing preserves the captured provider and exact model identity without silently replacing cloud selections with device inference"
+
+[[id]]
+id = "FA-82"
+level = "build"
+suite = "preview-auto-start"
+statement = "Automatic preview startup respects existing app state so remounts cannot repeat declined execution while explicit retry remains available"
+
+[[id]]
+id = "FA-84"
+level = "build"
+suite = "application-shape-authority"
+statement = "Application shape edits and transitions retain one source-bound authority and cannot obtain proof standing from authored files"
+
+[[id]]
+id = "FA-86"
+level = "build"
+suite = "in-tab-kernel-verdict"
+statement = "A proof verdict is decided by the Prism guest from addresses the tab derived and the result of a kernel run in the tab, never from a server reply"
+
+[[id]]
+id = "FA-87"
+level = "build"
+suite = "prism-r4-route"
+statement = "A chat turn is answered only by Foundry's own model in Prism, and Prism R4 refuses every route to another model before the request leaves the tab"
+
+[[id]]
+id = "PM-01"
+level = "build"
+suite = "product-model"
+statement = "Foundry is one Prism model whose architecture, design, features, security, quality and compliance facets are projected from app/product.json and the kernel, and whose quality thresholds are the kernel's own terms"
+
+[[id]]
+id = "PM-02"
+level = "build"
+suite = "front-end-trace"
+statement = "Every IPC call a Foundry screen makes reaches a back-end feature the screen requires, every register ID and registry feature is owned by exactly one back-end feature, and every back-end feature, screen and stakeholder is reached by a journey"
+
+[[id]]
+id = "FA-88"
+level = "build"
+suite = "prism-id"
+statement = "A session from Foundry's frame verifies by stitch's Prism id only for the app, the active device and the time it was signed for, and a removed device or another id signs none"
+
+[[id]]
+id = "FA-90"
+level = "build"
+suite = "rule-judge"
+statement = "A published app's answer is decided by the rule judge in Foundry's Prism kernel: the first rule whose conditions all hold decides, otherwise decides when none does, and a request outside the fields' bounds is refused"
+
+[[id]]
+id = "FA-91"
+level = "build"
+suite = "private-workspace"
+statement = "A private workspace opens only for the Prism id that owns it, on a device with a live session and its current boundary key; a record is read only when authentic and in place and stored only sealed; the workspace kept before an id moves in once; and Foundry's Prism kernel names every refusal"
+
+[[id]]
+id = "FA-92"
+level = "build"
+suite = "theater"
+statement = "Theater, right after Library in the sidebar, plays Prism apps one after another on a stage beside an up next rail, under the build preview's own sandbox, with the floor's catalogue, covers and bookmarks, and its look is the experience spec's five Theater statements"

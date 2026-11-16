@@ -2,7 +2,7 @@
 //! fixed corpus `tools/corpus.py` writes to `model/inference.json`.
 
 use hologram_forge_core::{
-    admitPage, done, encodeCompletion, encodeDelta, encodeError, encodeFinal, encodeModels, encodeOpenRouterRequest, encodeRole, endpointReady, expertPage, fetchSource, firstTokenReady, loaderStart, memoMatches, objEntry, packRank, packed, pageAction, poolAdmit, prefetchOrder, preimages, promote, rootPreimage, route, tablePage, Admission, Completion, Manifest, Memo, Message, Obj, PageAction, Priority, Provider, Request, Route, Section, Shard, Source, Staging, Start, Tier,
+    admitPage, done, encodeCompletion, encodeDelta, encodeError, encodeFinal, encodeModels, encodeOpenRouterRequest, encodeRole, endpointReady, expertPage, fetchSource, firstTokenReady, loaderStart, memoMatches, objEntry, packRank, packed, pageAction, poolAdmit, prefetchOrder, preimages, promote, rootPreimage, route, tablePage, Admission, Completion, Manifest, Memo, Message, Obj, PageAction, Priority, Request, Route, Section, Shard, Source, Staging, Start, Tier,
 };
 use serde_json::Value;
 
@@ -14,7 +14,7 @@ fn corpus() -> Vec<Value> {
 
 fn request(case: &Value) -> Request {
     Request {
-        model: "webgpu:BitNet".to_owned(),
+        model: "webgpu:Qwen".to_owned(),
         messages: case["messages"]
             .as_array()
             .unwrap()
@@ -57,14 +57,14 @@ fn prompt_and_params_bytes_match_the_daemon_rule_on_every_case() {
 #[test]
 fn memo_matches_its_own_key_and_nothing_else() {
     let memo = Memo {
-        model: vec!["did:holo:sha256:model".to_owned(), "webgpu:BitNet".to_owned()],
+        model: vec!["did:holo:sha256:model".to_owned(), "webgpu:Qwen".to_owned()],
         engineKappa: "e".to_owned(),
         promptKappa: "blake3:p".to_owned(),
         paramsKappa: "blake3:q".to_owned(),
         outputKappa: "blake3:o".to_owned(),
         receipt: "blake3:r".to_owned(),
     };
-    let by_name = vec!["webgpu:BitNet".to_owned()];
+    let by_name = vec!["webgpu:Qwen".to_owned()];
     let by_kappa = vec!["did:holo:sha256:model".to_owned()];
     let other = vec!["smollm2".to_owned()];
     assert!(memoMatches(&memo, &by_name, "blake3:p", "blake3:q"));
@@ -124,14 +124,9 @@ fn openrouter_request_bytes_match_on_every_case() {
 /// The route table: every row, as the theorems state it.
 #[test]
 fn route_serves_hits_and_never_pays_without_a_key() {
-    assert_eq!(route(true, Provider::Local, false, false, false), Route::Serve);
-    assert_eq!(route(true, Provider::Paid, false, false, false), Route::Serve);
-    assert_eq!(route(false, Provider::Local, true, false, false), Route::Local);
-    assert_eq!(route(false, Provider::Local, false, true, true), Route::NoGpu);
-    assert_eq!(route(false, Provider::Paid, false, true, true), Route::Paid);
-    assert_eq!(route(false, Provider::Paid, true, false, true), Route::NoKey);
-    assert_eq!(route(false, Provider::Paid, true, false, false), Route::NoKey);
-    assert_eq!(route(false, Provider::Paid, true, true, false), Route::PaidOffline);
+    assert_eq!(route(true, false), Route::Serve);
+    assert_eq!(route(false, true), Route::Local);
+    assert_eq!(route(false, false), Route::NoGpu);
 }
 
 /// The endpoint readiness table: a resident model is enough; a key needs the network; nothing else is ready.

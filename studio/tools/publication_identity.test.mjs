@@ -4,9 +4,6 @@ import { test } from "node:test";
 import { admitPublication, sameArchiveIdentity } from "../shell/publication-identity.mjs";
 const digest = "0123456789abcdef".repeat(4);
 const accepted = { total: 2, passed: 2, failed: [] };
-const url = new URL("../shell/github-build.js", import.meta.url);
-const source = fs.readFileSync(url, "utf8").replace(/from "(\.\/[^\"]+)"/g, (_, path) => `from ${JSON.stringify(new URL(path, url).href)}`);
-const { buildOnGitHub } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 
 test("canonical exact identity produces a typed body-fingerprint receipt", () => {
   assert.deepEqual(admitPublication(digest, digest, accepted), {
@@ -32,33 +29,7 @@ test("a complete report with a failed vector refuses", () => {
   assert.equal(admitPublication(digest, digest, { total: 2, passed: 1, failed: [{ index: 1 }] }).code, "acceptanceFailed");
 });
 
-async function build(named, fingerprint, acceptance) {
-  const reply = value => new Response(JSON.stringify(value));
-  const fetch = async (value) => {
-    const url = new URL(value);
-    if (url.hostname !== "api.github.com") {
-      return url.pathname.endsWith("app.json") ? reply({ attestations: { build: { id: named } } }) : new Response(new Uint8Array([1, 2, 3]));
-    }
-    if (url.pathname === "/user") return reply({ login: "user" });
-    if (url.pathname.endsWith("/git/ref/heads/main")) return reply({ object: { sha: "head" } });
-    if (url.pathname.endsWith("/git/commits/head")) return reply({ tree: { sha: "tree" } });
-    if (url.pathname.endsWith("/git/trees/tree")) return reply({ tree: [] });
-    if (url.pathname.endsWith("/git/trees")) return reply({ sha: "tree" });
-    if (url.pathname.endsWith("/actions/runs")) return reply({ workflow_runs: ["pages.yml", "bootstrap.yml"].map((w, id) => ({ id, path: ".github/workflows/" + w, created_at: "2026-01-01T00:00:00Z" })) });
-    if (/\/actions\/runs\/\d$/.test(url.pathname)) return reply({ status: "completed", conclusion: "success" });
-    return reply({});
-  };
-  return buildOnGitHub({ token: "token", spec: { name: "test", purpose: "test" }, fetch, sleep: async () => {}, templateCommit: async () => ({ files: [], remove: [] }), open: async () => ({ identities: { archiveFingerprint: fingerprint }, acceptance: async () => acceptance }) });
-}
-test("the actual build returns a typed receipt for matching live identity and runtime evidence", async () => {
-  const result = await build(digest, digest, accepted);
-  assert.equal(result.ok, true); assert.equal(result.identity.digest, digest); assert.deepEqual(result.vectors, { passed: 2, total: 2 });
-});
-test("the actual build refuses algorithm-prefix spoofing and a stale page", async () => {
-  assert.equal((await build("sha256:" + digest, digest, accepted)).code, "invalidArchiveIdentity");
-  assert.equal((await build("a".repeat(64), digest, accepted)).code, "archiveIdentityMismatch");
-});
-test("the actual build refuses missing identity and vacuous runtime acceptance", async () => {
-  assert.equal((await build(undefined, undefined, accepted)).code, "invalidArchiveIdentity");
-  assert.equal((await build(digest, digest, { total: 0, passed: 0, failed: [] })).code, "invalidAcceptance");
+test("on-device publication admits the kernel its page build named, after its vectors replay here", () => {
+  const host = fs.readFileSync(new URL("../shell/host.js", import.meta.url), "utf8");
+  assert.match(host, /admitPublication\(\(await \(await fetch\(new URL\("app\.json", at\)[^\n]+attestations\?\.build\?\.id, kernel\.identities\?\.archiveFingerprint, await kernel\.acceptance\(\)\);\n  if \(!admitted\.ok\) throw new Error\(admitted\.error\);/);
 });

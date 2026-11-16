@@ -1,0 +1,279 @@
+\begin{lexlean}{WorkspaceProofs}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\importmodule{Workspace}
+\title{Boolean}
+\begin{semanticmodule}
+definition{
+  name: breaksOpensOnlyForOwner,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  result: Bool,
+  body: ((not (owner =? 1)) && ((Workspace::openCode removed live owner key) =? 0))
+}
+
+theorem{
+  name: opensOnlyForOwnerHolds,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  statement: ((breaksOpensOnlyForOwner removed live owner key) = false),
+  proof: linear_arithmetic{definitions: [Workspace::openCode, breaksOpensOnlyForOwner]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+definition{
+  name: breaksOpensOnlyWithCurrentKey,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  result: Bool,
+  body: ((not (key =? 1)) && ((Workspace::openCode removed live owner key) =? 0))
+}
+
+theorem{
+  name: opensOnlyWithCurrentKeyHolds,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  statement: ((breaksOpensOnlyWithCurrentKey removed live owner key) = false),
+  proof: linear_arithmetic{definitions: [Workspace::openCode, breaksOpensOnlyWithCurrentKey]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+definition{
+  name: breaksOpensOnlyWithLiveSession,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  result: Bool,
+  body: ((not (live =? 1)) && ((Workspace::openCode removed live owner key) =? 0))
+}
+
+theorem{
+  name: opensOnlyWithLiveSessionHolds,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  statement: ((breaksOpensOnlyWithLiveSession removed live owner key) = false),
+  proof: linear_arithmetic{definitions: [Workspace::openCode, breaksOpensOnlyWithLiveSession]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+definition{
+  name: breaksRemovedDeviceNeverOpens,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  result: Bool,
+  body: ((removed =? 1) && ((Workspace::openCode removed live owner key) =? 0))
+}
+
+theorem{
+  name: removedDeviceNeverOpensHolds,
+  parameters: [removed : Nat, live : Nat, owner : Nat, key : Nat],
+  statement: ((breaksRemovedDeviceNeverOpens removed live owner key) = false),
+  proof: linear_arithmetic{definitions: [Workspace::openCode, breaksRemovedDeviceNeverOpens]},
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: breaksReadNeedsAuthentic,
+  parameters: [opened : Nat, authentic : Nat, bound : Nat],
+  result: Bool,
+  body: ((((not (opened =? 1)) || (not (authentic =? 1))) || (not (bound =? 1))) && ((Workspace::readCode opened authentic bound) =? 0))
+}
+
+theorem{
+  name: readNeedsAuthenticHolds,
+  parameters: [opened : Nat, authentic : Nat, bound : Nat],
+  statement: ((breaksReadNeedsAuthentic opened authentic bound) = false),
+  proof: linear_arithmetic{definitions: [Workspace::readCode, breaksReadNeedsAuthentic]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+definition{
+  name: breaksStoreNeedsSealed,
+  parameters: [opened : Nat, sealed : Nat, within : Nat],
+  result: Bool,
+  body: ((((not (opened =? 1)) || (not (sealed =? 1))) || (not (within =? 1))) && ((Workspace::storeCode opened sealed within) =? 0))
+}
+
+theorem{
+  name: storeNeedsSealedHolds,
+  parameters: [opened : Nat, sealed : Nat, within : Nat],
+  statement: ((breaksStoreNeedsSealed opened sealed within) = false),
+  proof: linear_arithmetic{definitions: [Workspace::storeCode, breaksStoreNeedsSealed]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+definition{
+  name: breaksMoveAtMostOnce,
+  parameters: [opened : Nat, moved : Nat],
+  result: Bool,
+  body: ((moved =? 1) && ((Workspace::moveCode opened moved) =? 0))
+}
+
+theorem{
+  name: moveAtMostOnceHolds,
+  parameters: [opened : Nat, moved : Nat],
+  statement: ((breaksMoveAtMostOnce opened moved) = false),
+  proof: linear_arithmetic{definitions: [Workspace::moveCode, breaksMoveAtMostOnce]},
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: breaksPlainRemovedAfterCommit,
+  parameters: [opened : Nat, committed : Nat],
+  result: Bool,
+  body: ((not (committed =? 1)) && ((Workspace::removeCode opened committed) =? 0))
+}
+
+theorem{
+  name: plainRemovedAfterCommitHolds,
+  parameters: [opened : Nat, committed : Nat],
+  statement: ((breaksPlainRemovedAfterCommit opened committed) = false),
+  proof: linear_arithmetic{definitions: [Workspace::removeCode, breaksPlainRemovedAfterCommit]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+
+theorem{
+  name: workspaceWords_ownerOpens,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 0 (cons 0 (cons 1 (cons 1 (cons 1 (nil Nat)))))))) = 0x6f6b),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_removedDeviceRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 0 (cons 1 (cons 1 (cons 1 (cons 1 (nil Nat)))))))) = 0x776f726b737061636544657669636552656d6f766564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_expiredSessionRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 0 (cons 0 (cons 0 (cons 1 (cons 1 (nil Nat)))))))) = 0x776f726b737061636553657373696f6e45787069726564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_anotherIdRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 0 (cons 0 (cons 1 (cons 0 (cons 1 (nil Nat)))))))) = 0x776f726b73706163654e6f744f776e6572),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_staleKeyRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 0 (cons 0 (cons 1 (cons 1 (cons 0 (nil Nat)))))))) = 0x776f726b73706163654b65795374616c65),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_authenticRecordRead,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 1 (cons 1 (cons 1 (cons 1 (nil Nat))))))) = 0x6f6b),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_closedWorkspaceRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 1 (cons 0 (cons 1 (cons 1 (nil Nat))))))) = 0x776f726b7370616365436c6f736564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_tamperedRecordRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 1 (cons 1 (cons 0 (cons 1 (nil Nat))))))) = 0x7265636f726454616d7065726564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_misplacedRecordRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 1 (cons 1 (cons 1 (cons 0 (nil Nat))))))) = 0x7265636f72644d6973706c61636564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_sealedRecordStored,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 2 (cons 1 (cons 1 (cons 1 (nil Nat))))))) = 0x6f6b),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_unsealedRecordRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 2 (cons 1 (cons 0 (cons 1 (nil Nat))))))) = 0x7265636f7264556e7365616c6564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_overQuotaRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 2 (cons 1 (cons 1 (cons 0 (nil Nat))))))) = 0x776f726b737061636551756f74614578636565646564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_firstMoveAllowed,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 3 (cons 1 (cons 0 (nil Nat)))))) = 0x6f6b),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_secondMoveRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 3 (cons 1 (cons 1 (nil Nat)))))) = 0x776f726b7370616365416c72656164794d6f766564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_plainRemovedAfterCommit,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 4 (cons 1 (cons 1 (nil Nat)))))) = 0x6f6b),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_plainKeptBeforeCommit,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 4 (cons 1 (cons 0 (nil Nat)))))) = 0x7365616c6564436f70794e6f74436f6d6d6974746564),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_versionRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 2 (cons 0 (cons 0 (cons 1 (cons 1 (cons 1 (nil Nat)))))))) = 0x6d616c666f726d6564576f726b737061636552657175657374),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_trailingWordRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 3 (cons 1 (cons 0 (cons 0 (nil Nat))))))) = 0x6d616c666f726d6564576f726b737061636552657175657374),
+  proof: reflexivity{},
+  axioms: []
+}
+
+theorem{
+  name: workspaceWords_unknownKindRefused,
+  parameters: [],
+  statement: ((Workspace::workspaceAnswer (cons 1 (cons 9 (cons 1 (cons 1 (nil Nat)))))) = 0x6d616c666f726d6564576f726b737061636552657175657374),
+  proof: reflexivity{},
+  axioms: []
+}
+\end{semanticmodule}
+\end{lexlean}

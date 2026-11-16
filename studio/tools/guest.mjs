@@ -39,7 +39,7 @@ for (const c of cases) {
   // A JS number cannot carry a u64 seed above 2^53; the page cannot send one either. The crate test
   // covers that case; the guest skips it and says so.
   if (c.seed != null && !Number.isSafeInteger(c.seed)) { console.log(`guest: ${c.name} skipped for OpenRouter bytes (seed above 2^53 is not a JS number)`); continue; }
-  const request = { model: "webgpu:BitNet", messages: c.messages, max_tokens: c.max_tokens, seed: c.seed, temperature: c.temperature == null ? "" : c.temperature };
+  const request = { model: "webgpu:Qwen", messages: c.messages, max_tokens: c.max_tokens, seed: c.seed, temperature: c.temperature == null ? "" : c.temperature };
   for (const stream of [true, false]) {
     const got = run({ op: "encode-openrouter-request", model: c.openrouter_model, request, stream }).bytes;
     const want = stream ? c.openrouter_stream : c.openrouter_plain;
@@ -47,10 +47,10 @@ for (const c of cases) {
     orChecked++;
   }
 }
-const rows = [[true, "local", false, false, false, "Serve"], [true, "paid", false, false, false, "Serve"], [false, "local", true, false, false, "Local"], [false, "local", false, true, true, "NoGpu"], [false, "paid", false, true, true, "Paid"], [false, "paid", true, false, true, "NoKey"], [false, "paid", true, false, false, "NoKey"], [false, "paid", true, true, false, "PaidOffline"]];
-for (const [hit, provider, gpuReady, keyPresent, online, want] of rows) {
-  const got = run({ op: "route", hit, provider, gpuReady, keyPresent, online }).route;
-  if (got !== want) { console.error(`guest: route(${hit},${provider},${gpuReady},${keyPresent},${online}) = ${got}, want ${want}`); process.exit(1); }
+const rows = [[true, false, "Serve"], [false, true, "Local"], [false, false, "NoGpu"]];
+for (const [hit, gpuReady, want] of rows) {
+  const got = run({ op: "route", hit, gpuReady }).route;
+  if (got !== want) { console.error(`guest: route(${hit},${gpuReady}) = ${got}, want ${want}`); process.exit(1); }
 }
 const readiness = [[true, false, false, true], [false, true, true, true], [false, true, false, false], [false, false, true, false], [false, false, false, false]];
 for (const [resident, keyPresent, online, want] of readiness) {

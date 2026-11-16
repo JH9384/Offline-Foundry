@@ -15,8 +15,9 @@ fmt-check:
     cargo fmt --all -- --check
 
 # R1, R4, R5 and the bootstrap trust root: `check-model`, `audit-limits`,
-# `audit-deferral` and `audit-bootstrap` (which includes
-# `audit-dependency-updates`), in one `xtask` process.
+# `audit-deferral`, `audit-bootstrap` (which includes
+# `audit-dependency-updates`), `audit-reuse` and `audit-prism` (only Prism is
+# implemented: non-Prism code may only shrink), in one `xtask` process.
 model:
     cargo run -q --locked -p xtask -- validate
 
@@ -50,9 +51,32 @@ deny:
 # acceptance vectors in the compiled guest, then has the Lean kernel and
 # leanchecker check every theorem (`TC-01`) and the generated code against the
 # model. It runs the build itself, so a separate `prismpm build` would repeat it.
+#
+# A pull request or a merge queue run may reuse the proof a run kept for
+# byte-identical proof inputs: bootstrap.yml restores `.prism-proof` from a cache
+# keyed by `app/**`, `prismpm.lock`, this file and the toolchain, and passes the
+# event in PRISM_PROOF_EVENT. Its merge commit is proved again in full on main.
+# Main, tags and every local run always prove, and every proof is kept.
 app:
-    cd app && lexlean fmt --check && lexlean lock --check
-    prismpm --project app verify
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Foundry's facets are projected from app/product.json and the kernel (R1): a stale one fails here,
+    # before anything is proved.
+    node studio/tools/foundry_model.mjs --check
+    (cd app && lexlean fmt --check && lexlean lock --check)
+    case "${PRISM_PROOF_EVENT:-}" in
+      pull_request|merge_group)
+        if [[ -s .prism-proof/attestation ]]; then
+          echo "app: the proof of these exact proof inputs is reused, attestation $(cat .prism-proof/attestation); main proves the merge commit in full"
+          exit 0
+        fi
+        ;;
+    esac
+    prismpm --project app verify | tee .prism-proof.log
+    mkdir -p .prism-proof
+    sed -n 's/^verified attestation: \([0-9a-f]\{64\}\)$/\1/p' .prism-proof.log > .prism-proof/attestation
+    rm -f .prism-proof.log
+    test -s .prism-proof/attestation
 
 # Only the meta-gate, while iterating on a scenario. `test` already runs it.
 bdd:
@@ -61,9 +85,10 @@ bdd:
 fmt:
     cargo fmt --all
 
-# Regenerate everything the model owns: CONFORMANCE.md.
+# Regenerate everything the model owns: CONFORMANCE.md, and Foundry's facet modules in app/src.
 model-write:
     cargo run -q --locked -p xtask -- check-model --write
+    node studio/tools/foundry_model.mjs
 
 # R3's first step in one command: a register row, its scenario, a failing test
 # named for the ID, and the regenerated CONFORMANCE.md.
